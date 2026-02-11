@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Trash2, Link, Server } from 'lucide-react';
+import { Plus, Trash2, Link, Server, RefreshCw } from 'lucide-react';
 import { useAppContext } from '@/context/AppContext';
 import AppLayout from '@/components/AppLayout';
 import { Button } from '@/components/ui/button';
@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { motion, AnimatePresence } from 'framer-motion';
 
 const Sources = () => {
-  const { sources, addSource, removeSource } = useAppContext();
+  const { sources, addSource, removeSource, parsePlaylist, parsingPlaylist } = useAppContext();
   const [open, setOpen] = useState(false);
   const [type, setType] = useState<'m3u' | 'xtream'>('m3u');
   const [name, setName] = useState('');
@@ -100,12 +100,17 @@ const Sources = () => {
                     </div>
                     <div>
                       <p className="font-medium text-foreground">{source.name}</p>
-                      <p className="text-xs text-muted-foreground">{source.type.toUpperCase()} · Added {new Date(source.addedAt).toLocaleDateString()}</p>
+                      <p className="text-xs text-muted-foreground">{source.type.toUpperCase()} · Added {new Date(source.created_at).toLocaleDateString()}</p>
                     </div>
                   </div>
-                  <Button variant="ghost" size="icon" onClick={() => removeSource(source.id)} className="text-muted-foreground hover:text-destructive">
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
+                  <div className="flex items-center gap-1">
+                    <Button variant="ghost" size="icon" onClick={() => parsePlaylist(source)} disabled={parsingPlaylist} className="text-muted-foreground hover:text-primary">
+                      <RefreshCw className={`w-4 h-4 ${parsingPlaylist ? 'animate-spin' : ''}`} />
+                    </Button>
+                    <Button variant="ghost" size="icon" onClick={() => removeSource(source.id)} className="text-muted-foreground hover:text-destructive">
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
                 </motion.div>
               ))}
             </div>

@@ -1,5 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Home, Film, Tv, Search, Heart, Settings, Play, Monitor } from 'lucide-react';
+import { Home, Film, Tv, Search, Heart, Settings, Play, Monitor, LogOut } from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
 
 const navItems = [
   { to: '/', icon: Home, label: 'Home' },
@@ -12,6 +13,7 @@ const navItems = [
 
 const AppSidebar = () => {
   const location = useLocation();
+  const { signOut, user } = useAuth();
 
   return (
     <aside className="fixed left-0 top-0 h-full w-20 lg:w-64 bg-sidebar border-r border-sidebar-border flex flex-col z-50">
@@ -42,11 +44,17 @@ const AppSidebar = () => {
         })}
       </nav>
 
-      <div className="p-4 lg:px-6 border-t border-sidebar-border">
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Monitor className="w-4 h-4" />
-          <span className="hidden lg:block">StreamVault v1.0</span>
-        </div>
+      <div className="p-4 lg:px-6 border-t border-sidebar-border space-y-3">
+        {user && (
+          <p className="text-xs text-muted-foreground truncate hidden lg:block">{user.email}</p>
+        )}
+        <button
+          onClick={signOut}
+          className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors w-full"
+        >
+          <LogOut className="w-4 h-4 shrink-0" />
+          <span className="hidden lg:block">Sign Out</span>
+        </button>
       </div>
     </aside>
   );

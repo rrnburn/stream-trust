@@ -1,13 +1,26 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import { useMedia } from '@/context/AppContext';
+import AppLayout from '@/components/AppLayout';
+import HeroBanner from '@/components/HeroBanner';
+import MediaGrid from '@/components/MediaGrid';
 
 const Index = () => {
+  const media = useMedia();
+  const featured = media[4]; // Starbound
+  const movies = media.filter(m => m.category === 'movie');
+  const series = media.filter(m => m.category === 'series');
+  const trending = [...media].sort((a, b) => (b.rating || 0) - (a.rating || 0)).slice(0, 6);
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
-      <div className="text-center">
-        <h1 className="mb-4 text-4xl font-bold">Welcome to Your Blank App</h1>
-        <p className="text-xl text-muted-foreground">Start building your amazing project here!</p>
+    <AppLayout>
+      <div className="p-4 lg:p-8">
+        <HeroBanner item={featured} />
+        <div className="space-y-10">
+          <MediaGrid items={trending} title="🔥 Trending Now" />
+          <MediaGrid items={movies} title="🎬 Movies" />
+          <MediaGrid items={series} title="📺 Series" />
+        </div>
       </div>
-    </div>
+    </AppLayout>
   );
 };
 

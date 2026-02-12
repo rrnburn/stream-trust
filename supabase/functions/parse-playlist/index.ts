@@ -30,9 +30,9 @@ function parseM3U(content: string): M3UItem[] {
       i += 2;
 
       const titleMatch = info.match(/,(.+)$/);
-      const groupMatch = info.match(/group-title="([^"]*)"/);
-      const logoMatch = info.match(/tvg-logo="([^"]*)"/);
-      const tvgIdMatch = info.match(/tvg-id="([^"]*)"/);
+      const groupMatch = info.match(/group-title=\"([^\"]*)\"/);
+      const logoMatch = info.match(/tvg-logo=\"([^\"]*)\"/);
+      const tvgIdMatch = info.match(/tvg-id=\"([^\"]*)\"/);
 
       const title = titleMatch?.[1]?.trim() || 'Unknown';
       const group = groupMatch?.[1] || 'Uncategorized';
@@ -82,16 +82,100 @@ serve(async (req) => {
 
     // Build Xtream API URL for playlist
     if (type === 'xtream' && username && password) {
-      const baseUrl = url.replace(/\/$/, '');
-      playlistUrl = `${baseUrl}/get.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}&type=m3u_plus&output=ts`;
+      // Normalize base and ensure protocol
+      let base = url.replace(/\/$/, '');
+      if (!/^https?:\/\/i.test(base)) base = 'http://' + base;
+
+      // If caller passed a full endpoint (get.php, player_api.php, or .m3u) append params properly,
+      // otherwise use the standard /get.php endpoint.
+      const hasEndpoint = /get\.php|player_api\.php|\.m3u/i.test(base);
+      if (hasEndpoint) {
+        const sep = base.includes('?') ? '&' : '?';
+        playlistUrl = `${base}${sep}username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}&type=m3u_plus`;
+      } else {
+        playlistUrl = `${base}/get.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}&type=m3u_plus`;
+      }
+
+      // One-line debug to help track constructed URL
+      console.log('[XTREAM] Constructed URL:', playlistUrl);
     }
+
+    console.log('[FETCH] Requesting playlist from:', playlistUrl);
 
     const response = await fetch(playlistUrl, {
       headers: { 'User-Agent': 'StreamVault/1.0' },
     });
 
+    // If the initial request failed and this was an Xtream request, try a fallback to player_api.php
+    if (!response.ok && type === 'xtream' && username && password) {
+      console.log('[RESPONSE] Primary status:', response.status, response.statusText);
+
+      // Attempt a fallback URL using player_api.php
+      try {
+        let fallbackUrl = playlistUrl;
+
+        // If playlistUrl already contains player_api.php, just reuse it; otherwise construct one.
+        if (!/player_api\.php/i.test(fallbackUrl)) {
+          if (/get\.php/i.test(fallbackUrl)) {
+            fallbackUrl = fallbackUrl.replace(/get\.php/i, 'player_api.php');
+          } else {
+            // Remove query portion and append player_api.php with params
+            const baseNoQuery = playlistUrl.split('?')[0].replace(/\/$/, '');
+            fallbackUrl = `${baseNoQuery}/player_api.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}&type=m3u_plus`;
+          }
+        }
+
+        console.log('[XTREAM] Trying fallback URL:', fallbackUrl);
+        const fallbackResp = await fetch(fallbackUrl, {
+          headers: { 'User-Agent': 'StreamVault/1.0' },
+        });
+
+        console.log('[FALLBACK RESPONSE] Status:', fallbackResp.status, fallbackResp.statusText);
+
+        if (fallbackResp.ok) {
+          const content = await fallbackResp.text();
+          const items = parseM3U(content);
+          const groups = [...new Set(items.map(i => i.group))].sort();
+          return new Response(JSON.stringify({
+            items,
+            groups,
+            total: items.length,
+          }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        } else {
+          // Read a snippet of the fallback body to help debugging
+          const fbBody = await fallbackResp.text().catch(() => '');
+          return new Response(JSON.stringify({
+            error: `Failed to fetch playlist (primary: ${response.status} ${response.statusText}; fallback: ${fallbackResp.status} ${fallbackResp.statusText})`,
+            primary: { url: playlistUrl, status: response.status, statusText: response.statusText },
+            fallback: { url: fallbackUrl, status: fallbackResp.status, statusText: fallbackResp.statusText, body: fbBody.substring(0, 500) },
+          }), {
+            status: 502,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+      } catch (fbErr) {
+        console.error('[FALLBACK ERROR]', fbErr);
+        return new Response(JSON.stringify({
+          error: `Failed to fetch playlist: primary returned ${response.status} ${response.statusText}`,
+          fallbackError: fbErr.message,
+        }), {
+          status: 502,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
+    // Existing behavior for non-xtream or if no fallback applies
     if (!response.ok) {
-      return new Response(JSON.stringify({ error: `Failed to fetch playlist: ${response.status}` }), {
+      const responseBody = await response.text().catch(() => '');
+      console.log('[ERROR] Response body:', responseBody.substring(0, 500));
+      return new Response(JSON.stringify({
+        error: `Failed to fetch playlist: ${response.status} ${response.statusText}`,
+        details: responseBody.substring(0, 500),
+        requestUrl: playlistUrl,
+      }), {
         status: 502,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });

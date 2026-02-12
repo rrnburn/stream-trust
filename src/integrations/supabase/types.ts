@@ -71,6 +71,56 @@ export type Database = {
         }
         Relationships: []
       }
+      parsed_media: {
+        Row: {
+          category: string
+          created_at: string
+          description: string
+          genre: string
+          group_name: string | null
+          id: string
+          poster: string
+          source_id: string
+          stream_url: string
+          title: string
+          user_id: string
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          description?: string
+          genre?: string
+          group_name?: string | null
+          id?: string
+          poster?: string
+          source_id: string
+          stream_url?: string
+          title: string
+          user_id: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          description?: string
+          genre?: string
+          group_name?: string | null
+          id?: string
+          poster?: string
+          source_id?: string
+          stream_url?: string
+          title?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "parsed_media_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "iptv_sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       watch_history: {
         Row: {
           id: string

@@ -1,8 +1,10 @@
+import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Play, Heart, Star, Clock, Calendar } from 'lucide-react';
 import { useMedia, useAppContext } from '@/context/AppContext';
 import AppLayout from '@/components/AppLayout';
 import MediaGrid from '@/components/MediaGrid';
+import VideoPlayer from '@/components/VideoPlayer';
 import { Button } from '@/components/ui/button';
 import { motion } from 'framer-motion';
 
@@ -12,6 +14,7 @@ const MediaDetail = () => {
   const media = useMedia();
   const { toggleFavorite, isFavorite, addToHistory } = useAppContext();
   const item = media.find(m => m.id === id);
+  const [showPlayer, setShowPlayer] = useState(false);
 
   if (!item) {
     return (
@@ -23,6 +26,13 @@ const MediaDetail = () => {
 
   const fav = isFavorite(item.id);
   const similar = media.filter(m => m.genre === item.genre && m.id !== item.id).slice(0, 6);
+  const hasStream = !!item.streamUrl;
+
+  const handlePlay = () => {
+    if (!hasStream) return;
+    addToHistory(item.id, 0);
+    setShowPlayer(true);
+  };
 
   return (
     <AppLayout>
@@ -30,6 +40,18 @@ const MediaDetail = () => {
         <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors mb-6">
           <ArrowLeft className="w-4 h-4" /> Back
         </button>
+
+        {/* Video Player */}
+        {showPlayer && item.streamUrl && (
+          <div className="mb-8">
+            <VideoPlayer
+              src={item.streamUrl}
+              title={item.title}
+              onProgress={(p) => addToHistory(item.id, p)}
+              onClose={() => setShowPlayer(false)}
+            />
+          </div>
+        )}
 
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -39,7 +61,11 @@ const MediaDetail = () => {
           {/* Poster */}
           <div className="w-full lg:w-72 shrink-0">
             <div className="aspect-[2/3] rounded-xl overflow-hidden bg-secondary flex items-center justify-center">
-              <span className="text-8xl font-display font-bold text-muted-foreground/15">{item.title.charAt(0)}</span>
+              {item.poster ? (
+                <img src={item.poster} alt={item.title} className="w-full h-full object-cover" />
+              ) : (
+                <span className="text-8xl font-display font-bold text-muted-foreground/15">{item.title.charAt(0)}</span>
+              )}
             </div>
           </div>
 
@@ -63,10 +89,11 @@ const MediaDetail = () => {
 
             <div className="flex gap-3">
               <Button
-                onClick={() => addToHistory(item.id, 0)}
+                onClick={handlePlay}
+                disabled={!hasStream}
                 className="bg-primary text-primary-foreground hover:bg-primary/90 gap-2 px-6"
               >
-                <Play className="w-4 h-4 fill-current" /> Play
+                <Play className="w-4 h-4 fill-current" /> {showPlayer ? 'Playing' : hasStream ? 'Play' : 'No Stream'}
               </Button>
               <Button
                 variant="outline"

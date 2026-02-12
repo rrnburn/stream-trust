@@ -91,9 +91,9 @@ serve(async (req) => {
       const hasEndpoint = /get\.php|player_api\.php|\.m3u/i.test(base);
       if (hasEndpoint) {
         const sep = base.includes('?') ? '&' : '?';
-        playlistUrl = `${base}${sep}username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}&type=m3u_plus`;
+        playlistUrl = `${base}${sep}username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}&action=get_live_streams`;
       } else {
-        playlistUrl = `${base}/get.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}&type=m3u_plus`;
+        playlistUrl = `${base}/get.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}&type=m3u`;
       }
 
       // One-line debug to help track constructed URL

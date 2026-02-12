@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './AuthContext';
+import { toast } from 'sonner';
 
 export interface IPTVSource {
   id: string;
@@ -44,21 +45,6 @@ interface AppState {
 
 const AppContext = createContext<AppState | null>(null);
 
-const DEMO_MEDIA: MediaItem[] = [
-  { id: 'd1', title: 'The Last Frontier', poster: '', category: 'movie', genre: 'Action', year: 2024, duration: '2h 15m', rating: 8.2, description: 'A gripping tale of survival in the untamed wilderness.', sourceId: 'demo' },
-  { id: 'd2', title: 'Neon Shadows', poster: '', category: 'movie', genre: 'Sci-Fi', year: 2024, duration: '1h 58m', rating: 7.9, description: 'In a cyberpunk city, a detective hunts an AI gone rogue.', sourceId: 'demo' },
-  { id: 'd3', title: 'Echoes of Time', poster: '', category: 'series', genre: 'Drama', year: 2023, duration: '4 Seasons', rating: 9.1, description: 'A family saga spanning four generations across continents.', sourceId: 'demo' },
-  { id: 'd4', title: 'Crimson Tide', poster: '', category: 'movie', genre: 'Thriller', year: 2024, duration: '2h 5m', rating: 7.6, description: 'A submarine crew faces a mutiny during a nuclear crisis.', sourceId: 'demo' },
-  { id: 'd5', title: 'Starbound', poster: '', category: 'series', genre: 'Sci-Fi', year: 2024, duration: '2 Seasons', rating: 8.8, description: "Humanity's first interstellar colony faces unexpected challenges.", sourceId: 'demo' },
-  { id: 'd6', title: "The Alchemist's Dream", poster: '', category: 'movie', genre: 'Fantasy', year: 2023, duration: '2h 30m', rating: 8.0, description: 'A young alchemist discovers the secret to eternal life.', sourceId: 'demo' },
-  { id: 'd7', title: 'Dark Waters', poster: '', category: 'movie', genre: 'Horror', year: 2024, duration: '1h 45m', rating: 7.3, description: 'A coastal town discovers ancient terrors beneath the waves.', sourceId: 'demo' },
-  { id: 'd8', title: 'Code Zero', poster: '', category: 'series', genre: 'Thriller', year: 2024, duration: '1 Season', rating: 8.5, description: 'Hackers uncover a conspiracy that could topple governments.', sourceId: 'demo' },
-  { id: 'd9', title: 'Golden Hour', poster: '', category: 'movie', genre: 'Romance', year: 2023, duration: '1h 52m', rating: 7.8, description: 'Two strangers meet during the golden hour in Paris.', sourceId: 'demo' },
-  { id: 'd10', title: 'Wildlands', poster: '', category: 'vod', genre: 'Documentary', year: 2024, duration: '1h 30m', rating: 9.0, description: "An exploration of Earth's most remote ecosystems.", sourceId: 'demo' },
-  { id: 'd11', title: 'Iron Will', poster: '', category: 'movie', genre: 'Action', year: 2024, duration: '2h 10m', rating: 7.5, description: 'A retired soldier returns for one final mission.', sourceId: 'demo' },
-  { id: 'd12', title: 'The Void', poster: '', category: 'series', genre: 'Sci-Fi', year: 2023, duration: '3 Seasons', rating: 8.7, description: 'Astronauts discover a dimension-bending anomaly in deep space.', sourceId: 'demo' },
-];
-
 export const useAppContext = () => {
   const ctx = useContext(AppContext);
   if (!ctx) throw new Error('useAppContext must be used within AppProvider');
@@ -67,7 +53,7 @@ export const useAppContext = () => {
 
 export const useMedia = () => {
   const { parsedMedia } = useAppContext();
-  return [...DEMO_MEDIA, ...parsedMedia];
+  return parsedMedia;
 };
 
 export const AppProvider = ({ children }: { children: ReactNode }) => {
@@ -79,7 +65,6 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [parsedMedia, setParsedMedia] = useState<MediaItem[]>([]);
   const [parsingPlaylist, setParsingPlaylist] = useState(false);
 
-  // Load sources from DB
   const loadSources = useCallback(async () => {
     if (!user) { setSources([]); return; }
     setLoadingSources(true);
@@ -91,14 +76,12 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     setLoadingSources(false);
   }, [user]);
 
-  // Load favorites from DB
   const loadFavorites = useCallback(async () => {
     if (!user) { setFavorites([]); return; }
     const { data } = await supabase.from('favorites').select('media_id');
     setFavorites(data?.map(f => f.media_id) || []);
   }, [user]);
 
-  // Load watch history from DB
   const loadHistory = useCallback(async () => {
     if (!user) { setWatchHistory([]); return; }
     const { data } = await supabase
@@ -109,11 +92,33 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     setWatchHistory(data?.map(h => ({ id: h.media_id, progress: h.progress, timestamp: h.watched_at })) || []);
   }, [user]);
 
+  const loadParsedMedia = useCallback(async () => {
+    if (!user) { setParsedMedia([]); return; }
+    const { data } = await supabase
+      .from('parsed_media')
+      .select('*')
+      .order('title', { ascending: true });
+    if (data) {
+      setParsedMedia(data.map((row: any) => ({
+        id: row.id,
+        title: row.title,
+        poster: row.poster || '',
+        category: row.category as MediaItem['category'],
+        genre: row.genre || 'Uncategorized',
+        description: row.description || '',
+        sourceId: row.source_id,
+        streamUrl: row.stream_url || '',
+        group: row.group_name || undefined,
+      })));
+    }
+  }, [user]);
+
   useEffect(() => {
     loadSources();
     loadFavorites();
     loadHistory();
-  }, [loadSources, loadFavorites, loadHistory]);
+    loadParsedMedia();
+  }, [loadSources, loadFavorites, loadHistory, loadParsedMedia]);
 
   const addSource = async (source: Omit<IPTVSource, 'id' | 'created_at'>) => {
     if (!user) return;
@@ -131,6 +136,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const removeSource = async (id: string) => {
     await supabase.from('iptv_sources').delete().eq('id', id);
     await loadSources();
+    // parsed_media cascade-deletes with source
+    await loadParsedMedia();
   };
 
   const toggleFavorite = async (mediaId: string) => {
@@ -156,28 +163,47 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const parsePlaylist = async (source: IPTVSource) => {
+    if (!user) return;
     setParsingPlaylist(true);
     try {
       const { data, error } = await supabase.functions.invoke('parse-playlist', {
         body: { url: source.url, type: source.type, username: source.username, password: source.password },
       });
       if (error) throw error;
-      if (data?.items) {
-        const media: MediaItem[] = data.items.map((item: any) => ({
-          id: `parsed-${item.id}`,
+      if (data?.items?.length) {
+        // Delete old parsed media for this source
+        await supabase.from('parsed_media').delete().eq('source_id', source.id);
+
+        // Insert new items in batches of 500
+        const rows = data.items.map((item: any) => ({
+          user_id: user.id,
+          source_id: source.id,
           title: item.title,
           poster: item.logo || '',
           category: item.category,
           genre: item.group || 'Uncategorized',
           description: `From ${source.name}`,
-          sourceId: source.id,
-          streamUrl: item.url,
-          group: item.group,
+          stream_url: item.url,
+          group_name: item.group || null,
         }));
-        setParsedMedia(prev => [...prev.filter(m => m.sourceId !== source.id), ...media]);
+
+        for (let i = 0; i < rows.length; i += 500) {
+          const batch = rows.slice(i, i + 500);
+          const { error: insertError } = await supabase.from('parsed_media').insert(batch);
+          if (insertError) {
+            console.error('Insert batch error:', insertError);
+            throw insertError;
+          }
+        }
+
+        toast.success(`Parsed ${data.items.length} items from ${source.name}`);
+        await loadParsedMedia();
+      } else {
+        toast.info('No items found in playlist');
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error('Failed to parse playlist:', e);
+      toast.error(`Failed to parse: ${e.message || 'Unknown error'}`);
     }
     setParsingPlaylist(false);
   };

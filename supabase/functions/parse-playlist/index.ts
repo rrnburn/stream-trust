@@ -81,18 +81,56 @@ serve(async (req) => {
     if (type === 'xtream' && username && password) {
       let base = url.replace(/\/$/, '');
 
-      if (!/^https?:\/\//i.test(base)) {
-        base = 'http://' + base;
-      }
+      // Strip protocol and re-add as http
+      base = base.replace(/^https?:\/\//i, '');
+      base = 'http://' + base;
 
+      // Remove any existing endpoint paths
       base = base.replace(/\/player_api\.php.*$/i, '');
       base = base.replace(/\/get\.php.*$/i, '');
+      // Remove trailing port-path noise
+      base = base.replace(/\/$/, '');
 
       playlistUrl =
-        `${base}/get.php?username=${encodeURIComponent(username)}` +
-        `&password=${encodeURIComponent(password)}&type=m3u_plus&output=ts`;
+        `${base}/player_api.php?username=${encodeURIComponent(username)}` +
+        `&password=${encodeURIComponent(password)}&action=get_live_streams`;
 
       console.log('[XTREAM] Constructed URL:', playlistUrl);
+
+      // For Xtream, fetch JSON and convert to M3U-style items
+      console.log('[FETCH] Requesting Xtream API:', playlistUrl);
+      const response = await fetch(playlistUrl, {
+        headers: { 'User-Agent': 'okhttp/4.9.2', 'Accept': '*/*' },
+      });
+
+      if (!response.ok) {
+        const body = await response.text().catch(() => '');
+        return new Response(JSON.stringify({
+          error: `Failed to fetch Xtream API: ${response.status} ${response.statusText}`,
+          details: body.substring(0, 500),
+          requestUrl: playlistUrl,
+        }), {
+          status: 502,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      // Xtream returns JSON array of streams
+      const streams = await response.json();
+      const items = (Array.isArray(streams) ? streams : []).map((s: any) => ({
+        id: crypto.randomUUID(),
+        title: s.name || 'Unknown',
+        group: s.category_name || 'Uncategorized',
+        logo: s.stream_icon || '',
+        url: `${base.replace('/player_api.php', '')}/${username}/${password}/${s.stream_id}`,
+        tvgId: s.epg_channel_id || '',
+        category: 'channel' as const,
+      }));
+
+      const groups = [...new Set(items.map((i: any) => i.group))].sort();
+      return new Response(JSON.stringify({ items, groups, total: items.length }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
     console.log('[FETCH] Requesting playlist from:', playlistUrl);

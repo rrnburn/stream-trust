@@ -95,39 +95,61 @@ serve(async (req) => {
         `${base}/player_api.php?username=${encodeURIComponent(username)}` +
         `&password=${encodeURIComponent(password)}&action=get_live_streams`;
 
-      console.log('[XTREAM] Constructed URL:', playlistUrl);
+      const apiBase = `${base}/player_api.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`;
+      const streamBase = base;
 
-      // For Xtream, fetch JSON and convert to M3U-style items
-      console.log('[FETCH] Requesting Xtream API:', playlistUrl);
-      const response = await fetch(playlistUrl, {
-        headers: { 'User-Agent': 'okhttp/4.9.2', 'Accept': '*/*' },
-      });
+      console.log('[XTREAM] API base:', apiBase);
 
-      if (!response.ok) {
-        const body = await response.text().catch(() => '');
-        return new Response(JSON.stringify({
-          error: `Failed to fetch Xtream API: ${response.status} ${response.statusText}`,
-          details: body.substring(0, 500),
-          requestUrl: playlistUrl,
-        }), {
-          status: 502,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
+      // Fetch live, VOD, and series in parallel
+      const [liveRes, vodRes, seriesRes] = await Promise.all([
+        fetch(`${apiBase}&action=get_live_streams`, { headers: { 'User-Agent': 'okhttp/4.9.2', 'Accept': '*/*' } }),
+        fetch(`${apiBase}&action=get_vod_streams`, { headers: { 'User-Agent': 'okhttp/4.9.2', 'Accept': '*/*' } }),
+        fetch(`${apiBase}&action=get_series`, { headers: { 'User-Agent': 'okhttp/4.9.2', 'Accept': '*/*' } }),
+      ]);
 
-      // Xtream returns JSON array of streams
-      const streams = await response.json();
-      const items = (Array.isArray(streams) ? streams : []).map((s: any) => ({
-        id: crypto.randomUUID(),
-        title: s.name || 'Unknown',
-        group: s.category_name || 'Uncategorized',
-        logo: s.stream_icon || '',
-        url: `${base.replace('/player_api.php', '')}/${username}/${password}/${s.stream_id}`,
-        tvgId: s.epg_channel_id || '',
-        category: 'channel' as const,
-      }));
+      const parseSafe = async (res: Response) => {
+        if (!res.ok) return [];
+        try { const j = await res.json(); return Array.isArray(j) ? j : []; }
+        catch { return []; }
+      };
 
-      const groups = [...new Set(items.map((i: any) => i.group))].sort();
+      const [liveStreams, vodStreams, seriesStreams] = await Promise.all([
+        parseSafe(liveRes), parseSafe(vodRes), parseSafe(seriesRes),
+      ]);
+
+      console.log(`[XTREAM] Fetched: ${liveStreams.length} live, ${vodStreams.length} VOD, ${seriesStreams.length} series`);
+
+      const items: M3UItem[] = [
+        ...liveStreams.map((s: any) => ({
+          id: crypto.randomUUID(),
+          title: s.name || 'Unknown',
+          group: s.category_name || 'Uncategorized',
+          logo: s.stream_icon || '',
+          url: `${streamBase}/${username}/${password}/${s.stream_id}`,
+          tvgId: s.epg_channel_id || '',
+          category: 'channel' as const,
+        })),
+        ...vodStreams.map((s: any) => ({
+          id: crypto.randomUUID(),
+          title: s.name || 'Unknown',
+          group: s.category_name || 'Uncategorized',
+          logo: s.stream_icon || '',
+          url: `${streamBase}/movie/${username}/${password}/${s.stream_id}.${s.container_extension || 'mp4'}`,
+          tvgId: '',
+          category: 'movie' as const,
+        })),
+        ...seriesStreams.map((s: any) => ({
+          id: crypto.randomUUID(),
+          title: s.name || 'Unknown',
+          group: s.category_name || 'Uncategorized',
+          logo: s.cover || '',
+          url: `${streamBase}/series/${username}/${password}/${s.series_id}`,
+          tvgId: '',
+          category: 'series' as const,
+        })),
+      ];
+
+      const groups = [...new Set(items.map((i) => i.group))].sort();
       return new Response(JSON.stringify({ items, groups, total: items.length }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });

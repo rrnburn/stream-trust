@@ -13,6 +13,8 @@ import Favorites from "./pages/Favorites";
 import Sources from "./pages/Sources";
 import MediaDetail from "./pages/MediaDetail";
 import AuthPage from "./pages/AuthPage";
+import LiveTV from "./pages/LiveTV";
+import VOD from "./pages/VOD";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -35,6 +37,8 @@ const AppRoutes = () => (
   <Routes>
     <Route path="/auth" element={<AuthRoute><AuthPage /></AuthRoute>} />
     <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
+    <Route path="/live-tv" element={<ProtectedRoute><LiveTV /></ProtectedRoute>} />
+    <Route path="/vod" element={<ProtectedRoute><VOD /></ProtectedRoute>} />
     <Route path="/movies" element={<ProtectedRoute><Movies /></ProtectedRoute>} />
     <Route path="/series" element={<ProtectedRoute><Series /></ProtectedRoute>} />
     <Route path="/search" element={<ProtectedRoute><SearchPage /></ProtectedRoute>} />

@@ -32,7 +32,7 @@ const Index = () => {
           {trending.length > 0 && <MediaGrid items={trending} title="🔥 Recent" />}
           {movies.length > 0 && <MediaGrid items={movies.slice(0, 12)} title="🎬 Movies" />}
           {series.length > 0 && <MediaGrid items={series.slice(0, 12)} title="📺 Series" />}
-          {channels.length > 0 && <MediaGrid items={channels.slice(0, 12)} title="📡 Channels" />}
+          {channels.length > 0 && <MediaGrid items={channels.slice(0, 12)} title="📡 Live TV" />}
         </div>
       </div>
     </AppLayout>

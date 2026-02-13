@@ -1,9 +1,11 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Home, Film, Tv, Search, Heart, Settings, Play, Monitor, LogOut } from 'lucide-react';
+import { Home, Film, Tv, Search, Heart, Settings, Play, Radio, PlayCircle, LogOut } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 
 const navItems = [
   { to: '/', icon: Home, label: 'Home' },
+  { to: '/live-tv', icon: Radio, label: 'Live TV' },
+  { to: '/vod', icon: PlayCircle, label: 'VOD' },
   { to: '/movies', icon: Film, label: 'Movies' },
   { to: '/series', icon: Tv, label: 'Series' },
   { to: '/search', icon: Search, label: 'Search' },

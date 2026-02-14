@@ -87,9 +87,11 @@ serve(async (req) => {
       base = base.replace(/\/$/, '');
 
       const apiBase = `${base}/player_api.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`;
-      const streamBase = base;
+      // Use HTTPS for stream URLs so browsers don't block mixed content
+      const streamBase = base.replace(/^http:\/\//i, 'https://');
 
       console.log('[XTREAM] API base:', apiBase);
+      console.log('[XTREAM] Stream base (HTTPS):', streamBase);
 
       // Fetch streams AND categories in parallel
       const [liveRes, vodRes, seriesRes, liveCatRes, vodCatRes, seriesCatRes] = await Promise.all([

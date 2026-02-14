@@ -2,9 +2,10 @@ import { useState, useMemo } from 'react';
 import { useMedia } from '@/context/AppContext';
 import AppLayout from '@/components/AppLayout';
 import VideoPlayer from '@/components/VideoPlayer';
-import { Radio, ChevronDown, ChevronRight, Search } from 'lucide-react';
+import { Radio, ChevronDown, ChevronRight, Search, Filter } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 const LiveTV = () => {
   const media = useMedia();
@@ -12,12 +13,25 @@ const LiveTV = () => {
   const [activeChannel, setActiveChannel] = useState<typeof channels[0] | null>(null);
   const [search, setSearch] = useState('');
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
+  const [selectedGroup, setSelectedGroup] = useState<string>('all');
+
+  // Get all unique groups for filtering
+  const allGroups = useMemo(() => {
+    const groups = [...new Set(channels.map(c => c.group || 'Uncategorized'))].sort();
+    return groups;
+  }, [channels]);
 
   const filtered = useMemo(() => {
-    if (!search) return channels;
-    const q = search.toLowerCase();
-    return channels.filter(c => c.title.toLowerCase().includes(q));
-  }, [channels, search]);
+    let items = channels;
+    if (selectedGroup !== 'all') {
+      items = items.filter(c => (c.group || 'Uncategorized') === selectedGroup);
+    }
+    if (search) {
+      const q = search.toLowerCase();
+      items = items.filter(c => c.title.toLowerCase().includes(q));
+    }
+    return items;
+  }, [channels, search, selectedGroup]);
 
   const grouped = useMemo(() => {
     const map = new Map<string, typeof channels>();
@@ -76,7 +90,7 @@ const LiveTV = () => {
 
         {/* Channel list */}
         <div className="w-full lg:w-80 xl:w-96 border-t lg:border-t-0 lg:border-l border-border bg-card/50 flex flex-col max-h-[50vh] lg:max-h-full">
-          <div className="p-3 border-b border-border">
+          <div className="p-3 border-b border-border space-y-2">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
@@ -86,7 +100,33 @@ const LiveTV = () => {
                 className="pl-9 bg-background"
               />
             </div>
-            <p className="text-xs text-muted-foreground mt-2">{filtered.length} channels</p>
+            {/* Group filter */}
+            {allGroups.length > 1 && (
+              <ScrollArea className="w-full">
+                <div className="flex gap-1.5 pb-1">
+                  <button
+                    onClick={() => setSelectedGroup('all')}
+                    className={`px-2.5 py-1 rounded-md text-xs font-medium whitespace-nowrap transition-colors ${
+                      selectedGroup === 'all' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    All ({channels.length})
+                  </button>
+                  {allGroups.map(g => (
+                    <button
+                      key={g}
+                      onClick={() => setSelectedGroup(g)}
+                      className={`px-2.5 py-1 rounded-md text-xs font-medium whitespace-nowrap transition-colors ${
+                        selectedGroup === g ? 'bg-primary text-primary-foreground' : 'bg-secondary text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      {g}
+                    </button>
+                  ))}
+                </div>
+              </ScrollArea>
+            )}
+            <p className="text-xs text-muted-foreground">{filtered.length} channels</p>
           </div>
 
           <div className="flex-1 overflow-y-auto">

@@ -138,8 +138,8 @@ serve(async (req) => {
           title: s.name || 'Unknown',
           group: liveCatMap[String(s.category_id)] || s.category_name || 'Uncategorized',
           logo: s.stream_icon || '',
-          // Append .m3u8 for HLS playback in browser
-          url: `${streamBase}/${username}/${password}/${s.stream_id}.m3u8`,
+          // No extension - raw TS stream, played via mpegts.js on the client
+          url: `${streamBase}/${username}/${password}/${s.stream_id}`,
           tvgId: s.epg_channel_id || '',
           category: 'channel' as const,
         })),

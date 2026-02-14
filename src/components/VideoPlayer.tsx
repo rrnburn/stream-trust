@@ -1,5 +1,6 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import Hls from 'hls.js';
+import mpegts from 'mpegts.js';
 import { Play, Pause, Maximize, Minimize, Volume2, VolumeX, SkipBack, SkipForward, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -15,6 +16,7 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const hlsRef = useRef<Hls | null>(null);
+  const mpegtsRef = useRef<mpegts.Player | null>(null);
   const controlsTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
   const [playing, setPlaying] = useState(false);
@@ -26,7 +28,22 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
   const [showControls, setShowControls] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Initialize HLS or native playback
+  // Build proxied URL for streams to avoid CORS and mixed content issues
+  const getProxiedUrl = useCallback((streamUrl: string) => {
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    if (!supabaseUrl || !streamUrl) return streamUrl;
+    return `${supabaseUrl}/functions/v1/stream-proxy?url=${encodeURIComponent(streamUrl)}`;
+  }, []);
+
+  // Detect stream type from URL
+  const getStreamType = (url: string): 'hls' | 'mpegts' | 'direct' => {
+    if (url.includes('.m3u8') || url.includes('.m3u')) return 'hls';
+    if (url.includes('.mp4') || url.includes('.mkv') || url.includes('.avi')) return 'direct';
+    // No extension = likely raw MPEG-TS stream (Xtream live channels)
+    return 'mpegts';
+  };
+
+  // Initialize playback
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !src) return;
@@ -34,54 +51,77 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
     setError(null);
     setBuffering(true);
 
-    const isHls = src.includes('.m3u8') || src.includes('.m3u') || src.includes('type=m3u');
+    const proxiedSrc = getProxiedUrl(src);
+    const streamType = getStreamType(src);
 
-    if (Hls.isSupported()) {
-      // Try HLS first for all streams - Xtream servers support .m3u8 output
-      const hls = new Hls({
-        enableWorker: true,
-        lowLatencyMode: true,
-        xhrSetup: (xhr) => {
-          xhr.withCredentials = false;
-        },
-      });
-      hlsRef.current = hls;
-      hls.loadSource(src);
-      hls.attachMedia(video);
-      hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        setBuffering(false);
-      });
-      hls.on(Hls.Events.ERROR, (_, data) => {
-        if (data.fatal) {
-          console.error('HLS error:', data.type, data.details);
-          if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
-            // If HLS fails, try direct playback as fallback
-            console.log('HLS network error, trying direct playback...');
-            hls.destroy();
-            hlsRef.current = null;
-            video.src = src;
-            video.load();
-          } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
-            hls.recoverMediaError();
-          } else {
-            setError('Playback error — stream may be unavailable');
-            hls.destroy();
+    console.log(`[Player] Stream type: ${streamType}, src: ${src.substring(0, 80)}...`);
+
+    if (streamType === 'hls') {
+      if (Hls.isSupported()) {
+        const hls = new Hls({
+          enableWorker: true,
+          lowLatencyMode: true,
+          xhrSetup: (xhr) => { xhr.withCredentials = false; },
+        });
+        hlsRef.current = hls;
+        hls.loadSource(proxiedSrc);
+        hls.attachMedia(video);
+        hls.on(Hls.Events.MANIFEST_PARSED, () => setBuffering(false));
+        hls.on(Hls.Events.ERROR, (_, data) => {
+          if (data.fatal) {
+            console.error('HLS error:', data.type, data.details);
+            if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+              hls.recoverMediaError();
+            } else {
+              setError('Stream unavailable');
+              hls.destroy();
+            }
           }
-        }
+        });
+      } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+        video.src = proxiedSrc;
+      }
+    } else if (streamType === 'mpegts' && mpegts.isSupported()) {
+      // Use mpegts.js for raw TS streams (live channels)
+      const player = mpegts.createPlayer({
+        type: 'mpegts',
+        isLive: true,
+        url: proxiedSrc,
+      }, {
+        enableWorker: true,
+        liveBufferLatencyChasing: true,
+        liveBufferLatencyMaxLatency: 3,
+        liveBufferLatencyMinRemain: 0.5,
       });
-    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-      // Native HLS (Safari)
-      video.src = src;
+      mpegtsRef.current = player;
+      player.attachMediaElement(video);
+      player.load();
+      const playResult = player.play();
+      if (playResult && typeof playResult.catch === 'function') {
+        playResult.catch(() => {});
+      }
+
+      player.on(mpegts.Events.ERROR, (errorType: string, errorDetail: string) => {
+        console.error('mpegts error:', errorType, errorDetail);
+        setError('Stream error — may be unavailable');
+      });
     } else {
-      // Direct playback fallback
-      video.src = src;
+      // Direct playback (mp4, etc.)
+      video.src = proxiedSrc;
     }
 
     return () => {
       hlsRef.current?.destroy();
       hlsRef.current = null;
+      if (mpegtsRef.current) {
+        mpegtsRef.current.pause();
+        mpegtsRef.current.unload();
+        mpegtsRef.current.detachMediaElement();
+        mpegtsRef.current.destroy();
+        mpegtsRef.current = null;
+      }
     };
-  }, [src]);
+  }, [src, getProxiedUrl]);
 
   // Video event listeners
   useEffect(() => {

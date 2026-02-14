@@ -18,6 +18,7 @@ const SearchPage = () => {
 
   const categories = [
     { value: 'all', label: 'All' },
+    { value: 'channel', label: 'Live TV' },
     { value: 'movie', label: 'Movies' },
     { value: 'series', label: 'Series' },
     { value: 'vod', label: 'VOD' },

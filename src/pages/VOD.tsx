@@ -4,19 +4,33 @@ import AppLayout from '@/components/AppLayout';
 import MediaGrid from '@/components/MediaGrid';
 import { PlayCircle, Search } from 'lucide-react';
 import { Input } from '@/components/ui/input';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 const VOD = () => {
   const media = useMedia();
   const [search, setSearch] = useState('');
+  const [selectedGroup, setSelectedGroup] = useState('all');
+
+  const allVod = useMemo(() => media.filter(m => m.category === 'movie' || m.category === 'vod'), [media]);
+
+  const groups = useMemo(() => {
+    const g = [...new Set(allVod.map(i => i.group || 'Uncategorized'))].sort();
+    return g;
+  }, [allVod]);
 
   const vodItems = useMemo(() => {
-    const items = media.filter(m => m.category === 'movie' || m.category === 'vod');
-    if (!search) return items;
-    const q = search.toLowerCase();
-    return items.filter(i => i.title.toLowerCase().includes(q));
-  }, [media, search]);
+    let items = allVod;
+    if (selectedGroup !== 'all') {
+      items = items.filter(i => (i.group || 'Uncategorized') === selectedGroup);
+    }
+    if (search) {
+      const q = search.toLowerCase();
+      items = items.filter(i => i.title.toLowerCase().includes(q));
+    }
+    return items;
+  }, [allVod, search, selectedGroup]);
 
-  if (media.filter(m => m.category === 'movie' || m.category === 'vod').length === 0) {
+  if (allVod.length === 0) {
     return (
       <AppLayout>
         <div className="flex flex-col items-center justify-center py-20 text-center p-4">
@@ -43,6 +57,34 @@ const VOD = () => {
             />
           </div>
         </div>
+
+        {/* Sub-category filters */}
+        {groups.length > 1 && (
+          <ScrollArea className="w-full">
+            <div className="flex gap-2 pb-2">
+              <button
+                onClick={() => setSelectedGroup('all')}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
+                  selectedGroup === 'all' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                All ({allVod.length})
+              </button>
+              {groups.map(g => (
+                <button
+                  key={g}
+                  onClick={() => setSelectedGroup(g)}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
+                    selectedGroup === g ? 'bg-primary text-primary-foreground' : 'bg-secondary text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {g}
+                </button>
+              ))}
+            </div>
+          </ScrollArea>
+        )}
+
         <MediaGrid items={vodItems} />
       </div>
     </AppLayout>

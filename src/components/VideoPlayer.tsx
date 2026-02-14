@@ -36,7 +36,8 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
 
     const isHls = src.includes('.m3u8') || src.includes('.m3u') || src.includes('type=m3u');
 
-    if (isHls && Hls.isSupported()) {
+    if (Hls.isSupported()) {
+      // Try HLS first for all streams - Xtream servers support .m3u8 output
       const hls = new Hls({
         enableWorker: true,
         lowLatencyMode: true,
@@ -52,10 +53,14 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
       });
       hls.on(Hls.Events.ERROR, (_, data) => {
         if (data.fatal) {
-          console.error('HLS fatal error:', data);
+          console.error('HLS error:', data.type, data.details);
           if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
-            setError('Network error — check if the stream URL is accessible');
-            hls.startLoad();
+            // If HLS fails, try direct playback as fallback
+            console.log('HLS network error, trying direct playback...');
+            hls.destroy();
+            hlsRef.current = null;
+            video.src = src;
+            video.load();
           } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
             hls.recoverMediaError();
           } else {
@@ -68,7 +73,7 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
       // Native HLS (Safari)
       video.src = src;
     } else {
-      // Try direct playback (mp4, ts, etc.)
+      // Direct playback fallback
       video.src = src;
     }
 

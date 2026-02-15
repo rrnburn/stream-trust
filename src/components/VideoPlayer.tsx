@@ -35,6 +35,12 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
     return `${supabaseUrl}/functions/v1/stream-proxy?url=${encodeURIComponent(streamUrl)}`;
   }, []);
 
+  // Try direct URL first; only proxy if needed (some providers block datacenter IPs)
+  const getPlaybackUrl = useCallback((streamUrl: string, useProxy: boolean) => {
+    if (useProxy) return getProxiedUrl(streamUrl);
+    return streamUrl;
+  }, [getProxiedUrl]);
+
   // Detect stream type from URL
   const getStreamType = (url: string): 'hls' | 'mpegts' | 'direct' => {
     if (url.includes('.m3u8') || url.includes('.m3u')) return 'hls';
@@ -44,18 +50,46 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
     return 'direct';
   };
 
+  const [useProxy, setUseProxy] = useState(false);
+
+  const cleanup = useCallback(() => {
+    hlsRef.current?.destroy();
+    hlsRef.current = null;
+    if (mpegtsRef.current) {
+      mpegtsRef.current.pause();
+      mpegtsRef.current.unload();
+      mpegtsRef.current.detachMediaElement();
+      mpegtsRef.current.destroy();
+      mpegtsRef.current = null;
+    }
+  }, []);
+
   // Initialize playback
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !src) return;
 
+    cleanup();
     setError(null);
     setBuffering(true);
 
-    const proxiedSrc = getProxiedUrl(src);
+    const playbackUrl = getPlaybackUrl(src, useProxy);
     const streamType = getStreamType(src);
 
-    console.log(`[Player] Stream type: ${streamType}, src: ${src.substring(0, 80)}...`);
+    console.log(`[Player] Stream type: ${streamType}, proxy: ${useProxy}, src: ${src.substring(0, 80)}...`);
+
+    let errorHandled = false;
+    const handleFatalError = () => {
+      if (errorHandled) return;
+      errorHandled = true;
+      if (!useProxy) {
+        console.log('[Player] Direct playback failed, retrying via proxy...');
+        cleanup();
+        setUseProxy(true);
+      } else {
+        setError('Stream unavailable');
+      }
+    };
 
     if (streamType === 'hls') {
       if (Hls.isSupported()) {
@@ -65,7 +99,7 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
           xhrSetup: (xhr) => { xhr.withCredentials = false; },
         });
         hlsRef.current = hls;
-        hls.loadSource(proxiedSrc);
+        hls.loadSource(playbackUrl);
         hls.attachMedia(video);
         hls.on(Hls.Events.MANIFEST_PARSED, () => setBuffering(false));
         hls.on(Hls.Events.ERROR, (_, data) => {
@@ -74,20 +108,19 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
             if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
               hls.recoverMediaError();
             } else {
-              setError('Stream unavailable');
               hls.destroy();
+              handleFatalError();
             }
           }
         });
       } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-        video.src = proxiedSrc;
+        video.src = playbackUrl;
       }
     } else if (streamType === 'mpegts' && mpegts.isSupported()) {
-      // Use mpegts.js for raw TS streams (live channels)
       const player = mpegts.createPlayer({
         type: 'mpegts',
         isLive: true,
-        url: proxiedSrc,
+        url: playbackUrl,
       }, {
         enableWorker: true,
         liveBufferLatencyChasing: true,
@@ -104,25 +137,19 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
 
       player.on(mpegts.Events.ERROR, (errorType: string, errorDetail: string) => {
         console.error('mpegts error:', errorType, errorDetail);
-        setError('Stream error — may be unavailable');
+        handleFatalError();
       });
     } else {
-      // Direct playback (mp4, etc.)
-      video.src = proxiedSrc;
+      video.src = playbackUrl;
     }
 
-    return () => {
-      hlsRef.current?.destroy();
-      hlsRef.current = null;
-      if (mpegtsRef.current) {
-        mpegtsRef.current.pause();
-        mpegtsRef.current.unload();
-        mpegtsRef.current.detachMediaElement();
-        mpegtsRef.current.destroy();
-        mpegtsRef.current = null;
-      }
-    };
-  }, [src, getProxiedUrl]);
+    return cleanup;
+  }, [src, useProxy, getPlaybackUrl, cleanup]);
+
+  // Reset proxy state when src changes
+  useEffect(() => {
+    setUseProxy(false);
+  }, [src]);
 
   // Video event listeners
   useEffect(() => {

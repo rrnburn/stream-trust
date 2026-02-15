@@ -22,12 +22,9 @@ serve(async (req) => {
       });
     }
 
-    // Ensure we use HTTP for the upstream request (Xtream servers often only support HTTP)
-    const httpUrl = streamUrl.replace(/^https:\/\//i, 'http://');
-
     // Forward range headers for video seeking
     const headers: Record<string, string> = {
-      'User-Agent': 'okhttp/4.9.2',
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       'Accept': '*/*',
     };
 
@@ -36,9 +33,16 @@ serve(async (req) => {
       headers['Range'] = rangeHeader;
     }
 
-    console.log('[PROXY] Fetching:', httpUrl);
+    console.log('[PROXY] Fetching:', streamUrl);
 
-    const upstream = await fetch(httpUrl, { headers });
+    // Try original URL first, fallback to HTTP if HTTPS fails
+    let upstream = await fetch(streamUrl, { headers });
+    
+    if (!upstream.ok && upstream.status !== 206 && streamUrl.startsWith('https://')) {
+      const httpUrl = streamUrl.replace(/^https:\/\//i, 'http://');
+      console.log('[PROXY] HTTPS failed, retrying with HTTP:', httpUrl);
+      upstream = await fetch(httpUrl, { headers });
+    }
 
     if (!upstream.ok && upstream.status !== 206) {
       console.error('[PROXY] Upstream error:', upstream.status, upstream.statusText);
@@ -67,11 +71,11 @@ serve(async (req) => {
     if (contentRange) responseHeaders['Content-Range'] = contentRange;
 
     // For m3u8 manifests, rewrite segment URLs to go through proxy
-    if (httpUrl.endsWith('.m3u8') || contentType.includes('mpegurl') || contentType.includes('m3u')) {
+    if (streamUrl.endsWith('.m3u8') || contentType.includes('mpegurl') || contentType.includes('m3u')) {
       const body = await upstream.text();
       
       // Get the base URL for relative segment URLs
-      const baseUrl = httpUrl.substring(0, httpUrl.lastIndexOf('/') + 1);
+      const baseUrl = streamUrl.substring(0, streamUrl.lastIndexOf('/') + 1);
       const proxyBase = url.origin + url.pathname;
       
       // Rewrite relative URLs in the manifest to go through proxy

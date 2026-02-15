@@ -94,10 +94,22 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
 
   const loadParsedMedia = useCallback(async () => {
     if (!user) { setParsedMedia([]); return; }
-    const { data } = await supabase
-      .from('parsed_media')
-      .select('*')
-      .order('title', { ascending: true });
+    // Fetch all media in pages to avoid 1000-row default limit
+    let allData: any[] = [];
+    let from = 0;
+    const pageSize = 1000;
+    while (true) {
+      const { data: page } = await supabase
+        .from('parsed_media')
+        .select('*')
+        .order('title', { ascending: true })
+        .range(from, from + pageSize - 1);
+      if (!page || page.length === 0) break;
+      allData = allData.concat(page);
+      if (page.length < pageSize) break;
+      from += pageSize;
+    }
+    const data = allData;
     if (data) {
       setParsedMedia(data.map((row: any) => ({
         id: row.id,

@@ -39,8 +39,9 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
   const getStreamType = (url: string): 'hls' | 'mpegts' | 'direct' => {
     if (url.includes('.m3u8') || url.includes('.m3u')) return 'hls';
     if (url.includes('.mp4') || url.includes('.mkv') || url.includes('.avi')) return 'direct';
-    // No extension = likely raw MPEG-TS stream (Xtream live channels)
-    return 'mpegts';
+    // .ts extension or no extension = MPEG-TS stream (Xtream live channels)
+    if (url.includes('.ts') || !url.match(/\.\w{2,4}$/)) return 'mpegts';
+    return 'direct';
   };
 
   // Initialize playback

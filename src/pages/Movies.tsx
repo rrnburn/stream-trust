@@ -4,7 +4,7 @@ import AppLayout from '@/components/AppLayout';
 import MediaGrid from '@/components/MediaGrid';
 import { Search } from 'lucide-react';
 import { Input } from '@/components/ui/input';
-import { ScrollArea } from '@/components/ui/scroll-area';
+
 
 const Movies = () => {
   const media = useMedia();
@@ -39,8 +39,8 @@ const Movies = () => {
         </div>
 
         {groups.length > 1 && (
-          <ScrollArea className="w-full">
-            <div className="flex gap-2 pb-2">
+          <div className="w-full overflow-x-auto scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
+            <div className="flex gap-2 pb-2 w-max">
               <button
                 onClick={() => setSelectedGroup('all')}
                 className={`px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
@@ -57,7 +57,7 @@ const Movies = () => {
                 >{g}</button>
               ))}
             </div>
-          </ScrollArea>
+          </div>
         )}
 
         <MediaGrid items={filtered} />

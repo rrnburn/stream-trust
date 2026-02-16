@@ -5,7 +5,7 @@ import VideoPlayer from '@/components/VideoPlayer';
 import { Radio, ChevronDown, ChevronRight, Search, Filter } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
-import { ScrollArea } from '@/components/ui/scroll-area';
+
 
 const LiveTV = () => {
   const media = useMedia();
@@ -102,8 +102,8 @@ const LiveTV = () => {
             </div>
             {/* Group filter */}
             {allGroups.length > 1 && (
-              <ScrollArea className="w-full">
-                <div className="flex gap-1.5 pb-1">
+              <div className="w-full overflow-x-auto scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
+                <div className="flex gap-1.5 pb-1 w-max">
                   <button
                     onClick={() => setSelectedGroup('all')}
                     className={`px-2.5 py-1 rounded-md text-xs font-medium whitespace-nowrap transition-colors ${
@@ -124,7 +124,7 @@ const LiveTV = () => {
                     </button>
                   ))}
                 </div>
-              </ScrollArea>
+              </div>
             )}
             <p className="text-xs text-muted-foreground">{filtered.length} channels</p>
           </div>

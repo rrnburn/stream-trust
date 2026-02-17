@@ -178,37 +178,27 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     if (!user) return;
     setParsingPlaylist(true);
     try {
+      // Server-side parsing AND insertion — avoids client timeout for large libraries
       const { data, error } = await supabase.functions.invoke('parse-playlist', {
-        body: { url: source.url, type: source.type, username: source.username, password: source.password },
+        body: {
+          url: source.url,
+          type: source.type,
+          username: source.username,
+          password: source.password,
+          sourceId: source.id,
+          userId: user.id,
+          sourceName: source.name,
+        },
       });
       if (error) throw error;
-      if (data?.items?.length) {
-        // Delete old parsed media for this source
-        await supabase.from('parsed_media').delete().eq('source_id', source.id);
+      if (data?.error) throw new Error(data.error);
 
-        // Insert new items in batches of 500
-        const rows = data.items.map((item: any) => ({
-          user_id: user.id,
-          source_id: source.id,
-          title: item.title,
-          poster: item.logo || '',
-          category: item.category,
-          genre: item.group || 'Uncategorized',
-          description: `From ${source.name}`,
-          stream_url: item.url,
-          group_name: item.group || null,
-        }));
-
-        for (let i = 0; i < rows.length; i += 500) {
-          const batch = rows.slice(i, i + 500);
-          const { error: insertError } = await supabase.from('parsed_media').insert(batch);
-          if (insertError) {
-            console.error('Insert batch error:', insertError);
-            throw insertError;
-          }
-        }
-
-        toast.success(`Parsed ${data.items.length} items from ${source.name}`);
+      if (data?.inserted > 0 || data?.total > 0) {
+        const parts = [];
+        if (data.channels) parts.push(`${data.channels} channels`);
+        if (data.movies) parts.push(`${data.movies} movies`);
+        if (data.series) parts.push(`${data.series} series`);
+        toast.success(`Parsed ${data.total} items (${parts.join(', ')}) from ${source.name}`);
         await loadParsedMedia();
       } else {
         toast.info('No items found in playlist');

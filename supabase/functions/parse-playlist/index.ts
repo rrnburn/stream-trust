@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -6,12 +7,10 @@ const corsHeaders = {
 };
 
 interface M3UItem {
-  id: string;
   title: string;
   group: string;
   logo: string;
   url: string;
-  tvgId: string;
   category: 'movie' | 'series' | 'vod' | 'channel';
 }
 
@@ -31,12 +30,10 @@ function parseM3U(content: string): M3UItem[] {
       const titleMatch = info.match(/,(.+)$/);
       const groupMatch = info.match(/group-title="([^"]*)"/);
       const logoMatch = info.match(/tvg-logo="([^"]*)"/);
-      const tvgIdMatch = info.match(/tvg-id="([^"]*)"/);
 
       const title = titleMatch?.[1]?.trim() || 'Unknown';
       const group = groupMatch?.[1] || 'Uncategorized';
       const logo = logoMatch?.[1] || '';
-      const tvgId = tvgIdMatch?.[1] || '';
 
       const groupLower = group.toLowerCase();
       let category: M3UItem['category'] = 'channel';
@@ -44,15 +41,7 @@ function parseM3U(content: string): M3UItem[] {
       else if (groupLower.includes('series') || groupLower.includes('show')) category = 'series';
       else if (groupLower.includes('vod')) category = 'vod';
 
-      items.push({
-        id: crypto.randomUUID(),
-        title,
-        group,
-        logo,
-        url: streamUrl,
-        tvgId,
-        category,
-      });
+      items.push({ title, group, logo, url: streamUrl, category });
     } else {
       i++;
     }
@@ -67,7 +56,7 @@ serve(async (req) => {
   }
 
   try {
-    const { url, type, username, password } = await req.json();
+    const { url, type, username, password, sourceId, userId, sourceName } = await req.json();
 
     if (!url) {
       return new Response(JSON.stringify({ error: 'URL is required' }), {
@@ -76,7 +65,12 @@ serve(async (req) => {
       });
     }
 
-    let playlistUrl = url;
+    // Create Supabase client for server-side DB operations
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
+    let items: M3UItem[] = [];
 
     if (type === 'xtream' && username && password) {
       let base = url.replace(/\/$/, '');
@@ -87,20 +81,19 @@ serve(async (req) => {
       base = base.replace(/\/$/, '');
 
       const apiBase = `${base}/player_api.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`;
-      // Use HTTPS for stream URLs so browsers don't block mixed content
       const streamBase = base.replace(/^http:\/\//i, 'https://');
 
       console.log('[XTREAM] API base:', apiBase);
       console.log('[XTREAM] Stream base (HTTPS):', streamBase);
 
-      // Fetch streams AND categories in parallel
+      const fetchOpts = { headers: { 'User-Agent': 'okhttp/4.9.2', 'Accept': '*/*' } };
       const [liveRes, vodRes, seriesRes, liveCatRes, vodCatRes, seriesCatRes] = await Promise.all([
-        fetch(`${apiBase}&action=get_live_streams`, { headers: { 'User-Agent': 'okhttp/4.9.2', 'Accept': '*/*' } }),
-        fetch(`${apiBase}&action=get_vod_streams`, { headers: { 'User-Agent': 'okhttp/4.9.2', 'Accept': '*/*' } }),
-        fetch(`${apiBase}&action=get_series`, { headers: { 'User-Agent': 'okhttp/4.9.2', 'Accept': '*/*' } }),
-        fetch(`${apiBase}&action=get_live_categories`, { headers: { 'User-Agent': 'okhttp/4.9.2', 'Accept': '*/*' } }),
-        fetch(`${apiBase}&action=get_vod_categories`, { headers: { 'User-Agent': 'okhttp/4.9.2', 'Accept': '*/*' } }),
-        fetch(`${apiBase}&action=get_series_categories`, { headers: { 'User-Agent': 'okhttp/4.9.2', 'Accept': '*/*' } }),
+        fetch(`${apiBase}&action=get_live_streams`, fetchOpts),
+        fetch(`${apiBase}&action=get_vod_streams`, fetchOpts),
+        fetch(`${apiBase}&action=get_series`, fetchOpts),
+        fetch(`${apiBase}&action=get_live_categories`, fetchOpts),
+        fetch(`${apiBase}&action=get_vod_categories`, fetchOpts),
+        fetch(`${apiBase}&action=get_series_categories`, fetchOpts),
       ]);
 
       const parseSafe = async (res: Response) => {
@@ -114,13 +107,10 @@ serve(async (req) => {
         parseSafe(liveCatRes), parseSafe(vodCatRes), parseSafe(seriesCatRes),
       ]);
 
-      // Build category ID -> name maps
       const buildCatMap = (cats: any[]) => {
         const map: Record<string, string> = {};
         for (const c of cats) {
-          if (c.category_id && c.category_name) {
-            map[String(c.category_id)] = c.category_name;
-          }
+          if (c.category_id && c.category_name) map[String(c.category_id)] = c.category_name;
         }
         return map;
       };
@@ -132,78 +122,98 @@ serve(async (req) => {
       console.log(`[XTREAM] Fetched: ${liveStreams.length} live, ${vodStreams.length} VOD, ${seriesStreams.length} series`);
       console.log(`[XTREAM] Categories: ${Object.keys(liveCatMap).length} live, ${Object.keys(vodCatMap).length} VOD, ${Object.keys(seriesCatMap).length} series`);
 
-      const items: M3UItem[] = [
+      items = [
         ...liveStreams.map((s: any) => ({
-          id: crypto.randomUUID(),
           title: s.name || 'Unknown',
           group: liveCatMap[String(s.category_id)] || s.category_name || 'Uncategorized',
           logo: s.stream_icon || '',
-          // Use /live/ path with .ts extension for Xtream live streams
           url: `${streamBase}/live/${username}/${password}/${s.stream_id}.ts`,
-          tvgId: s.epg_channel_id || '',
           category: 'channel' as const,
         })),
         ...vodStreams.map((s: any) => ({
-          id: crypto.randomUUID(),
           title: s.name || 'Unknown',
           group: vodCatMap[String(s.category_id)] || s.category_name || 'Uncategorized',
           logo: s.stream_icon || '',
-          // Force .mp4 extension for browser compatibility (browsers can't play .mkv)
           url: `${streamBase}/movie/${username}/${password}/${s.stream_id}.mp4`,
-          tvgId: '',
           category: 'movie' as const,
         })),
         ...seriesStreams.map((s: any) => ({
-          id: crypto.randomUUID(),
           title: s.name || 'Unknown',
           group: seriesCatMap[String(s.category_id)] || s.category_name || 'Uncategorized',
           logo: s.cover || '',
           url: `${streamBase}/series/${username}/${password}/${s.series_id}`,
-          tvgId: '',
           category: 'series' as const,
         })),
       ];
-
-      const groups = [...new Set(items.map((i) => i.group))].sort();
-      return new Response(JSON.stringify({ items, groups, total: items.length }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    } else {
+      console.log('[FETCH] Requesting playlist from:', url);
+      const response = await fetch(url, {
+        headers: { 'User-Agent': 'okhttp/4.9.2', 'Accept': '*/*' },
       });
+      if (!response.ok) {
+        return new Response(JSON.stringify({ error: `Failed to fetch: ${response.status}` }), {
+          status: 502,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      items = parseM3U(await response.text());
     }
 
-    console.log('[FETCH] Requesting playlist from:', playlistUrl);
+    // If sourceId and userId provided, insert directly into DB (server-side)
+    if (sourceId && userId && items.length > 0) {
+      console.log(`[DB] Inserting ${items.length} items for source ${sourceId}`);
 
-    const response = await fetch(playlistUrl, {
-      headers: {
-        'User-Agent': 'okhttp/4.9.2',
-        'Accept': '*/*'
-      },
-    });
+      // Delete old records
+      const { error: delErr } = await supabase.from('parsed_media').delete().eq('source_id', sourceId);
+      if (delErr) console.error('[DB] Delete error:', delErr.message);
 
-    if (!response.ok) {
-      const body = await response.text().catch(() => '');
+      // Batch insert 500 at a time
+      let inserted = 0;
+      const batchSize = 500;
+      for (let i = 0; i < items.length; i += batchSize) {
+        const batch = items.slice(i, i + batchSize).map(item => ({
+          user_id: userId,
+          source_id: sourceId,
+          title: item.title,
+          poster: item.logo || '',
+          category: item.category,
+          genre: item.group || 'Uncategorized',
+          description: `From ${sourceName || 'source'}`,
+          stream_url: item.url,
+          group_name: item.group || null,
+        }));
+
+        const { error: insErr } = await supabase.from('parsed_media').insert(batch);
+        if (insErr) {
+          console.error(`[DB] Insert batch ${i / batchSize} error:`, insErr.message);
+        } else {
+          inserted += batch.length;
+        }
+      }
+
+      console.log(`[DB] Inserted ${inserted} of ${items.length} items`);
+
       return new Response(JSON.stringify({
-        error: `Failed to fetch playlist: ${response.status} ${response.statusText}`,
-        details: body.substring(0, 500),
-        requestUrl: playlistUrl,
+        total: items.length,
+        inserted,
+        channels: items.filter(i => i.category === 'channel').length,
+        movies: items.filter(i => i.category === 'movie').length,
+        series: items.filter(i => i.category === 'series').length,
       }), {
-        status: 502,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    const content = await response.text();
-    const items = parseM3U(content);
-    const groups = [...new Set(items.map(i => i.group))].sort();
-
+    // Fallback: return items (legacy mode)
     return new Response(JSON.stringify({
       items,
-      groups,
       total: items.length,
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : 'Unknown error';
+    console.error('[PARSE] Error:', msg);
     return new Response(JSON.stringify({ error: msg }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

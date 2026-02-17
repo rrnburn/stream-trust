@@ -27,39 +27,41 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
   const [buffering, setBuffering] = useState(true);
   const [showControls, setShowControls] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [useProxy, setUseProxy] = useState(false);
+  const [preBuffering, setPreBuffering] = useState(false);
 
-  // Build proxied URL for streams to avoid CORS and mixed content issues
   const getProxiedUrl = useCallback((streamUrl: string) => {
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
     if (!supabaseUrl || !streamUrl) return streamUrl;
     return `${supabaseUrl}/functions/v1/stream-proxy?url=${encodeURIComponent(streamUrl)}`;
   }, []);
 
-  // Try direct URL first; only proxy if needed (some providers block datacenter IPs)
-  const getPlaybackUrl = useCallback((streamUrl: string, useProxy: boolean) => {
-    if (useProxy) return getProxiedUrl(streamUrl);
-    return streamUrl;
+  const getPlaybackUrl = useCallback((streamUrl: string, proxy: boolean) => {
+    return proxy ? getProxiedUrl(streamUrl) : streamUrl;
   }, [getProxiedUrl]);
 
-  // Detect stream type from URL
   const getStreamType = (url: string): 'hls' | 'mpegts' | 'direct' => {
-    if (url.includes('.m3u8') || url.includes('.m3u')) return 'hls';
-    if (url.includes('.mp4') || url.includes('.mkv') || url.includes('.avi')) return 'direct';
-    // .ts extension or no extension = MPEG-TS stream (Xtream live channels)
-    if (url.includes('.ts') || !url.match(/\.\w{2,4}$/)) return 'mpegts';
+    const cleanUrl = url.split('?')[0]; // Strip query params for extension detection
+    if (cleanUrl.includes('.m3u8') || cleanUrl.includes('.m3u')) return 'hls';
+    if (cleanUrl.includes('.mp4') || cleanUrl.includes('.mkv') || cleanUrl.includes('.avi')) return 'direct';
+    if (cleanUrl.includes('.ts') || !cleanUrl.match(/\.\w{2,4}$/)) return 'mpegts';
     return 'direct';
   };
 
-  const [useProxy, setUseProxy] = useState(false);
+  const isLiveStream = useCallback((url: string) => {
+    return url.includes('/live/') || getStreamType(url) === 'mpegts';
+  }, []);
 
   const cleanup = useCallback(() => {
     hlsRef.current?.destroy();
     hlsRef.current = null;
     if (mpegtsRef.current) {
-      mpegtsRef.current.pause();
-      mpegtsRef.current.unload();
-      mpegtsRef.current.detachMediaElement();
-      mpegtsRef.current.destroy();
+      try {
+        mpegtsRef.current.pause();
+        mpegtsRef.current.unload();
+        mpegtsRef.current.detachMediaElement();
+        mpegtsRef.current.destroy();
+      } catch {}
       mpegtsRef.current = null;
     }
   }, []);
@@ -72,11 +74,13 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
     cleanup();
     setError(null);
     setBuffering(true);
+    setPreBuffering(false);
 
     const playbackUrl = getPlaybackUrl(src, useProxy);
     const streamType = getStreamType(src);
+    const isLive = isLiveStream(src);
 
-    console.log(`[Player] Stream type: ${streamType}, proxy: ${useProxy}, src: ${src.substring(0, 80)}...`);
+    console.log(`[Player] type=${streamType} proxy=${useProxy} live=${isLive} url=${src.substring(0, 80)}...`);
 
     let errorHandled = false;
     const handleFatalError = () => {
@@ -88,23 +92,51 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
         setUseProxy(true);
       } else {
         setError('Stream unavailable');
+        setBuffering(false);
       }
+    };
+
+    // Pre-buffer for live streams: wait for sufficient buffer before playing
+    const startWithPreBuffer = () => {
+      if (!isLive) {
+        video.play().catch(() => {});
+        return;
+      }
+      setPreBuffering(true);
+      const MIN_BUFFER = 2; // seconds
+      const checkBuffer = () => {
+        if (video.buffered.length > 0) {
+          const buffered = video.buffered.end(0) - video.currentTime;
+          if (buffered >= MIN_BUFFER) {
+            console.log(`[Player] Pre-buffer ready: ${buffered.toFixed(1)}s`);
+            setPreBuffering(false);
+            video.play().catch(() => {});
+            return;
+          }
+        }
+        // Keep checking
+        setTimeout(checkBuffer, 200);
+      };
+      checkBuffer();
     };
 
     if (streamType === 'hls') {
       if (Hls.isSupported()) {
         const hls = new Hls({
           enableWorker: true,
-          lowLatencyMode: true,
+          lowLatencyMode: isLive,
           xhrSetup: (xhr) => { xhr.withCredentials = false; },
         });
         hlsRef.current = hls;
         hls.loadSource(playbackUrl);
         hls.attachMedia(video);
-        hls.on(Hls.Events.MANIFEST_PARSED, () => setBuffering(false));
+        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+          setBuffering(false);
+          startWithPreBuffer();
+        });
         hls.on(Hls.Events.ERROR, (_, data) => {
           if (data.fatal) {
-            console.error('HLS error:', data.type, data.details);
+            console.error('[Player] HLS fatal:', data.type, data.details);
             if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
               hls.recoverMediaError();
             } else {
@@ -115,6 +147,7 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
         });
       } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
         video.src = playbackUrl;
+        video.addEventListener('loadedmetadata', () => startWithPreBuffer(), { once: true });
       }
     } else if (streamType === 'mpegts' && mpegts.isSupported()) {
       const player = mpegts.createPlayer({
@@ -124,27 +157,52 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
       }, {
         enableWorker: true,
         liveBufferLatencyChasing: true,
-        liveBufferLatencyMaxLatency: 3,
-        liveBufferLatencyMinRemain: 0.5,
+        liveBufferLatencyMaxLatency: 5,
+        liveBufferLatencyMinRemain: 1,
       });
       mpegtsRef.current = player;
       player.attachMediaElement(video);
       player.load();
-      const playResult = player.play();
-      if (playResult && typeof playResult.catch === 'function') {
-        playResult.catch(() => {});
-      }
+
+      // Pre-buffer: wait for canplay then check buffer before starting
+      video.addEventListener('canplay', () => startWithPreBuffer(), { once: true });
 
       player.on(mpegts.Events.ERROR, (errorType: string, errorDetail: string) => {
-        console.error('mpegts error:', errorType, errorDetail);
+        console.error('[Player] mpegts error:', errorType, errorDetail);
         handleFatalError();
       });
     } else {
+      // Direct playback (mp4 etc) — try direct first, proxy fallback on error
       video.src = playbackUrl;
+      video.addEventListener('loadedmetadata', () => {
+        setBuffering(false);
+        video.play().catch(() => {});
+      }, { once: true });
+      
+      // Handle direct video errors - trigger proxy fallback
+      const onVideoError = () => {
+        console.error('[Player] Direct video error, code:', video.error?.code, video.error?.message);
+        handleFatalError();
+      };
+      video.addEventListener('error', onVideoError, { once: true });
+      
+      // Timeout fallback - if nothing loads within 10s, try proxy
+      const timeout = setTimeout(() => {
+        if (video.readyState < 2 && !errorHandled) {
+          console.log('[Player] Direct load timeout, trying proxy...');
+          handleFatalError();
+        }
+      }, 10000);
+      
+      return () => {
+        clearTimeout(timeout);
+        video.removeEventListener('error', onVideoError);
+        cleanup();
+      };
     }
 
     return cleanup;
-  }, [src, useProxy, getPlaybackUrl, cleanup]);
+  }, [src, useProxy, getPlaybackUrl, cleanup, isLiveStream]);
 
   // Reset proxy state when src changes
   useEffect(() => {
@@ -158,7 +216,7 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
 
     const onTimeUpdate = () => {
       setCurrentTime(video.currentTime);
-      if (video.duration && onProgress) {
+      if (video.duration && isFinite(video.duration) && onProgress) {
         onProgress(video.currentTime / video.duration);
       }
     };
@@ -166,9 +224,8 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
     const onPlay = () => { setPlaying(true); setBuffering(false); };
     const onPause = () => setPlaying(false);
     const onWaiting = () => setBuffering(true);
-    const onPlaying = () => setBuffering(false);
+    const onPlaying = () => { setBuffering(false); setPreBuffering(false); };
     const onCanPlay = () => setBuffering(false);
-    const onError = () => setError('Failed to load stream');
 
     video.addEventListener('timeupdate', onTimeUpdate);
     video.addEventListener('durationchange', onDurationChange);
@@ -177,7 +234,6 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
     video.addEventListener('waiting', onWaiting);
     video.addEventListener('playing', onPlaying);
     video.addEventListener('canplay', onCanPlay);
-    video.addEventListener('error', onError);
 
     return () => {
       video.removeEventListener('timeupdate', onTimeUpdate);
@@ -187,7 +243,6 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
       video.removeEventListener('waiting', onWaiting);
       video.removeEventListener('playing', onPlaying);
       video.removeEventListener('canplay', onCanPlay);
-      video.removeEventListener('error', onError);
     };
   }, [onProgress]);
 
@@ -244,7 +299,6 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
     return `${m}:${sec.toString().padStart(2, '0')}`;
   };
 
-  // Keyboard controls
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === ' ' || e.key === 'k') { e.preventDefault(); togglePlay(); }
@@ -271,16 +325,19 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
         onClick={togglePlay}
       />
 
-      {/* Buffering spinner */}
+      {/* Buffering / Pre-buffering spinner */}
       <AnimatePresence>
-        {buffering && !error && (
+        {(buffering || preBuffering) && !error && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="absolute inset-0 flex items-center justify-center bg-black/40 pointer-events-none"
+            className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 pointer-events-none"
           >
             <Loader2 className="w-12 h-12 text-primary animate-spin" />
+            {preBuffering && (
+              <p className="text-white/70 text-sm mt-3">Buffering stream...</p>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
@@ -303,15 +360,13 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
             transition={{ duration: 0.2 }}
             className="absolute inset-0 flex flex-col justify-between"
           >
-            {/* Top bar */}
             {title && (
               <div className="bg-gradient-to-b from-black/70 to-transparent p-4">
                 <p className="text-white font-semibold text-sm truncate">{title}</p>
               </div>
             )}
 
-            {/* Center play */}
-            {!playing && !buffering && (
+            {!playing && !buffering && !preBuffering && (
               <div className="flex-1 flex items-center justify-center">
                 <button
                   onClick={togglePlay}
@@ -322,10 +377,8 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
               </div>
             )}
 
-            {/* Bottom controls */}
             <div className="bg-gradient-to-t from-black/80 to-transparent p-4 pt-10 space-y-2">
-              {/* Progress bar */}
-              {duration > 0 && (
+              {duration > 0 && isFinite(duration) && (
                 <div className="w-full h-1.5 bg-white/20 rounded-full cursor-pointer group/bar" onClick={seekTo}>
                   <div
                     className="h-full bg-primary rounded-full relative transition-all"

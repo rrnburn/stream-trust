@@ -37,6 +37,9 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
   const [error, setError] = useState<string | null>(null);
   const [useProxy, setUseProxy] = useState(false);
   const [preBuffering, setPreBuffering] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
+  const [retrying, setRetrying] = useState(false);
+  const MAX_RETRIES = 3;
 
   const getProxiedUrl = useCallback((streamUrl: string) => {
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -118,8 +121,8 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
         cleanup();
         setUseProxy(true);
       } else {
-        log('ERROR', `Playback failed via proxy: ${reason}`);
-        setError('Stream unavailable');
+        log('ERROR', `Playback failed via proxy: ${reason} | Title="${title}" retryCount=${retryCount}`);
+        setError(reason);
         setBuffering(false);
       }
     };
@@ -241,12 +244,30 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
     }
 
     return cleanup;
-  }, [src, useProxy, getPlaybackUrl, cleanup, isLiveStream, normalizeStreamUrl, title]);
+  }, [src, useProxy, retryCount, getPlaybackUrl, cleanup, isLiveStream, normalizeStreamUrl, title]);
 
-  // Reset proxy state when src changes
+  // Reset proxy and retry state when src changes
   useEffect(() => {
     setUseProxy(false);
+    setRetryCount(0);
+    setRetrying(false);
+    setError(null);
   }, [src]);
+
+  const handleRetry = useCallback(() => {
+    if (retrying || retryCount >= MAX_RETRIES) return;
+    const attempt = retryCount + 1;
+    log('INFO', `Retry attempt ${attempt}/${MAX_RETRIES} for "${title}" src=${src?.substring(0, 80)}`);
+    setRetrying(true);
+    setError(null);
+    const delay = Math.min(1000 * Math.pow(2, retryCount), 4000);
+    setTimeout(() => {
+      setRetryCount(attempt);
+      setUseProxy(false);
+      setRetrying(false);
+      // The useEffect on [src, useProxy, retryCount] will re-initialize playback
+    }, delay);
+  }, [retrying, retryCount, title, src]);
 
   // Video event listeners
   useEffect(() => {
@@ -388,9 +409,40 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
 
       {/* Error state */}
       {error && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 text-center p-4">
-          <p className="text-destructive font-medium mb-2">{error}</p>
-          <p className="text-muted-foreground text-sm">The stream may require a valid subscription or may be geo-restricted.</p>
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 text-center p-4 gap-3">
+          <p className="text-destructive font-medium text-lg">⚠️ Playback failed</p>
+          <p className="text-muted-foreground text-sm max-w-xs">
+            {error}. Please check your connection or try again.
+          </p>
+          <div className="flex gap-3 mt-2">
+            {retryCount < MAX_RETRIES && (
+              <button
+                onClick={handleRetry}
+                disabled={retrying}
+                className="px-5 py-2 rounded-lg bg-primary text-primary-foreground font-medium text-sm hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center gap-2"
+              >
+                {retrying ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Retrying ({retryCount + 1}/{MAX_RETRIES})...
+                  </>
+                ) : (
+                  `Retry${retryCount > 0 ? ` (${retryCount}/${MAX_RETRIES})` : ''}`
+                )}
+              </button>
+            )}
+            {retryCount >= MAX_RETRIES && (
+              <p className="text-muted-foreground text-xs">Max retries reached.</p>
+            )}
+            {onClose && (
+              <button
+                onClick={onClose}
+                className="px-5 py-2 rounded-lg bg-secondary text-secondary-foreground font-medium text-sm hover:bg-secondary/80 transition-colors"
+              >
+                Go Back
+              </button>
+            )}
+          </div>
         </div>
       )}
 

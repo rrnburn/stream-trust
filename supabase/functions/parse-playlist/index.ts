@@ -127,7 +127,7 @@ serve(async (req) => {
           title: s.name || 'Unknown',
           group: liveCatMap[String(s.category_id)] || s.category_name || 'Uncategorized',
           logo: s.stream_icon || '',
-          url: `${streamBase}/live/${username}/${password}/${s.stream_id}.ts`,
+          url: `${streamBase}/live/${username}/${password}/${s.stream_id}.m3u8`,
           category: 'channel' as const,
         })),
         ...vodStreams.map((s: any) => ({

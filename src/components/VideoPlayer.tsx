@@ -12,6 +12,14 @@ interface VideoPlayerProps {
   onClose?: () => void;
 }
 
+const log = (level: 'INFO' | 'DEBUG' | 'WARN' | 'ERROR', msg: string, ...args: any[]) => {
+  const ts = new Date().toISOString();
+  const formatted = `[${ts}] [Player] [${level}] ${msg}`;
+  if (level === 'ERROR') console.error(formatted, ...args);
+  else if (level === 'WARN') console.warn(formatted, ...args);
+  else console.log(formatted, ...args);
+};
+
 const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerProps) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -40,8 +48,18 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
     return proxy ? getProxiedUrl(streamUrl) : streamUrl;
   }, [getProxiedUrl]);
 
+  // Normalize live TV URLs: convert legacy .ts to .m3u8 for HLS playback
+  const normalizeStreamUrl = useCallback((url: string): string => {
+    if (url.includes('/live/') && url.endsWith('.ts')) {
+      const hlsUrl = url.replace(/\.ts$/, '.m3u8');
+      log('INFO', `Converted live .ts → .m3u8: ${hlsUrl.substring(0, 80)}...`);
+      return hlsUrl;
+    }
+    return url;
+  }, []);
+
   const getStreamType = (url: string): 'hls' | 'mpegts' | 'direct' => {
-    const cleanUrl = url.split('?')[0]; // Strip query params for extension detection
+    const cleanUrl = url.split('?')[0];
     if (cleanUrl.includes('.m3u8') || cleanUrl.includes('.m3u')) return 'hls';
     if (cleanUrl.includes('.mp4') || cleanUrl.includes('.mkv') || cleanUrl.includes('.avi')) return 'direct';
     if (cleanUrl.includes('.ts') || !cleanUrl.match(/\.\w{2,4}$/)) return 'mpegts';
@@ -53,15 +71,21 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
   }, []);
 
   const cleanup = useCallback(() => {
-    hlsRef.current?.destroy();
-    hlsRef.current = null;
+    if (hlsRef.current) {
+      log('DEBUG', 'Destroying HLS instance');
+      hlsRef.current.destroy();
+      hlsRef.current = null;
+    }
     if (mpegtsRef.current) {
       try {
+        log('DEBUG', 'Destroying mpegts instance');
         mpegtsRef.current.pause();
         mpegtsRef.current.unload();
         mpegtsRef.current.detachMediaElement();
         mpegtsRef.current.destroy();
-      } catch {}
+      } catch (e) {
+        log('WARN', 'mpegts cleanup error', e);
+      }
       mpegtsRef.current = null;
     }
   }, []);
@@ -76,51 +100,56 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
     setBuffering(true);
     setPreBuffering(false);
 
-    const playbackUrl = getPlaybackUrl(src, useProxy);
-    const streamType = getStreamType(src);
-    const isLive = isLiveStream(src);
+    const normalizedSrc = normalizeStreamUrl(src);
+    const playbackUrl = getPlaybackUrl(normalizedSrc, useProxy);
+    const streamType = getStreamType(normalizedSrc);
+    const isLive = isLiveStream(normalizedSrc);
 
-    console.log(`[Player] type=${streamType} proxy=${useProxy} live=${isLive} url=${src.substring(0, 80)}...`);
+    log('INFO', `Media selected: Title="${title}" Type=${streamType} Live=${isLive} Proxy=${useProxy}`);
+    log('DEBUG', `Stream URL: ${normalizedSrc.substring(0, 120)}`);
+    log('DEBUG', `Playback URL: ${playbackUrl.substring(0, 120)}`);
 
     let errorHandled = false;
-    const handleFatalError = () => {
+    const handleFatalError = (reason: string) => {
       if (errorHandled) return;
       errorHandled = true;
       if (!useProxy) {
-        console.log('[Player] Direct playback failed, retrying via proxy...');
+        log('WARN', `Direct playback failed (${reason}), retrying via proxy...`);
         cleanup();
         setUseProxy(true);
       } else {
+        log('ERROR', `Playback failed via proxy: ${reason}`);
         setError('Stream unavailable');
         setBuffering(false);
       }
     };
 
-    // Pre-buffer for live streams: wait for sufficient buffer before playing
+    // Pre-buffer for live streams
     const startWithPreBuffer = () => {
       if (!isLive) {
-        video.play().catch(() => {});
+        log('INFO', 'VOD stream ready, starting playback');
+        video.play().catch((e) => log('WARN', 'Autoplay blocked', e?.message));
         return;
       }
       setPreBuffering(true);
-      const MIN_BUFFER = 2; // seconds
+      const MIN_BUFFER = 2;
       const checkBuffer = () => {
         if (video.buffered.length > 0) {
           const buffered = video.buffered.end(0) - video.currentTime;
           if (buffered >= MIN_BUFFER) {
-            console.log(`[Player] Pre-buffer ready: ${buffered.toFixed(1)}s`);
+            log('INFO', `Pre-buffer ready: ${buffered.toFixed(1)}s buffered`);
             setPreBuffering(false);
-            video.play().catch(() => {});
+            video.play().catch((e) => log('WARN', 'Autoplay blocked', e?.message));
             return;
           }
         }
-        // Keep checking
         setTimeout(checkBuffer, 200);
       };
       checkBuffer();
     };
 
     if (streamType === 'hls') {
+      log('INFO', 'Initializing HLS player');
       if (Hls.isSupported()) {
         const hls = new Hls({
           enableWorker: true,
@@ -130,26 +159,36 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
         hlsRef.current = hls;
         hls.loadSource(playbackUrl);
         hls.attachMedia(video);
-        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        hls.on(Hls.Events.MANIFEST_PARSED, (_, data) => {
+          log('INFO', `HLS manifest parsed: ${data.levels.length} quality levels`);
           setBuffering(false);
           startWithPreBuffer();
         });
         hls.on(Hls.Events.ERROR, (_, data) => {
           if (data.fatal) {
-            console.error('[Player] HLS fatal:', data.type, data.details);
+            log('ERROR', `HLS fatal error: type=${data.type} details=${data.details}`, data.response ? `status=${data.response.code}` : '');
             if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+              log('INFO', 'Attempting HLS media error recovery');
               hls.recoverMediaError();
             } else {
               hls.destroy();
-              handleFatalError();
+              handleFatalError(`HLS ${data.type}: ${data.details}`);
             }
+          } else {
+            log('WARN', `HLS non-fatal: ${data.type} ${data.details}`);
           }
         });
       } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+        log('INFO', 'Using native HLS (Safari)');
         video.src = playbackUrl;
         video.addEventListener('loadedmetadata', () => startWithPreBuffer(), { once: true });
+      } else {
+        log('ERROR', 'HLS not supported in this browser');
+        setError('HLS playback not supported');
+        setBuffering(false);
       }
     } else if (streamType === 'mpegts' && mpegts.isSupported()) {
+      log('INFO', 'Initializing mpegts.js player');
       const player = mpegts.createPlayer({
         type: 'mpegts',
         isLive: true,
@@ -164,36 +203,36 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
       player.attachMediaElement(video);
       player.load();
 
-      // Pre-buffer: wait for canplay then check buffer before starting
       video.addEventListener('canplay', () => startWithPreBuffer(), { once: true });
 
       player.on(mpegts.Events.ERROR, (errorType: string, errorDetail: string) => {
-        console.error('[Player] mpegts error:', errorType, errorDetail);
-        handleFatalError();
+        log('ERROR', `mpegts error: type=${errorType} detail=${errorDetail}`);
+        handleFatalError(`mpegts ${errorType}: ${errorDetail}`);
       });
     } else {
-      // Direct playback (mp4 etc) — try direct first, proxy fallback on error
+      log('INFO', 'Using direct HTML5 video playback');
       video.src = playbackUrl;
       video.addEventListener('loadedmetadata', () => {
+        log('INFO', 'Direct video metadata loaded');
         setBuffering(false);
-        video.play().catch(() => {});
+        video.play().catch((e) => log('WARN', 'Autoplay blocked', e?.message));
       }, { once: true });
-      
-      // Handle direct video errors - trigger proxy fallback
+
       const onVideoError = () => {
-        console.error('[Player] Direct video error, code:', video.error?.code, video.error?.message);
-        handleFatalError();
+        const code = video.error?.code;
+        const msg = video.error?.message || 'Unknown';
+        log('ERROR', `Direct video error: code=${code} message=${msg}`);
+        handleFatalError(`Video error ${code}: ${msg}`);
       };
       video.addEventListener('error', onVideoError, { once: true });
-      
-      // Timeout fallback - if nothing loads within 10s, try proxy
+
       const timeout = setTimeout(() => {
         if (video.readyState < 2 && !errorHandled) {
-          console.log('[Player] Direct load timeout, trying proxy...');
-          handleFatalError();
+          log('WARN', 'Direct load timeout (10s), trying proxy...');
+          handleFatalError('Load timeout');
         }
       }, 10000);
-      
+
       return () => {
         clearTimeout(timeout);
         video.removeEventListener('error', onVideoError);
@@ -202,7 +241,7 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
     }
 
     return cleanup;
-  }, [src, useProxy, getPlaybackUrl, cleanup, isLiveStream]);
+  }, [src, useProxy, getPlaybackUrl, cleanup, isLiveStream, normalizeStreamUrl, title]);
 
   // Reset proxy state when src changes
   useEffect(() => {
@@ -221,11 +260,14 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
       }
     };
     const onDurationChange = () => setDuration(video.duration || 0);
-    const onPlay = () => { setPlaying(true); setBuffering(false); };
+    const onPlay = () => { setPlaying(true); setBuffering(false); log('DEBUG', 'Playback started'); };
     const onPause = () => setPlaying(false);
     const onWaiting = () => setBuffering(true);
     const onPlaying = () => { setBuffering(false); setPreBuffering(false); };
     const onCanPlay = () => setBuffering(false);
+    const onError = () => {
+      log('ERROR', `Video element error: code=${video.error?.code} msg=${video.error?.message}`);
+    };
 
     video.addEventListener('timeupdate', onTimeUpdate);
     video.addEventListener('durationchange', onDurationChange);
@@ -234,6 +276,7 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
     video.addEventListener('waiting', onWaiting);
     video.addEventListener('playing', onPlaying);
     video.addEventListener('canplay', onCanPlay);
+    video.addEventListener('error', onError);
 
     return () => {
       video.removeEventListener('timeupdate', onTimeUpdate);
@@ -243,13 +286,14 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
       video.removeEventListener('waiting', onWaiting);
       video.removeEventListener('playing', onPlaying);
       video.removeEventListener('canplay', onCanPlay);
+      video.removeEventListener('error', onError);
     };
   }, [onProgress]);
 
   const togglePlay = useCallback(() => {
     const video = videoRef.current;
     if (!video) return;
-    if (video.paused) video.play().catch(() => {});
+    if (video.paused) video.play().catch((e) => log('WARN', 'Play failed', e?.message));
     else video.pause();
   }, []);
 

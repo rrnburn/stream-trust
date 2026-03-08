@@ -2,6 +2,7 @@ import { logger } from '@/lib/logger';
 import { isNativePlatform } from '@/lib/platform';
 
 const PLAYER_ID = 'streamvault';
+const INIT_TIMEOUT_MS = 15000; // 15 seconds max wait for initPlayer
 
 /**
  * Dynamically import the plugin only on native platforms.
@@ -9,6 +10,20 @@ const PLAYER_ID = 'streamvault';
 async function getVideoPlayer() {
   const { VideoPlayer } = await import('@capgo/capacitor-video-player');
   return VideoPlayer;
+}
+
+/**
+ * Wrap a promise with a timeout so it never hangs forever.
+ */
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(`${label} timed out after ${ms}ms`));
+    }, ms);
+    promise
+      .then((val) => { clearTimeout(timer); resolve(val); })
+      .catch((err) => { clearTimeout(timer); reject(err); });
+  });
 }
 
 /**
@@ -23,9 +38,12 @@ export async function playNative(url: string, title?: string): Promise<void> {
   logger.info('NativePlayer', `Playing: ${url.substring(0, 100)}`, { title });
 
   try {
+    logger.info('NativePlayer', 'Loading VideoPlayer plugin...');
     const VideoPlayer = await getVideoPlayer();
-    const result = await VideoPlayer.initPlayer({
-      mode: 'fullscreen',
+    logger.info('NativePlayer', 'Plugin loaded, calling initPlayer...');
+
+    const initOptions = {
+      mode: 'fullscreen' as const,
       url,
       playerId: PLAYER_ID,
       componentTag: 'div',
@@ -34,13 +52,21 @@ export async function playNative(url: string, title?: string): Promise<void> {
       exitOnEnd: true,
       loopOnEnd: false,
       pipEnabled: true,
-      displayMode: 'landscape',
-      accentColor: '#E5A535',
-    });
+      displayMode: 'landscape' as const,
+    };
+
+    logger.debug('NativePlayer', `initPlayer options: ${JSON.stringify(initOptions)}`);
+
+    const result = await withTimeout(
+      VideoPlayer.initPlayer(initOptions),
+      INIT_TIMEOUT_MS,
+      'initPlayer'
+    );
 
     logger.info('NativePlayer', `initPlayer result: ${JSON.stringify(result)}`);
   } catch (err: any) {
-    logger.error('NativePlayer', `Playback error: ${err?.message || err}`, { url: url.substring(0, 80) });
+    const msg = err?.message || String(err);
+    logger.error('NativePlayer', `Playback error: ${msg}`, { url: url.substring(0, 80) });
     throw err;
   }
 }

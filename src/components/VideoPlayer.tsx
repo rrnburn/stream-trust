@@ -181,11 +181,16 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
     if (!src) return;
     setNativePlayerLaunching(true);
     setError(null);
+    log('INFO', `Launching native player for: ${src.substring(0, 100)}`);
     try {
       const normalizedSrc = normalizeStreamUrl(src);
+      log('INFO', `Normalized URL: ${normalizedSrc.substring(0, 100)}`);
       await playNative(normalizedSrc, title);
+      log('INFO', 'Native player returned successfully');
     } catch (err: any) {
-      setError(err?.message || 'Native player failed');
+      const msg = err?.message || 'Native player failed';
+      log('ERROR', `Native player error: ${msg}`);
+      setError(msg);
     }
     setNativePlayerLaunching(false);
   }, [src, title, normalizeStreamUrl]);

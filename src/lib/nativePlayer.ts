@@ -7,7 +7,7 @@ export function isNativePlayerAvailable(): boolean {
   return isNativePlatform() && Capacitor.getPlatform() === 'android';
 }
 
-async function ensureAndroid(): boolean {
+function ensureAndroid(): boolean {
   if (Capacitor.getPlatform() !== 'android') {
     toast.error('External players only work on Android');
     return false;

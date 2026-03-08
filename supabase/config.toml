@@ -1,1 +1,10 @@
 project_id = "eywvzwdctkmgxfsmlqkb"
+
+[functions.stream-proxy]
+verify_jwt = false
+
+[functions.parse-playlist]
+verify_jwt = false
+
+[functions.get-series-info]
+verify_jwt = false

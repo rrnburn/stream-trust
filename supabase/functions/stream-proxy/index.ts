@@ -171,8 +171,8 @@ Deno.serve(async (req) => {
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : 'Unknown error';
     const stack = error instanceof Error ? error.stack : '';
-    console.error(`[${reqId}] FATAL: ${msg}`);
-    if (stack) console.error(`[${reqId}] Stack: ${stack}`);
+    console.error(`[stream-proxy] [ERROR] [${reqId}] Unhandled exception | error=${msg}`);
+    if (stack) console.error(`[stream-proxy] [ERROR] [${reqId}] Stack trace | ${stack}`);
     return new Response(JSON.stringify({ error: msg }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

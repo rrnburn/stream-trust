@@ -5,6 +5,7 @@ import { Play, Pause, Maximize, Minimize, Volume2, VolumeX, SkipBack, SkipForwar
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '@/integrations/supabase/client';
 import { isNativePlatform } from '@/lib/platform';
+import { logger } from '@/lib/logger';
 
 interface VideoPlayerProps {
   src: string;

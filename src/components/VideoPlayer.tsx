@@ -288,31 +288,74 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
       });
     } else {
       log('INFO', 'Using direct HTML5 video playback');
-      video.src = playbackUrl;
-      video.addEventListener('loadedmetadata', () => {
-        log('INFO', 'Direct video metadata loaded');
-        setBuffering(false);
-        video.play().catch((e) => log('WARN', 'Autoplay blocked', e?.message));
-      }, { once: true });
 
-      const onVideoError = () => {
-        const code = video.error?.code;
-        const msg = video.error?.message || 'Unknown';
-        log('ERROR', `Direct video error: code=${code} message=${msg}`);
-        handleFatalError(`Video error ${code}: ${msg}`);
+      // For IPTV MP4 streams: try multiple URL variants
+      // Many IPTV servers reject HTTPS or require HTTP
+      const urlVariants: string[] = [];
+      if (useProxy) {
+        urlVariants.push(playbackUrl);
+      } else {
+        // Try original URL first
+        urlVariants.push(playbackUrl);
+        // If HTTPS, also try HTTP variant
+        if (playbackUrl.startsWith('https://')) {
+          urlVariants.push(playbackUrl.replace(/^https:\/\//i, 'http://'));
+        }
+      }
+
+      let variantIndex = 0;
+      let resolved = false;
+
+      const tryNextVariant = () => {
+        if (resolved || errorHandled) return;
+        if (variantIndex >= urlVariants.length) {
+          handleFatalError(`Video error: all direct URL variants failed`);
+          return;
+        }
+        const url = urlVariants[variantIndex];
+        variantIndex++;
+        log('INFO', `Trying direct variant ${variantIndex}/${urlVariants.length}: ${url.substring(0, 100)}`);
+        
+        // Reset video element
+        video.removeAttribute('src');
+        video.load();
+        
+        const onMeta = () => {
+          if (resolved) return;
+          resolved = true;
+          video.removeEventListener('error', onErr);
+          log('INFO', `Direct video metadata loaded (variant ${variantIndex})`);
+          setBuffering(false);
+          video.play().catch((e) => log('WARN', 'Autoplay blocked', { msg: e?.message }));
+        };
+
+        const onErr = () => {
+          if (resolved) return;
+          video.removeEventListener('loadedmetadata', onMeta);
+          const code = video.error?.code;
+          const msg = video.error?.message || 'Unknown';
+          log('WARN', `Direct variant ${variantIndex} failed: code=${code} message=${msg}`);
+          // Try next variant
+          tryNextVariant();
+        };
+
+        video.addEventListener('loadedmetadata', onMeta, { once: true });
+        video.addEventListener('error', onErr, { once: true });
+        video.src = url;
       };
-      video.addEventListener('error', onVideoError, { once: true });
+
+      tryNextVariant();
 
       const timeout = setTimeout(() => {
-        if (video.readyState < 2 && !errorHandled) {
-          log('WARN', 'Direct load timeout (10s), trying proxy...');
+        if (!resolved && !errorHandled) {
+          log('WARN', 'Direct load timeout (12s), trying proxy...');
           handleFatalError('Load timeout');
         }
-      }, 10000);
+      }, 12000);
 
       return () => {
+        resolved = true;
         clearTimeout(timeout);
-        video.removeEventListener('error', onVideoError);
         cleanup();
       };
     }

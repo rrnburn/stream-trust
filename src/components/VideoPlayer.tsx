@@ -176,23 +176,29 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
     }
   }, []);
 
-  // Launch native ExoPlayer/AVPlayer
-  const launchNativePlayer = useCallback(async () => {
-    if (!src) return;
+  // Launch native ExoPlayer/AVPlayer — returns true if native handled it
+  const launchNativePlayer = useCallback(async (): Promise<boolean> => {
+    if (!src) return false;
     setNativePlayerLaunching(true);
     setError(null);
     log('INFO', `Launching native player for: ${src.substring(0, 100)}`);
     try {
       const normalizedSrc = normalizeStreamUrl(src);
       log('INFO', `Normalized URL: ${normalizedSrc.substring(0, 100)}`);
-      await playNative(normalizedSrc, title);
-      log('INFO', 'Native player returned successfully');
+      const success = await playNative(normalizedSrc, title);
+      if (success) {
+        log('INFO', 'Native player launched successfully');
+      } else {
+        log('WARN', 'Native player unavailable, falling back to web player');
+      }
+      setNativePlayerLaunching(false);
+      return success;
     } catch (err: any) {
       const msg = err?.message || 'Native player failed';
       log('ERROR', `Native player error: ${msg}`);
-      setError(msg);
+      setNativePlayerLaunching(false);
+      return false;
     }
-    setNativePlayerLaunching(false);
   }, [src, title, normalizeStreamUrl]);
 
   // Auto-launch native player on native platforms

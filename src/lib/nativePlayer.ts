@@ -2,8 +2,8 @@ import { logger } from '@/lib/logger';
 import { isNativePlatform } from '@/lib/platform';
 
 /**
- * Launch an external video player (VLC, MX Player, system default) via Android Intent URI.
- * The intent:// scheme with type=video/* triggers the OS app chooser for video players.
+ * Launch an external video player via Android Intent URI or app deep links.
+ * Tries multiple strategies since Capacitor WebView handles intents differently.
  */
 export function isNativePlayerAvailable(): boolean {
   return isNativePlatform();
@@ -14,43 +14,50 @@ export async function playNative(url: string, title?: string): Promise<boolean> 
 
   logger.info('NativePlayer', `Opening external player for: ${url.substring(0, 120)}`, { title });
 
+  // Strategy 1: Direct intent via window.location.href (most likely to work in Capacitor WebView)
   try {
-    // Construct an Android Intent URI that forces the OS to use a video/* handler
-    // This bypasses Chrome and shows the app chooser with VLC, MX Player, etc.
-    const encodedUrl = encodeURIComponent(url);
-    const encodedTitle = encodeURIComponent(title || 'Video');
+    const intentUri = `intent:${url}#Intent;action=android.intent.action.VIEW;type=video/*;S.title=${encodeURIComponent(title || 'Video')};end`;
+    logger.info('NativePlayer', `Trying window.location.href intent`);
+    window.location.href = intentUri;
     
-    // intent:// scheme with ACTION_VIEW + video/* MIME type
-    const intentUri = `intent:${url}#Intent;action=android.intent.action.VIEW;type=video/*;S.title=${encodedTitle};end`;
-    
-    logger.info('NativePlayer', `Intent URI: ${intentUri.substring(0, 150)}`);
-    
-    // Create a hidden iframe to fire the intent without navigating away from the app
-    const iframe = document.createElement('iframe');
-    iframe.style.display = 'none';
-    iframe.src = intentUri;
-    document.body.appendChild(iframe);
-    
-    // Clean up after a short delay
-    setTimeout(() => {
-      document.body.removeChild(iframe);
-    }, 2000);
-
-    logger.info('NativePlayer', 'Intent URI fired via iframe');
+    // Wait briefly to see if it worked (page won't unload if it failed silently)
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    logger.info('NativePlayer', 'Intent via location.href attempted');
     return true;
   } catch (err: any) {
-    logger.warn('NativePlayer', `Intent URI failed: ${err?.message}, trying window.location fallback`);
+    logger.warn('NativePlayer', `location.href intent failed: ${err?.message}`);
+  }
 
-    try {
-      // Fallback: direct navigation to intent URI
-      const intentUri = `intent:${url}#Intent;action=android.intent.action.VIEW;type=video/*;end`;
-      window.location.href = intentUri;
-      logger.info('NativePlayer', 'window.location.href intent fallback fired');
-      return true;
-    } catch (fallbackErr: any) {
-      logger.error('NativePlayer', `All methods failed: ${fallbackErr?.message}`);
-      return false;
-    }
+  // Strategy 2: Try VLC deep link directly
+  try {
+    const vlcUri = `vlc://${url}`;
+    logger.info('NativePlayer', `Trying VLC deep link: ${vlcUri.substring(0, 80)}`);
+    window.location.href = vlcUri;
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    return true;
+  } catch (err: any) {
+    logger.warn('NativePlayer', `VLC deep link failed: ${err?.message}`);
+  }
+
+  // Strategy 3: Try MX Player deep link
+  try {
+    const mxUri = `intent:${url}#Intent;package=com.mxtech.videoplayer.ad;type=video/*;end`;
+    logger.info('NativePlayer', `Trying MX Player intent`);
+    window.location.href = mxUri;
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    return true;
+  } catch (err: any) {
+    logger.warn('NativePlayer', `MX Player intent failed: ${err?.message}`);
+  }
+
+  // Strategy 4: window.open as last resort
+  try {
+    logger.info('NativePlayer', 'Trying window.open fallback');
+    window.open(url, '_system');
+    return true;
+  } catch (err: any) {
+    logger.error('NativePlayer', `All methods failed: ${err?.message}`);
+    return false;
   }
 }
 

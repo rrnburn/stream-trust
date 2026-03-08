@@ -333,7 +333,7 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
           clearTimeout(loadTimeout);
           log('INFO', `${label} success: metadata loaded`);
           setBuffering(false);
-          video.play().catch((e) => log('WARN', 'Autoplay blocked', { msg: e?.message }));
+          tryPlay(video);
         };
 
         const onErr = () => {

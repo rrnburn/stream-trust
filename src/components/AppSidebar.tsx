@@ -46,9 +46,6 @@ const AppSidebar = () => {
     const series = media.filter(m => m.category === 'series');
     map['series'] = [...new Set(series.map(c => c.group || 'Uncategorized'))].sort();
     
-    // vod (movies + vod)
-    const vod = media.filter(m => m.category === 'movie' || m.category === 'vod');
-    map['vod_movies'] = [...new Set(vod.map(c => c.group || 'Uncategorized'))].sort();
     
     return map;
   }, [media]);

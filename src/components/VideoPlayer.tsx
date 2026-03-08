@@ -563,14 +563,14 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
           </button>
           <div className="flex gap-3 w-full max-w-xs">
             <button
-              onClick={() => playInMxPlayer(normalizedSrc, title)}
+              onClick={() => playInMxPlayer(nativeSrc, title)}
               className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-secondary text-secondary-foreground text-sm font-medium hover:bg-secondary/80 transition-colors"
             >
               <ExternalLink className="w-4 h-4" />
               MX Player
             </button>
             <button
-              onClick={() => playInSystemChooser(normalizedSrc)}
+              onClick={() => playInSystemChooser(nativeSrc)}
               className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-secondary text-secondary-foreground text-sm font-medium hover:bg-secondary/80 transition-colors"
             >
               <Play className="w-4 h-4" />

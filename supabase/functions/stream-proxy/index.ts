@@ -101,13 +101,13 @@ Deno.serve(async (req) => {
     };
 
     // Forward content-length, content-range, accept-ranges for seeking
-    const contentLength = upstream!.headers.get('content-length');
+    const contentLength = upstream.headers.get('content-length');
     if (contentLength) responseHeaders['Content-Length'] = contentLength;
 
-    const contentRange = upstream!.headers.get('content-range');
+    const contentRange = upstream.headers.get('content-range');
     if (contentRange) responseHeaders['Content-Range'] = contentRange;
 
-    const acceptRanges = upstream!.headers.get('accept-ranges');
+    const acceptRanges = upstream.headers.get('accept-ranges');
     if (acceptRanges) responseHeaders['Accept-Ranges'] = acceptRanges;
 
     // For m3u8 manifests, rewrite segment URLs to go through proxy
@@ -115,7 +115,7 @@ Deno.serve(async (req) => {
       || contentType.includes('mpegurl') || contentType.includes('m3u');
 
     if (isManifest) {
-      const body = await upstream!.text();
+      const body = await upstream.text();
 
       // Build the proxy base URL using the known Supabase URL pattern
       const supabaseUrl = Deno.env.get('SUPABASE_URL') || url.origin;
@@ -157,15 +157,15 @@ Deno.serve(async (req) => {
       delete responseHeaders['Content-Length'];
 
       return new Response(rewritten, {
-        status: upstream!.status,
+        status: upstream.status,
         headers: responseHeaders,
       });
     }
 
     // For binary content (ts segments, mp4, etc.), stream directly
     console.log(`[stream-proxy] [INFO] [${reqId}] Streaming binary | contentLength=${contentLength || 'unknown'}`);
-    return new Response(upstream!.body, {
-      status: upstream!.status,
+    return new Response(upstream.body, {
+      status: upstream.status,
       headers: responseHeaders,
     });
   } catch (error: unknown) {

@@ -163,7 +163,7 @@ Deno.serve(async (req) => {
     }
 
     // For binary content (ts segments, mp4, etc.), stream directly
-    console.log(`[${reqId}] Streaming binary, len=${contentLength || 'unknown'}`);
+    console.log(`[stream-proxy] [INFO] [${reqId}] Streaming binary | contentLength=${contentLength || 'unknown'}`);
     return new Response(upstream!.body, {
       status: upstream!.status,
       headers: responseHeaders,

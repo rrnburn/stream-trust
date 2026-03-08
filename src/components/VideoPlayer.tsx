@@ -584,7 +584,7 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
     return () => window.removeEventListener('keydown', handleKey);
   }, [togglePlay, duration, playing]);
 
-  // Native platform: show poster + play button that launches ExoPlayer/AVPlayer
+  // Native platform: show poster + button to open in external player (VLC, MX Player, etc.)
   if (isNative) {
     return (
       <div className="relative w-full aspect-video bg-black rounded-xl overflow-hidden flex items-center justify-center">
@@ -594,23 +594,16 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
         <div className="relative z-10 flex flex-col items-center gap-4">
           {nativePlayerLaunching ? (
             <Loader2 className="w-14 h-14 text-primary animate-spin" />
-          ) : error ? (
+          ) : (
             <>
-              <p className="text-destructive font-medium text-base">⚠️ {error}</p>
               <button
                 onClick={launchNativePlayer}
-                className="px-5 py-2.5 rounded-lg bg-primary text-primary-foreground font-medium text-sm hover:bg-primary/90 transition-colors flex items-center gap-2"
+                className="w-16 h-16 rounded-full bg-primary/90 flex items-center justify-center hover:bg-primary transition-colors"
               >
-                <Play className="w-4 h-4 fill-current" /> Retry
+                <ExternalLink className="w-7 h-7 text-primary-foreground" />
               </button>
+              <p className="text-white/80 text-xs">Open in external player</p>
             </>
-          ) : (
-            <button
-              onClick={launchNativePlayer}
-              className="w-16 h-16 rounded-full bg-primary/90 flex items-center justify-center hover:bg-primary transition-colors"
-            >
-              <Play className="w-7 h-7 text-primary-foreground fill-primary-foreground ml-1" />
-            </button>
           )}
           {title && <p className="text-white font-semibold text-sm">{title}</p>}
         </div>

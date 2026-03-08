@@ -61,6 +61,7 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
   const [preBuffering, setPreBuffering] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
   const [retrying, setRetrying] = useState(false);
+  const [autoplayMuted, setAutoplayMuted] = useState(false);
   const MAX_RETRIES = 3;
 
   const getProxiedUrl = useCallback((streamUrl: string) => {
@@ -77,11 +78,18 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
     return proxy ? getProxiedUrl(streamUrl) : streamUrl;
   }, [getProxiedUrl]);
 
-  // Normalize live TV URLs: convert legacy .ts to .m3u8 for HLS playback
+  // Normalize stream URLs: convert .ts to .m3u8 for live, .mp4 to .m3u8 for movies (Xtream providers support HLS for VOD too)
   const normalizeStreamUrl = useCallback((url: string): string => {
+    // Live TV: .ts → .m3u8
     if (url.includes('/live/') && url.endsWith('.ts')) {
       const hlsUrl = url.replace(/\.ts$/, '.m3u8');
       log('INFO', `Converted live .ts → .m3u8: ${hlsUrl.substring(0, 80)}...`);
+      return hlsUrl;
+    }
+    // Movies/VOD: .mp4 → .m3u8 (Xtream providers serve HLS for VOD, avoids CORS issues with direct MP4)
+    if (url.includes('/movie/') && url.endsWith('.mp4')) {
+      const hlsUrl = url.replace(/\.mp4$/, '.m3u8');
+      log('INFO', `Converted movie .mp4 → .m3u8: ${hlsUrl.substring(0, 80)}...`);
       return hlsUrl;
     }
     return url;
@@ -196,11 +204,27 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
       }
     };
 
+    // Helper: try to play with sound, fall back to muted if autoplay blocked
+    const tryPlay = (video: HTMLVideoElement) => {
+      video.muted = false;
+      video.play().then(() => {
+        log('INFO', 'Playback started with sound');
+        setAutoplayMuted(false);
+        setMuted(false);
+      }).catch(() => {
+        log('WARN', 'Autoplay blocked, retrying muted');
+        video.muted = true;
+        setMuted(true);
+        setAutoplayMuted(true);
+        video.play().catch((e) => log('ERROR', 'Even muted autoplay failed', { msg: e?.message }));
+      });
+    };
+
     // Pre-buffer for live streams
     const startWithPreBuffer = () => {
       if (!isLive) {
         log('INFO', 'VOD stream ready, starting playback');
-        video.play().catch((e) => log('WARN', 'Autoplay blocked', e?.message));
+        tryPlay(video);
         return;
       }
       setPreBuffering(true);
@@ -211,7 +235,7 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
           if (buffered >= MIN_BUFFER) {
             log('INFO', `Pre-buffer ready: ${buffered.toFixed(1)}s buffered`);
             setPreBuffering(false);
-            video.play().catch((e) => log('WARN', 'Autoplay blocked', e?.message));
+            tryPlay(video);
             return;
           }
         }
@@ -309,7 +333,7 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
           clearTimeout(loadTimeout);
           log('INFO', `${label} success: metadata loaded`);
           setBuffering(false);
-          video.play().catch((e) => log('WARN', 'Autoplay blocked', { msg: e?.message }));
+          tryPlay(video);
         };
 
         const onErr = () => {
@@ -363,6 +387,7 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
     setRetryCount(0);
     setRetrying(false);
     setError(null);
+    setAutoplayMuted(false);
   }, [src]);
 
   const handleRetry = useCallback(() => {
@@ -500,6 +525,22 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
         playsInline
         onClick={togglePlay}
       />
+
+      {/* Tap to unmute banner */}
+      {autoplayMuted && playing && !error && (
+        <button
+          onClick={() => {
+            if (videoRef.current) {
+              videoRef.current.muted = false;
+              setMuted(false);
+              setAutoplayMuted(false);
+            }
+          }}
+          className="absolute top-4 left-4 z-20 flex items-center gap-2 px-3 py-2 rounded-lg bg-black/70 text-white text-sm font-medium hover:bg-black/90 transition-colors animate-pulse"
+        >
+          <VolumeX className="w-4 h-4" /> Tap to unmute
+        </button>
+      )}
 
       {/* Buffering / Pre-buffering spinner */}
       <AnimatePresence>

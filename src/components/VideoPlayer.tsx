@@ -114,6 +114,49 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
     }
   }, []);
 
+  const initHlsJs = useCallback((video: HTMLVideoElement, url: string, isLive: boolean, onReady: () => void, onFatal: (reason: string) => void) => {
+    if (Hls.isSupported()) {
+      log('INFO', 'Initializing hls.js player');
+      const hls = new Hls({
+        enableWorker: true,
+        lowLatencyMode: isLive,
+        fragLoadingTimeOut: 20000,
+        manifestLoadingTimeOut: 15000,
+        levelLoadingTimeOut: 15000,
+        fragLoadingMaxRetry: 6,
+        manifestLoadingMaxRetry: 4,
+        levelLoadingMaxRetry: 4,
+        xhrSetup: (xhr) => { xhr.withCredentials = false; },
+      });
+      hlsRef.current = hls;
+      hls.loadSource(url);
+      hls.attachMedia(video);
+      hls.on(Hls.Events.MANIFEST_PARSED, (_, data) => {
+        log('INFO', `HLS manifest parsed: ${data.levels.length} quality levels`);
+        setBuffering(false);
+        onReady();
+      });
+      hls.on(Hls.Events.ERROR, (_, data) => {
+        if (data.fatal) {
+          log('ERROR', `HLS fatal error: type=${data.type} details=${data.details}`, { status: data.response?.code });
+          if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+            log('INFO', 'Attempting HLS media error recovery');
+            hls.recoverMediaError();
+          } else {
+            hls.destroy();
+            onFatal(`HLS ${data.type}: ${data.details}`);
+          }
+        } else {
+          log('WARN', `HLS non-fatal: ${data.type} ${data.details}`);
+        }
+      });
+    } else {
+      log('ERROR', 'HLS not supported in this browser');
+      onFatal('HLS playback not supported');
+      setBuffering(false);
+    }
+  }, []);
+
   // Initialize playback
   useEffect(() => {
     const video = videoRef.current;

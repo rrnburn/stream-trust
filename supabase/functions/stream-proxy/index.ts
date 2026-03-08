@@ -25,13 +25,16 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Extract origin domain for Referer header
+    const streamOrigin = new URL(streamUrl).origin;
+    
     console.log(`[stream-proxy] [INFO] [${reqId}] Incoming request | url=${streamUrl.substring(0, 120)}`);
 
-    // Forward range headers for video seeking
+    // Use minimal headers — Xtream panels are sensitive to extra headers
     const headers: Record<string, string> = {
       'User-Agent': 'okhttp/4.9.2',
       'Accept': '*/*',
-      'Connection': 'keep-alive',
+      'Referer': streamOrigin + '/',
     };
 
     const rangeHeader = req.headers.get('range');
@@ -40,59 +43,56 @@ Deno.serve(async (req) => {
       console.log(`[stream-proxy] [DEBUG] [${reqId}] Range header | range=${rangeHeader}`);
     }
 
-    // Fetch with timeout and abort
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+    // Try multiple fetch strategies: HTTPS → HTTP → different User-Agent
+    const fetchStrategies = [
+      { url: streamUrl, ua: 'okhttp/4.9.2', label: 'HTTPS+okhttp' },
+      { url: streamUrl.replace(/^https:\/\//i, 'http://'), ua: 'okhttp/4.9.2', label: 'HTTP+okhttp' },
+      { url: streamUrl, ua: 'VLC/3.0.20 LibVLC/3.0.20', label: 'HTTPS+VLC' },
+      { url: streamUrl.replace(/^https:\/\//i, 'http://'), ua: 'VLC/3.0.20 LibVLC/3.0.20', label: 'HTTP+VLC' },
+      { url: streamUrl, ua: 'Lavf/60.16.100', label: 'HTTPS+ffmpeg' },
+      { url: streamUrl.replace(/^https:\/\//i, 'http://'), ua: 'Lavf/60.16.100', label: 'HTTP+ffmpeg' },
+    ];
 
-    let upstream: Response;
-    try {
-      upstream = await fetch(streamUrl, { headers, signal: controller.signal });
-    } catch (fetchErr: unknown) {
-      clearTimeout(timeoutId);
-      // If HTTPS fails, try HTTP fallback
-      if (streamUrl.startsWith('https://')) {
-        const httpUrl = streamUrl.replace(/^https:\/\//i, 'http://');
-        console.log(`[stream-proxy] [WARN] [${reqId}] HTTPS failed, trying HTTP | url=${httpUrl.substring(0, 80)}`);
-        const controller2 = new AbortController();
-        const timeoutId2 = setTimeout(() => controller2.abort(), FETCH_TIMEOUT_MS);
-        try {
-          upstream = await fetch(httpUrl, { headers, signal: controller2.signal });
-        } catch (httpErr: unknown) {
-          clearTimeout(timeoutId2);
-          const msg = httpErr instanceof Error ? httpErr.message : 'Unknown';
-          console.error(`[stream-proxy] [ERROR] [${reqId}] Both HTTPS and HTTP failed | error=${msg}`);
-          return new Response(JSON.stringify({ error: `Fetch failed: ${msg}` }), {
-            status: 502,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          });
+    let upstream: Response | null = null;
+    let lastError = '';
+
+    for (const strategy of fetchStrategies) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+      try {
+        const stratHeaders = { ...headers, 'User-Agent': strategy.ua };
+        const res = await fetch(strategy.url, { headers: stratHeaders, signal: controller.signal, redirect: 'follow' });
+        clearTimeout(timeoutId);
+        
+        if (res.ok || res.status === 206) {
+          console.log(`[stream-proxy] [INFO] [${reqId}] Strategy "${strategy.label}" succeeded | status=${res.status}`);
+          upstream = res;
+          break;
+        } else {
+          lastError = `${strategy.label}: HTTP ${res.status}`;
+          console.log(`[stream-proxy] [WARN] [${reqId}] Strategy "${strategy.label}" failed | status=${res.status}`);
+          // Consume body to free connection
+          try { await res.text(); } catch {}
         }
-        clearTimeout(timeoutId2);
-      } else {
-        const msg = fetchErr instanceof Error ? fetchErr.message : 'Unknown';
-        console.error(`[stream-proxy] [ERROR] [${reqId}] Fetch failed | error=${msg}`);
-        return new Response(JSON.stringify({ error: `Fetch failed: ${msg}` }), {
-          status: 502,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
+      } catch (err: unknown) {
+        clearTimeout(timeoutId);
+        const msg = err instanceof Error ? err.message : 'Unknown';
+        lastError = `${strategy.label}: ${msg}`;
+        console.log(`[stream-proxy] [WARN] [${reqId}] Strategy "${strategy.label}" errored | error=${msg}`);
       }
     }
-    clearTimeout(timeoutId);
 
-    if (!upstream!.ok && upstream!.status !== 206) {
-      const statusText = upstream!.statusText || 'Unknown';
-      console.error(`[stream-proxy] [ERROR] [${reqId}] Upstream error | status=${upstream!.status} statusText=${statusText}`);
-      let errorBody = '';
-      try { errorBody = await upstream!.text(); } catch {}
-      if (errorBody) console.error(`[stream-proxy] [ERROR] [${reqId}] Upstream response body | body=${errorBody.substring(0, 200)}`);
-      return new Response(JSON.stringify({ error: `Upstream ${upstream!.status}: ${statusText}` }), {
-        status: upstream!.status,
+    if (!upstream) {
+      console.error(`[stream-proxy] [ERROR] [${reqId}] All strategies failed | last=${lastError}`);
+      return new Response(JSON.stringify({ error: `All fetch strategies failed: ${lastError}` }), {
+        status: 502,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
     // Determine content type
-    const contentType = upstream!.headers.get('content-type') || 'application/octet-stream';
-    console.log(`[stream-proxy] [INFO] [${reqId}] Upstream OK | status=${upstream!.status} contentType=${contentType}`);
+    const contentType = upstream.headers.get('content-type') || 'application/octet-stream';
+    console.log(`[stream-proxy] [INFO] [${reqId}] Upstream OK | status=${upstream.status} contentType=${contentType}`);
 
     const responseHeaders: Record<string, string> = {
       ...corsHeaders,
@@ -101,13 +101,13 @@ Deno.serve(async (req) => {
     };
 
     // Forward content-length, content-range, accept-ranges for seeking
-    const contentLength = upstream!.headers.get('content-length');
+    const contentLength = upstream.headers.get('content-length');
     if (contentLength) responseHeaders['Content-Length'] = contentLength;
 
-    const contentRange = upstream!.headers.get('content-range');
+    const contentRange = upstream.headers.get('content-range');
     if (contentRange) responseHeaders['Content-Range'] = contentRange;
 
-    const acceptRanges = upstream!.headers.get('accept-ranges');
+    const acceptRanges = upstream.headers.get('accept-ranges');
     if (acceptRanges) responseHeaders['Accept-Ranges'] = acceptRanges;
 
     // For m3u8 manifests, rewrite segment URLs to go through proxy
@@ -115,7 +115,7 @@ Deno.serve(async (req) => {
       || contentType.includes('mpegurl') || contentType.includes('m3u');
 
     if (isManifest) {
-      const body = await upstream!.text();
+      const body = await upstream.text();
 
       // Build the proxy base URL using the known Supabase URL pattern
       const supabaseUrl = Deno.env.get('SUPABASE_URL') || url.origin;
@@ -157,15 +157,15 @@ Deno.serve(async (req) => {
       delete responseHeaders['Content-Length'];
 
       return new Response(rewritten, {
-        status: upstream!.status,
+        status: upstream.status,
         headers: responseHeaders,
       });
     }
 
     // For binary content (ts segments, mp4, etc.), stream directly
     console.log(`[stream-proxy] [INFO] [${reqId}] Streaming binary | contentLength=${contentLength || 'unknown'}`);
-    return new Response(upstream!.body, {
-      status: upstream!.status,
+    return new Response(upstream.body, {
+      status: upstream.status,
       headers: responseHeaders,
     });
   } catch (error: unknown) {

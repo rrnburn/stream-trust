@@ -225,9 +225,9 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
     };
   }, [isNative, src, launchNativePlayer]);
 
-  // Initialize web playback (skip on native)
+  // Initialize web playback (skip if native player is active)
   useEffect(() => {
-    if (isNative) return;
+    if (isNative && nativeActive) return;
     const video = videoRef.current;
     if (!video || !src) return;
 

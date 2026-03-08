@@ -450,7 +450,7 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
     }
 
     return cleanup;
-  }, [src, useProxy, hlsFallback, retryCount, getPlaybackUrl, cleanup, isLiveStream, normalizeStreamUrl, title]);
+  }, [src, useProxy, hlsFallback, retryCount, getPlaybackUrl, cleanup, isLiveStream, normalizeStreamUrl, title, isNative, nativeActive]);
 
   // Reset proxy and retry state when src changes
   useEffect(() => {

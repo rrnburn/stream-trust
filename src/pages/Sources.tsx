@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react';
-import { Plus, Trash2, Link, Server, RefreshCw, Download, CheckCircle, Loader2 } from 'lucide-react';
+import { useState } from 'react';
+import { Plus, Trash2, Link, Server, RefreshCw, Download, Loader2 } from 'lucide-react';
 import { useAppContext } from '@/context/AppContext';
 import AppLayout from '@/components/AppLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Progress } from '@/components/ui/progress';
 import { motion, AnimatePresence } from 'framer-motion';
 import { checkForUpdate, downloadUpdate, getCurrentBuild, type ReleaseInfo } from '@/lib/appUpdater';
 import { toast } from 'sonner';
@@ -20,6 +21,8 @@ const Sources = () => {
 
   // Update checker state
   const [checking, setChecking] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState(0);
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [latestRelease, setLatestRelease] = useState<ReleaseInfo | null>(null);
   const currentBuild = getCurrentBuild();
@@ -42,7 +45,15 @@ const Sources = () => {
 
   const handleDownload = async () => {
     if (latestRelease?.apkUrl) {
-      await downloadUpdate(latestRelease.apkUrl);
+      setDownloading(true);
+      setDownloadProgress(0);
+      try {
+        await downloadUpdate(latestRelease.apkUrl, (percent) => setDownloadProgress(percent));
+      } catch {
+        toast.error('Download failed');
+      } finally {
+        setDownloading(false);
+      }
     } else {
       toast.error('No APK available for this release');
     }
@@ -161,17 +172,26 @@ const Sources = () => {
             <motion.div
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
-              className="glass rounded-xl p-4 flex items-center justify-between gap-3"
+              className="glass rounded-xl p-4 space-y-3"
             >
-              <div>
-                <p className="font-medium text-foreground text-sm">{latestRelease.name}</p>
-                <p className="text-xs text-muted-foreground">
-                  {latestRelease.tagName} · {new Date(latestRelease.publishedAt).toLocaleDateString()}
-                </p>
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="font-medium text-foreground text-sm">{latestRelease.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {latestRelease.tagName} · {new Date(latestRelease.publishedAt).toLocaleDateString()}
+                  </p>
+                </div>
+                <Button onClick={handleDownload} disabled={downloading} className="gap-2 bg-primary text-primary-foreground hover:bg-primary/90">
+                  {downloading ? (
+                    <><Loader2 className="w-4 h-4 animate-spin" /> Downloading...</>
+                  ) : (
+                    <><Download className="w-4 h-4" /> Download & Install</>
+                  )}
+                </Button>
               </div>
-              <Button onClick={handleDownload} className="gap-2 bg-primary text-primary-foreground hover:bg-primary/90">
-                <Download className="w-4 h-4" /> Download APK
-              </Button>
+              {downloading && (
+                <Progress value={downloadProgress} className="h-2" />
+              )}
             </motion.div>
           ) : (
             <Button

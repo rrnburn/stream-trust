@@ -84,30 +84,59 @@ export async function downloadUpdate(
 
 async function downloadAndInstallApk(
   apkUrl: string,
-  _onProgress?: (percent: number) => void
+  onProgress?: (percent: number) => void
 ): Promise<void> {
   try {
-    logger.info('AppUpdater', `Opening APK for install: ${apkUrl}`);
-    
-    // Use Android's system browser / download manager which handles
-    // APK download + install prompt natively (no FileProvider needed)
-    const { Browser } = await import('@capacitor/browser');
-    await Browser.open({ url: apkUrl, windowName: '_system' });
-    
-    toast.info('APK download started — tap the notification when complete to install');
-    logger.info('AppUpdater', 'Opened APK URL in system browser');
-  } catch (e: any) {
-    logger.error('AppUpdater', `Browser open failed: ${e?.message}`);
-    // Final fallback
-    window.open(apkUrl, '_system');
-    toast.info('APK download started — check your notifications to install');
-  }
-}
+    const { Filesystem, Directory } = await import('@capacitor/filesystem');
+    const { IntentLauncher } = await import('@capgo/capacitor-intent-launcher');
 
-function uint8ArrayToBase64(bytes: Uint8Array): string {
-  let binary = '';
-  for (let i = 0; i < bytes.length; i++) {
-    binary += String.fromCharCode(bytes[i]);
+    logger.info('AppUpdater', `Downloading APK: ${apkUrl}`);
+    onProgress?.(0);
+
+    const fileName = `update-${Date.now()}.apk`;
+
+    // Download APK to cache
+    const result = await Filesystem.downloadFile({
+      url: apkUrl,
+      path: fileName,
+      directory: Directory.Cache,
+      progress: true,
+    });
+
+    // Listen for progress if available — Capacitor fires events during download
+    // Note: downloadFile with progress:true resolves after completion
+    onProgress?.(100);
+
+    const filePath = result.path || fileName;
+    logger.info('AppUpdater', `APK downloaded to: ${filePath}`);
+
+    // Get content:// URI via FileProvider
+    const uriResult = await Filesystem.getUri({
+      path: fileName,
+      directory: Directory.Cache,
+    });
+
+    logger.info('AppUpdater', `APK URI: ${uriResult.uri}`);
+
+    // Launch Android package installer intent
+    await IntentLauncher.startActivityAsync({
+      action: 'android.intent.action.VIEW',
+      data: uriResult.uri,
+      type: 'application/vnd.android.package-archive',
+      flags: 3, // FLAG_GRANT_READ_URI_PERMISSION (1) | FLAG_ACTIVITY_NEW_TASK (2)
+    });
+
+    logger.info('AppUpdater', 'Install intent launched');
+  } catch (e: any) {
+    logger.error('AppUpdater', `Download/install failed: ${e?.message}`);
+    // Fallback: open in system browser
+    try {
+      const { Browser } = await import('@capacitor/browser');
+      await Browser.open({ url: apkUrl, windowName: '_system' });
+      toast.info('APK download started — tap the notification when complete to install');
+    } catch {
+      window.open(apkUrl, '_system');
+      toast.info('APK download started — check your notifications to install');
+    }
   }
-  return btoa(binary);
 }

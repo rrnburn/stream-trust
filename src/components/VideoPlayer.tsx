@@ -64,8 +64,10 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
   const [retryCount, setRetryCount] = useState(0);
   const [retrying, setRetrying] = useState(false);
   const [autoplayMuted, setAutoplayMuted] = useState(false);
-  const [hlsFallback, setHlsFallback] = useState(false); // When true, retry movie .mp4 as .m3u8
+  const [hlsFallback, setHlsFallback] = useState(false);
+  const [nativePlayerLaunching, setNativePlayerLaunching] = useState(false);
   const MAX_RETRIES = 3;
+  const isNative = isNativePlatform();
 
   const getProxiedUrl = useCallback((streamUrl: string) => {
     // Native apps don't need the proxy — direct playback with residential IP

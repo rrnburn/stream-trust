@@ -131,6 +131,7 @@ const LocalAppProvider = ({ children }: { children: ReactNode }) => {
         toast.info('No items found in playlist');
       }
     } catch (e: any) {
+      logger.error('AppContext', `Failed to parse playlist: ${e.message || 'Unknown'}`, { source: source.name });
       console.error('Failed to parse playlist:', e);
       toast.error(`Failed to parse: ${e.message || 'Unknown error'}`);
     }

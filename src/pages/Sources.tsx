@@ -18,6 +18,36 @@ const Sources = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
 
+  // Update checker state
+  const [checking, setChecking] = useState(false);
+  const [updateAvailable, setUpdateAvailable] = useState(false);
+  const [latestRelease, setLatestRelease] = useState<ReleaseInfo | null>(null);
+  const currentBuild = getCurrentBuild();
+
+  const handleCheckUpdate = async () => {
+    setChecking(true);
+    try {
+      const result = await checkForUpdate();
+      setUpdateAvailable(result.available);
+      setLatestRelease(result.latest);
+      if (!result.available) {
+        toast.success('You're on the latest version');
+      }
+    } catch {
+      toast.error('Failed to check for updates');
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  const handleDownload = async () => {
+    if (latestRelease?.apkUrl) {
+      await downloadUpdate(latestRelease.apkUrl);
+    } else {
+      toast.error('No APK available for this release');
+    }
+  };
+
   const handleAdd = () => {
     if (!name || !url) return;
     addSource({ name, type, url, username: type === 'xtream' ? username : undefined, password: type === 'xtream' ? password : undefined });

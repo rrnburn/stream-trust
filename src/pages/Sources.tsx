@@ -45,7 +45,15 @@ const Sources = () => {
 
   const handleDownload = async () => {
     if (latestRelease?.apkUrl) {
-      await downloadUpdate(latestRelease.apkUrl);
+      setDownloading(true);
+      setDownloadProgress(0);
+      try {
+        await downloadUpdate(latestRelease.apkUrl, (percent) => setDownloadProgress(percent));
+      } catch {
+        toast.error('Download failed');
+      } finally {
+        setDownloading(false);
+      }
     } else {
       toast.error('No APK available for this release');
     }

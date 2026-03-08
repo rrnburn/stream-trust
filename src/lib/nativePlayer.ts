@@ -8,8 +8,13 @@ const INIT_TIMEOUT_MS = 15000; // 15 seconds max wait for initPlayer
  * Dynamically import the plugin only on native platforms.
  */
 async function getVideoPlayer() {
-  const { VideoPlayer } = await import('@capgo/capacitor-video-player');
-  return VideoPlayer;
+  const mod = await import('@capgo/capacitor-video-player');
+  // The package exports CapacitorVideoPlayer (not VideoPlayer)
+  const plugin = (mod as any).CapacitorVideoPlayer || (mod as any).VideoPlayer || (mod as any).default;
+  if (!plugin) {
+    throw new Error('Could not resolve CapacitorVideoPlayer export from @capgo/capacitor-video-player');
+  }
+  return plugin;
 }
 
 /**

@@ -195,11 +195,17 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
     setNativePlayerLaunching(false);
   }, [src, title, normalizeStreamUrl]);
 
-  // Native player disabled — the @capgo/capacitor-video-player plugin hangs on import.
-  // The WebView HTML5/hls.js player works fine on Android/iOS instead.
-
-  // Initialize web playback (works on all platforms including native WebView)
+  // Auto-launch native player on native platforms
   useEffect(() => {
+    if (isNative && src) {
+      launchNativePlayer();
+    }
+    return () => { if (isNative) stopNative(); };
+  }, [isNative, src, launchNativePlayer]);
+
+  // Initialize web playback (skip on native)
+  useEffect(() => {
+    if (isNative) return;
     const video = videoRef.current;
     if (!video || !src) return;
 

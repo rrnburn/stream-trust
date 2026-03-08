@@ -80,11 +80,10 @@ Deno.serve(async (req) => {
 
     if (!upstream!.ok && upstream!.status !== 206) {
       const statusText = upstream!.statusText || 'Unknown';
-      console.error(`[${reqId}] Upstream ${upstream!.status} ${statusText}`);
-      // Try to read error body for diagnostics
+      console.error(`[stream-proxy] [ERROR] [${reqId}] Upstream error | status=${upstream!.status} statusText=${statusText}`);
       let errorBody = '';
       try { errorBody = await upstream!.text(); } catch {}
-      console.error(`[${reqId}] Upstream body: ${errorBody.substring(0, 200)}`);
+      if (errorBody) console.error(`[stream-proxy] [ERROR] [${reqId}] Upstream response body | body=${errorBody.substring(0, 200)}`);
       return new Response(JSON.stringify({ error: `Upstream ${upstream!.status}: ${statusText}` }), {
         status: upstream!.status,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

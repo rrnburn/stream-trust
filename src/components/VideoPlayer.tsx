@@ -387,6 +387,7 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
     setRetryCount(0);
     setRetrying(false);
     setError(null);
+    setAutoplayMuted(false);
   }, [src]);
 
   const handleRetry = useCallback(() => {

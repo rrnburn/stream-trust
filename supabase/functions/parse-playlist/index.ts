@@ -137,7 +137,7 @@ Deno.serve(async (req: Request) => {
           title: s.name || 'Unknown',
           group: vodCatMap[String(s.category_id)] || s.category_name || 'Uncategorized',
           logo: s.stream_icon || '',
-          url: `${streamBase}/movie/${username}/${password}/${s.stream_id}.mp4`,
+          url: `${streamBase}/movie/${username}/${password}/${s.stream_id}.${s.container_extension || 'mp4'}`,
           category: 'movie' as const,
         })),
         ...seriesStreams.map((s: any) => ({

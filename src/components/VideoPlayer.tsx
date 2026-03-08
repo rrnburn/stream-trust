@@ -540,8 +540,25 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
 
   // Native platform: show poster + buttons to open in specific external players
   if (isNative && nativeActive) {
-    // Native players (VLC) handle MP4 natively — don't convert movie URLs
     const nativeSrc = normalizeStreamUrl(src);
+    // For movies, prepare both .mp4 and .m3u8 variants
+    const isMovie = src.includes('/movie/') && src.endsWith('.mp4');
+    const hlsSrc = isMovie ? src.replace(/\.mp4$/, '.m3u8') : null;
+    // Also try without extension (some Xtream providers serve at bare URL)
+    const bareSrc = isMovie ? src.replace(/\.mp4$/, '') : null;
+
+    const handleVlcPlay = async () => {
+      if (isMovie) {
+        // Try HLS first for movies (most compatible with Xtream providers)
+        log('INFO', `Movie: trying VLC with .m3u8 first`);
+        await playInVlc(hlsSrc!, title);
+        // Note: we can't detect VLC failure from intent result alone,
+        // so we also show alternate format buttons below
+      } else {
+        await playInVlc(nativeSrc, title);
+      }
+    };
+
     return (
       <div className="relative w-full aspect-video bg-black rounded-xl overflow-hidden flex items-center justify-center">
         {poster && (
@@ -551,22 +568,38 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
           {title && <p className="text-white font-semibold text-sm text-center">{title}</p>}
           <p className="text-white/70 text-xs">Choose a player</p>
           <button
-            onClick={() => playInVlc(nativeSrc, title)}
+            onClick={handleVlcPlay}
             className="w-full max-w-xs flex items-center justify-center gap-3 px-6 py-4 rounded-xl bg-primary text-primary-foreground font-semibold text-base hover:bg-primary/90 transition-colors"
           >
             <ExternalLink className="w-5 h-5" />
             Open in VLC
           </button>
+          {isMovie && (
+            <div className="flex gap-2 w-full max-w-xs">
+              <button
+                onClick={() => playInVlc(nativeSrc, title)}
+                className="flex-1 px-3 py-2 rounded-lg bg-muted text-muted-foreground text-xs font-medium hover:bg-muted/80 transition-colors"
+              >
+                VLC (MP4)
+              </button>
+              <button
+                onClick={() => playInVlc(bareSrc!, title)}
+                className="flex-1 px-3 py-2 rounded-lg bg-muted text-muted-foreground text-xs font-medium hover:bg-muted/80 transition-colors"
+              >
+                VLC (Direct)
+              </button>
+            </div>
+          )}
           <div className="flex gap-3 w-full max-w-xs">
             <button
-              onClick={() => playInMxPlayer(nativeSrc, title)}
+              onClick={() => playInMxPlayer(isMovie ? hlsSrc! : nativeSrc, title)}
               className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-secondary text-secondary-foreground text-sm font-medium hover:bg-secondary/80 transition-colors"
             >
               <ExternalLink className="w-4 h-4" />
               MX Player
             </button>
             <button
-              onClick={() => playInSystemChooser(nativeSrc)}
+              onClick={() => playInSystemChooser(isMovie ? hlsSrc! : nativeSrc)}
               className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-secondary text-secondary-foreground text-sm font-medium hover:bg-secondary/80 transition-colors"
             >
               <Play className="w-4 h-4" />

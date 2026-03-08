@@ -3,6 +3,7 @@ import { isNativePlatform } from '@/lib/platform';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './AuthContext';
 import { toast } from 'sonner';
+import { logger } from '@/lib/logger';
 import type { IPTVSource, MediaItem } from './AppContext.types';
 import {
   getSources,
@@ -124,11 +125,13 @@ const LocalAppProvider = ({ children }: { children: ReactNode }) => {
         if (result.movies) parts.push(`${result.movies} movies`);
         if (result.series) parts.push(`${result.series} series`);
         toast.success(`Parsed ${result.total} items (${parts.join(', ')}) from ${source.name}`);
+        logger.info('AppContext', `Parsed ${result.total} items from ${source.name}`, { channels: result.channels, movies: result.movies, series: result.series });
         await reload();
       } else {
         toast.info('No items found in playlist');
       }
     } catch (e: any) {
+      logger.error('AppContext', `Failed to parse playlist: ${e.message || 'Unknown'}`, { source: source.name });
       console.error('Failed to parse playlist:', e);
       toast.error(`Failed to parse: ${e.message || 'Unknown error'}`);
     }

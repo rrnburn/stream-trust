@@ -1,13 +1,13 @@
 import { logger } from '@/lib/logger';
 import { isNativePlatform } from '@/lib/platform';
+import { CapacitorVideoPlayer } from '@capgo/capacitor-video-player';
 
 const PLAYER_ID = 'streamvault';
-const IMPORT_TIMEOUT_MS = 8000;  // 8s max wait for dynamic import
-const INIT_TIMEOUT_MS = 15000;   // 15s max wait for initPlayer
+const INIT_TIMEOUT_MS = 15000;
 
-/**
- * Wrap a promise with a timeout so it never hangs forever.
- */
+/** Whether native player failed and we should use web fallback */
+let nativeUnavailable = false;
+
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const timer = setTimeout(() => {
@@ -19,39 +19,28 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
   });
 }
 
-/**
- * Dynamically import the plugin with a timeout so it never hangs.
- */
-async function getVideoPlayer() {
-  logger.debug('NativePlayer', 'Starting dynamic import of @capgo/capacitor-video-player...');
-
-  const mod = await withTimeout(
-    import('@capgo/capacitor-video-player'),
-    IMPORT_TIMEOUT_MS,
-    'dynamic import @capgo/capacitor-video-player'
-  );
-
-  // Log all exported keys so we can see what's actually there
-  const exportedKeys = Object.keys(mod);
-  logger.info('NativePlayer', `Module exports: [${exportedKeys.join(', ')}]`);
-
-  const plugin = (mod as any).CapacitorVideoPlayer || (mod as any).VideoPlayer || (mod as any).default;
-  if (!plugin) {
-    throw new Error(`Could not resolve plugin. Available exports: [${exportedKeys.join(', ')}]`);
-  }
-
-  // Log available methods on the resolved plugin
-  const methods = Object.keys(plugin).filter(k => typeof (plugin as any)[k] === 'function');
-  logger.info('NativePlayer', `Plugin methods: [${methods.join(', ')}]`);
-
-  return plugin;
-}
-
-/** Whether native player failed and we should use web fallback */
-let nativeUnavailable = false;
-
 export function isNativePlayerAvailable(): boolean {
   return isNativePlatform() && !nativeUnavailable;
+}
+
+/**
+ * Ensure the required <div id="fullscreen"> exists in the DOM.
+ * The @capgo/capacitor-video-player plugin needs this element on Android.
+ */
+function ensureFullscreenDiv() {
+  if (!document.getElementById('fullscreen')) {
+    const div = document.createElement('div');
+    div.id = 'fullscreen';
+    div.style.position = 'fixed';
+    div.style.top = '0';
+    div.style.left = '0';
+    div.style.width = '100vw';
+    div.style.height = '100vh';
+    div.style.zIndex = '99999';
+    div.style.display = 'none'; // plugin will show it
+    document.body.appendChild(div);
+    logger.info('NativePlayer', 'Created <div id="fullscreen"> for native player');
+  }
 }
 
 /**
@@ -72,9 +61,19 @@ export async function playNative(url: string, title?: string): Promise<boolean> 
   logger.info('NativePlayer', `Playing: ${url.substring(0, 100)}`, { title });
 
   try {
-    logger.info('NativePlayer', 'Step 1/3: Loading VideoPlayer plugin...');
-    const VideoPlayer = await getVideoPlayer();
-    logger.info('NativePlayer', 'Step 2/3: Plugin loaded successfully');
+    // Ensure the fullscreen container div exists (required by Android)
+    ensureFullscreenDiv();
+
+    // Log plugin availability
+    logger.info('NativePlayer', `CapacitorVideoPlayer type: ${typeof CapacitorVideoPlayer}`);
+    if (CapacitorVideoPlayer) {
+      const methods = Object.getOwnPropertyNames(Object.getPrototypeOf(CapacitorVideoPlayer) || CapacitorVideoPlayer);
+      logger.info('NativePlayer', `Plugin keys: [${methods.join(', ')}]`);
+    }
+
+    if (!CapacitorVideoPlayer || typeof CapacitorVideoPlayer.initPlayer !== 'function') {
+      throw new Error('CapacitorVideoPlayer.initPlayer is not a function — plugin not registered');
+    }
 
     const initOptions = {
       mode: 'fullscreen' as const,
@@ -89,11 +88,11 @@ export async function playNative(url: string, title?: string): Promise<boolean> 
       displayMode: 'landscape' as const,
     };
 
-    logger.info('NativePlayer', 'Step 3/3: Calling initPlayer...');
-    logger.debug('NativePlayer', `initPlayer options: ${JSON.stringify(initOptions)}`);
+    logger.info('NativePlayer', 'Calling initPlayer...');
+    logger.debug('NativePlayer', `Options: ${JSON.stringify(initOptions)}`);
 
     const result = await withTimeout(
-      VideoPlayer.initPlayer(initOptions),
+      CapacitorVideoPlayer.initPlayer(initOptions),
       INIT_TIMEOUT_MS,
       'initPlayer'
     );
@@ -104,8 +103,7 @@ export async function playNative(url: string, title?: string): Promise<boolean> 
     const msg = err?.message || String(err);
     logger.error('NativePlayer', `Playback error: ${msg}`, { url: url.substring(0, 80) });
 
-    // If the import or init timed out, mark native as unavailable for this session
-    if (msg.includes('timed out') || msg.includes('Could not resolve')) {
+    if (msg.includes('timed out') || msg.includes('not a function') || msg.includes('not registered')) {
       nativeUnavailable = true;
       logger.warn('NativePlayer', 'Marking native player as unavailable — will use web player fallback');
     }
@@ -117,8 +115,7 @@ export async function playNative(url: string, title?: string): Promise<boolean> 
 export async function stopNative(): Promise<void> {
   if (!isNativePlatform() || nativeUnavailable) return;
   try {
-    const VideoPlayer = await getVideoPlayer();
-    await VideoPlayer.stopAllPlayers();
+    await CapacitorVideoPlayer.stopAllPlayers();
   } catch {
     // ignore
   }

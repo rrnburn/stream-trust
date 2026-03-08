@@ -143,7 +143,7 @@ async function downloadAndInstallApk(
     const { IntentLauncher, ActivityAction } = await import('@capgo/capacitor-intent-launcher');
 
     await IntentLauncher.startActivityAsync({
-      action: ActivityAction.INSTALL_PACKAGE,
+      action: ActivityAction.VIEW,
       data: fileInfo.uri,
       type: 'application/vnd.android.package-archive',
       extra: {

@@ -110,14 +110,22 @@ Deno.serve(async (req) => {
 
         if (res.ok || res.status === 206) {
               // Validate that the proxy actually returned media, not an HTML error page
-              const proxyCt = res.headers.get('content-type') || '';
-              if (proxyCt.includes('text/html') && !ps.url.endsWith('.html')) {
-                lastError = `${ps.label}: proxy returned HTML instead of media (content-type: ${proxyCt})`;
-                console.log(`[stream-proxy] [WARN] [${reqId}] ${lastError}`);
-                try { await res.text(); } catch {}
-                continue;
+              const proxyCt = (res.headers.get('content-type') || '').toLowerCase();
+              const proxyLen = parseInt(res.headers.get('content-length') || '0', 10);
+              const isHtml = proxyCt.includes('text/html') || proxyCt.includes('text/plain');
+              const isTiny = proxyLen > 0 && proxyLen < 100_000; // real video is > 100KB
+              
+              if ((isHtml || isTiny) && !ps.url.endsWith('.html') && !ps.url.includes('.m3u')) {
+                const body = await res.text();
+                const looksLikeHtml = body.trimStart().startsWith('<') || body.includes('<!DOCTYPE') || body.includes('<html');
+                if (isHtml || looksLikeHtml) {
+                  lastError = `${ps.label}: proxy returned HTML/block page (ct=${proxyCt}, len=${proxyLen}, htmlDetected=${looksLikeHtml})`;
+                  console.log(`[stream-proxy] [WARN] [${reqId}] ${lastError}`);
+                  continue;
+                }
               }
-              console.log(`[stream-proxy] [INFO] [${reqId}] External proxy "${ps.label}" succeeded | status=${res.status}`);
+              
+              console.log(`[stream-proxy] [INFO] [${reqId}] External proxy "${ps.label}" succeeded | status=${res.status} ct=${proxyCt} len=${proxyLen}`);
               upstream = res;
               break;
             } else {

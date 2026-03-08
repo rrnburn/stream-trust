@@ -3,6 +3,7 @@ import Hls from 'hls.js';
 import mpegts from 'mpegts.js';
 import { Play, Pause, Maximize, Minimize, Volume2, VolumeX, SkipBack, SkipForward, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { supabase } from '@/integrations/supabase/client';
 
 interface VideoPlayerProps {
   src: string;
@@ -12,12 +13,32 @@ interface VideoPlayerProps {
   onClose?: () => void;
 }
 
-const log = (level: 'INFO' | 'DEBUG' | 'WARN' | 'ERROR', msg: string, ...args: any[]) => {
+// Buffer logs and send in batches to avoid spamming the backend
+const logBuffer: Array<{ level: string; component: string; message: string; meta?: Record<string, unknown> }> = [];
+let flushTimer: ReturnType<typeof setTimeout> | null = null;
+
+const flushLogs = () => {
+  if (logBuffer.length === 0) return;
+  const batch = logBuffer.splice(0, logBuffer.length);
+  supabase.functions.invoke('log-event', { body: batch }).catch(() => {});
+};
+
+const log = (level: 'INFO' | 'DEBUG' | 'WARN' | 'ERROR', msg: string, meta?: Record<string, unknown>) => {
   const ts = new Date().toISOString();
   const formatted = `[${ts}] [Player] [${level}] ${msg}`;
-  if (level === 'ERROR') console.error(formatted, ...args);
-  else if (level === 'WARN') console.warn(formatted, ...args);
-  else console.log(formatted, ...args);
+  if (level === 'ERROR') console.error(formatted, meta || '');
+  else if (level === 'WARN') console.warn(formatted, meta || '');
+  else console.log(formatted, meta || '');
+
+  // Queue for backend
+  logBuffer.push({ level, component: 'Player', message: msg, meta });
+  if (flushTimer) clearTimeout(flushTimer);
+  // Flush immediately on errors, batch others every 2s
+  if (level === 'ERROR') {
+    flushLogs();
+  } else {
+    flushTimer = setTimeout(flushLogs, 2000);
+  }
 };
 
 const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerProps) => {

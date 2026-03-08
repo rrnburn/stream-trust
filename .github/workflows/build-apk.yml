@@ -55,6 +55,26 @@ jobs:
       - name: Create assets directory
         run: mkdir -p android/app/src/main/assets/public
 
+      - name: Add install permission and FileProvider
+        run: |
+          # Add REQUEST_INSTALL_PACKAGES permission to AndroidManifest.xml
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+          sed -i 's|</manifest>|    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />\n</manifest>|' "$MANIFEST"
+          
+          # Add FileProvider to AndroidManifest inside <application> tag
+          PROVIDER='        <provider\n            android:name="androidx.core.content.FileProvider"\n            android:authorities="${applicationId}.fileprovider"\n            android:exported="false"\n            android:grantUriPermissions="true">\n            <meta-data\n                android:name="android.support.FILE_PROVIDER_PATHS"\n                android:resource="@xml/file_paths" />\n        </provider>'
+          sed -i "s|</application>|${PROVIDER}\n    </application>|" "$MANIFEST"
+          
+          # Create file_paths.xml for FileProvider
+          mkdir -p android/app/src/main/res/xml
+          cat > android/app/src/main/res/xml/file_paths.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <paths>
+              <cache-path name="cache" path="." />
+              <external-cache-path name="external_cache" path="." />
+          </paths>
+          EOF
+
       - name: Sync Capacitor
         run: npx cap sync android
 

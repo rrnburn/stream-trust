@@ -525,6 +525,22 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
         onClick={togglePlay}
       />
 
+      {/* Tap to unmute banner */}
+      {autoplayMuted && playing && !error && (
+        <button
+          onClick={() => {
+            if (videoRef.current) {
+              videoRef.current.muted = false;
+              setMuted(false);
+              setAutoplayMuted(false);
+            }
+          }}
+          className="absolute top-4 left-4 z-20 flex items-center gap-2 px-3 py-2 rounded-lg bg-black/70 text-white text-sm font-medium hover:bg-black/90 transition-colors animate-pulse"
+        >
+          <VolumeX className="w-4 h-4" /> Tap to unmute
+        </button>
+      )}
+
       {/* Buffering / Pre-buffering spinner */}
       <AnimatePresence>
         {(buffering || preBuffering) && !error && (

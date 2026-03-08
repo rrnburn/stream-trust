@@ -27,7 +27,6 @@ export async function getBiometricStatus(): Promise<BiometricStatus> {
       [BiometryType.FACE_AUTHENTICATION]: 'face',
       [BiometryType.FACE_ID]: 'face',
       [BiometryType.TOUCH_ID]: 'fingerprint',
-      [BiometryType.IRIS]: 'iris',
     };
     const biometryType = typeMap[result.biometryType] || 'fingerprint';
 

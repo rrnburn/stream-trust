@@ -51,9 +51,12 @@ export async function checkForUpdate(): Promise<{
     // Compare build numbers: "build-42" vs "build-45"
     const currentNum = parseBuildNumber(CURRENT_BUILD);
     const latestNum = parseBuildNumber(latest.tagName);
-    const available = latestNum > currentNum;
+    
+    // If current build is unknown/dev, always offer update
+    // If both parse to valid numbers, compare them
+    const available = currentNum === 0 || latestNum > currentNum;
 
-    logger.info('AppUpdater', `Current: ${currentNum}, Latest: ${latestNum}, Update available: ${available}`);
+    logger.info('AppUpdater', `Current: "${CURRENT_BUILD}" (${currentNum}), Latest: "${latest.tagName}" (${latestNum}), Update available: ${available}`);
 
     return { available, current: CURRENT_BUILD, latest };
   } catch (e: any) {

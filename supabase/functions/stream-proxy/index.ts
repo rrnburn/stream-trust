@@ -84,7 +84,11 @@ Deno.serve(async (req) => {
 
     // If all direct strategies failed, try external proxy
     if (!upstream) {
-      const externalProxyUrl = Deno.env.get('EXTERNAL_PROXY_URL');
+      let externalProxyUrl = Deno.env.get('EXTERNAL_PROXY_URL') || '';
+      // Ensure the URL has a protocol prefix
+      if (externalProxyUrl && !externalProxyUrl.startsWith('http')) {
+        externalProxyUrl = `http://${externalProxyUrl}`;
+      }
       if (externalProxyUrl) {
         console.log(`[stream-proxy] [INFO] [${reqId}] Direct fetch failed, trying external proxy`);
         const proxyStrategies = [

@@ -373,6 +373,13 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
 
       if (useProxy) {
         playUrl(playbackUrl, 'Proxy MP4', () => {
+          // If proxy MP4 failed and it's a movie, try HLS fallback
+          if (isMovieMp4 && !hlsFallback) {
+            log('WARN', `Proxy MP4 failed, trying HLS .m3u8 fallback...`);
+            cleanup();
+            setHlsFallback(true);
+            return;
+          }
           log('ERROR', `Proxy playback failed | Title="${title}"`);
           setError('This stream is currently unavailable. The provider may be blocking playback from web browsers.');
           setBuffering(false);

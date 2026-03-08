@@ -61,6 +61,7 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
   const [preBuffering, setPreBuffering] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
   const [retrying, setRetrying] = useState(false);
+  const [autoplayMuted, setAutoplayMuted] = useState(false);
   const MAX_RETRIES = 3;
 
   const getProxiedUrl = useCallback((streamUrl: string) => {

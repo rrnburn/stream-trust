@@ -5,6 +5,9 @@ on:
   push:
     branches: [main]
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -32,8 +35,19 @@ jobs:
           bun install
           npm install --package-lock-only
 
+      - name: Generate build version
+        id: version
+        run: |
+          BUILD_VERSION="build-${{ github.run_number }}"
+          BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          echo "version=$BUILD_VERSION" >> $GITHUB_OUTPUT
+          echo "date=$BUILD_DATE" >> $GITHUB_OUTPUT
+
       - name: Build web assets
         run: bun run build
+        env:
+          VITE_APP_BUILD_VERSION: ${{ steps.version.outputs.version }}
+          VITE_APP_BUILD_DATE: ${{ steps.version.outputs.date }}
 
       - name: Add Android platform
         run: npx cap add android || true
@@ -67,8 +81,19 @@ jobs:
         working-directory: android
         run: ./gradlew assembleDebug
 
-      - name: Upload APK
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: streaminstuff-debug
           path: android/app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          name: "Build #${{ github.run_number }}"
+          body: |
+            Automated build from commit ${{ github.sha }}
+            Built at ${{ steps.version.outputs.date }}
+          files: android/app/build/outputs/apk/debug/app-debug.apk
+          make_latest: "true"

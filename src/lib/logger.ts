@@ -35,7 +35,7 @@ export const logger = {
   error: (component: string, msg: string, meta?: Record<string, unknown>) => addEntry('error', component, msg, meta),
   getEntries: () => [...entries],
   clear: () => { entries.length = 0; listeners.forEach(fn => fn()); },
-  subscribe: (fn: () => void) => { listeners.add(fn); return () => listeners.delete(fn); },
+  subscribe: (fn: () => void) => { listeners.add(fn); return () => { listeners.delete(fn); }; },
 };
 
 // Intercept console methods

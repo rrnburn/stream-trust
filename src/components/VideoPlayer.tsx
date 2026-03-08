@@ -544,9 +544,6 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
     // For movies, prepare both .mp4 and .m3u8 variants
     const isMovie = src.includes('/movie/');
     // For HLS fallback, replace any extension with .m3u8
-    const hlsSrc = isMovie ? src.replace(/\.[^.]+$/, '.m3u8') : null;
-    // Also try without extension (some Xtream providers serve at bare URL)
-    const bareSrc = isMovie ? src.replace(/\.[^.]+$/, '') : null;
 
     // For movies, use original .mp4 URL directly (matching Tivimate behavior)
     const primarySrc = isMovie ? src : nativeSrc;
@@ -571,22 +568,6 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
             <ExternalLink className="w-5 h-5" />
             Open in VLC
           </button>
-          {isMovie && (
-            <div className="flex gap-2 w-full max-w-xs">
-              <button
-                onClick={() => playInVlc(hlsSrc!, title)}
-                className="flex-1 px-3 py-2 rounded-lg bg-muted text-muted-foreground text-xs font-medium hover:bg-muted/80 transition-colors"
-              >
-                VLC (HLS)
-              </button>
-              <button
-                onClick={() => playInVlc(bareSrc!, title)}
-                className="flex-1 px-3 py-2 rounded-lg bg-muted text-muted-foreground text-xs font-medium hover:bg-muted/80 transition-colors"
-              >
-                VLC (Direct)
-              </button>
-            </div>
-          )}
           <div className="flex gap-3 w-full max-w-xs">
             <button
               onClick={() => playInMxPlayer(primarySrc, title)}

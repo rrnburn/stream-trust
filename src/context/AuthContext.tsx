@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { isNativePlatform } from '@/lib/platform';
 import type { User, Session } from '@supabase/supabase-js';
 
 interface AuthState {
@@ -19,12 +20,18 @@ export const useAuth = () => {
   return ctx;
 };
 
+// Fake local user for native builds (no cloud auth needed)
+const LOCAL_USER = { id: 'local-user', email: 'local@device' } as User;
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<User | null>(null);
+  const native = isNativePlatform();
+  const [user, setUser] = useState<User | null>(native ? LOCAL_USER : null);
   const [session, setSession] = useState<Session | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!native);
 
   useEffect(() => {
+    if (native) return; // no cloud auth on native
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       setUser(session?.user ?? null);
@@ -38,23 +45,25 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [native]);
 
   const signUp = async (email: string, password: string) => {
+    if (native) return { error: null };
     const { error } = await supabase.auth.signUp({
-      email,
-      password,
+      email, password,
       options: { emailRedirectTo: window.location.origin },
     });
     return { error: error as Error | null };
   };
 
   const signIn = async (email: string, password: string) => {
+    if (native) return { error: null };
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     return { error: error as Error | null };
   };
 
   const signOut = async () => {
+    if (native) return;
     await supabase.auth.signOut();
   };
 

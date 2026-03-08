@@ -204,11 +204,27 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
       }
     };
 
+    // Helper: try to play with sound, fall back to muted if autoplay blocked
+    const tryPlay = (video: HTMLVideoElement) => {
+      video.muted = false;
+      video.play().then(() => {
+        log('INFO', 'Playback started with sound');
+        setAutoplayMuted(false);
+        setMuted(false);
+      }).catch(() => {
+        log('WARN', 'Autoplay blocked, retrying muted');
+        video.muted = true;
+        setMuted(true);
+        setAutoplayMuted(true);
+        video.play().catch((e) => log('ERROR', 'Even muted autoplay failed', { msg: e?.message }));
+      });
+    };
+
     // Pre-buffer for live streams
     const startWithPreBuffer = () => {
       if (!isLive) {
         log('INFO', 'VOD stream ready, starting playback');
-        video.play().catch((e) => log('WARN', 'Autoplay blocked', e?.message));
+        tryPlay(video);
         return;
       }
       setPreBuffering(true);
@@ -219,7 +235,7 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
           if (buffered >= MIN_BUFFER) {
             log('INFO', `Pre-buffer ready: ${buffered.toFixed(1)}s buffered`);
             setPreBuffering(false);
-            video.play().catch((e) => log('WARN', 'Autoplay blocked', e?.message));
+            tryPlay(video);
             return;
           }
         }

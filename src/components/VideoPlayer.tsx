@@ -544,9 +544,6 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
     // For movies, prepare both .mp4 and .m3u8 variants
     const isMovie = src.includes('/movie/');
     // For HLS fallback, replace any extension with .m3u8
-    const hlsSrc = isMovie ? src.replace(/\.[^.]+$/, '.m3u8') : null;
-    // Also try without extension (some Xtream providers serve at bare URL)
-    const bareSrc = isMovie ? src.replace(/\.[^.]+$/, '') : null;
 
     // For movies, use original .mp4 URL directly (matching Tivimate behavior)
     const primarySrc = isMovie ? src : nativeSrc;

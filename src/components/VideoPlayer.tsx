@@ -201,12 +201,28 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
     }
   }, [src, title, normalizeStreamUrl]);
 
-  // Auto-launch native player on native platforms
+  // Track whether native player is active (so web player knows to skip)
+  const [nativeActive, setNativeActive] = useState(false);
+
+  // Auto-launch native player on native platforms; fall back to web if it fails
   useEffect(() => {
-    if (isNative && src) {
-      launchNativePlayer();
-    }
-    return () => { if (isNative) stopNative(); };
+    if (!isNative || !src) return;
+    let cancelled = false;
+
+    launchNativePlayer().then((success) => {
+      if (cancelled) return;
+      if (success) {
+        setNativeActive(true);
+      } else {
+        // Native failed — let web player take over
+        setNativeActive(false);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      if (isNative) stopNative();
+    };
   }, [isNative, src, launchNativePlayer]);
 
   // Initialize web playback (skip on native)

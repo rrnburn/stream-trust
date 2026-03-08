@@ -200,7 +200,7 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
     log('DEBUG', `Playback URL: ${playbackUrl.substring(0, 120)}`);
 
     let errorHandled = false;
-    const isMovieMp4 = src.includes('/movie/') && src.endsWith('.mp4');
+    const isMovieMp4 = src.includes('/movie/');
     const handleFatalError = (reason: string) => {
       if (errorHandled) return;
       errorHandled = true;

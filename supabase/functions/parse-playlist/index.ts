@@ -74,6 +74,8 @@ Deno.serve(async (req: Request) => {
 
     if (type === 'xtream' && username && password) {
       let base = url.replace(/\/$/, '');
+      // Preserve original protocol from user's source URL
+      const originalProtocol = /^https:\/\//i.test(base) ? 'https://' : 'http://';
       base = base.replace(/^https?:\/\//i, '');
       base = 'http://' + base;
       base = base.replace(/\/player_api\.php.*$/i, '');
@@ -81,7 +83,8 @@ Deno.serve(async (req: Request) => {
       base = base.replace(/\/$/, '');
 
       const apiBase = `${base}/player_api.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`;
-      const streamBase = base.replace(/^http:\/\//i, 'https://');
+      // Use original protocol for stream URLs instead of forcing HTTPS
+      const streamBase = base.replace(/^http:\/\//i, originalProtocol);
 
       console.log('[XTREAM] API base:', apiBase);
       console.log('[XTREAM] Stream base (HTTPS):', streamBase);
@@ -134,7 +137,7 @@ Deno.serve(async (req: Request) => {
           title: s.name || 'Unknown',
           group: vodCatMap[String(s.category_id)] || s.category_name || 'Uncategorized',
           logo: s.stream_icon || '',
-          url: `${streamBase}/movie/${username}/${password}/${s.stream_id}.mp4`,
+          url: `${streamBase}/movie/${username}/${password}/${s.stream_id}.${s.container_extension || 'mp4'}`,
           category: 'movie' as const,
         })),
         ...seriesStreams.map((s: any) => ({

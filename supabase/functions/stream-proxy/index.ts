@@ -92,7 +92,7 @@ Deno.serve(async (req) => {
 
     // Determine content type
     const contentType = upstream!.headers.get('content-type') || 'application/octet-stream';
-    console.log(`[${reqId}] OK ${upstream!.status} type=${contentType}`);
+    console.log(`[stream-proxy] [INFO] [${reqId}] Upstream OK | status=${upstream!.status} contentType=${contentType}`);
 
     const responseHeaders: Record<string, string> = {
       ...corsHeaders,

@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useMedia } from '@/context/AppContext';
+import { useSearchParams } from 'react-router-dom';
 import AppLayout from '@/components/AppLayout';
 import VideoPlayer from '@/components/VideoPlayer';
 import { Radio, ChevronDown, ChevronRight, Search, Filter } from 'lucide-react';
@@ -9,11 +10,15 @@ import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/component
 
 const LiveTV = () => {
   const media = useMedia();
+  const [searchParams, setSearchParams] = useSearchParams();
   const channels = media.filter(m => m.category === 'channel');
   const [activeChannel, setActiveChannel] = useState<typeof channels[0] | null>(null);
   const [search, setSearch] = useState('');
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
-  const [selectedGroup, setSelectedGroup] = useState<string>('all');
+  const selectedGroup = searchParams.get('group') || 'all';
+  const setSelectedGroup = (g: string) => {
+    if (g === 'all') { setSearchParams({}); } else { setSearchParams({ group: g }); }
+  };
 
   // Get all unique groups for filtering
   const allGroups = useMemo(() => {

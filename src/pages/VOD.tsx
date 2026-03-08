@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useMedia } from '@/context/AppContext';
+import { useSearchParams } from 'react-router-dom';
 import AppLayout from '@/components/AppLayout';
 import MediaGrid from '@/components/MediaGrid';
 import { PlayCircle, Search } from 'lucide-react';
@@ -8,8 +9,12 @@ import { Input } from '@/components/ui/input';
 
 const VOD = () => {
   const media = useMedia();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState('');
-  const [selectedGroup, setSelectedGroup] = useState('all');
+  const selectedGroup = searchParams.get('group') || 'all';
+  const setSelectedGroup = (g: string) => {
+    if (g === 'all') { setSearchParams({}); } else { setSearchParams({ group: g }); }
+  };
 
   const allVod = useMemo(() => media.filter(m => m.category === 'movie' || m.category === 'vod'), [media]);
 

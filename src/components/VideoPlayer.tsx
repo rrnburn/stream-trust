@@ -116,15 +116,12 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
     const handleFatalError = (reason: string) => {
       if (errorHandled) return;
       errorHandled = true;
-      if (!useProxy) {
-        log('WARN', `Direct playback failed (${reason}), retrying via proxy...`);
-        cleanup();
-        setUseProxy(true);
-      } else {
-        log('ERROR', `Playback failed via proxy: ${reason} | Title="${title}" retryCount=${retryCount}`);
-        setError(reason);
-        setBuffering(false);
-      }
+      
+      // Skip proxy fallback — most IPTV providers block datacenter IPs (HTTP 458).
+      // Direct playback from the user's residential IP is the only viable path.
+      log('ERROR', `Playback failed: ${reason} | Title="${title}" retryCount=${retryCount}`);
+      setError(reason);
+      setBuffering(false);
     };
 
     // Pre-buffer for live streams
@@ -157,6 +154,12 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
         const hls = new Hls({
           enableWorker: true,
           lowLatencyMode: isLive,
+          fragLoadingTimeOut: 20000,
+          manifestLoadingTimeOut: 15000,
+          levelLoadingTimeOut: 15000,
+          fragLoadingMaxRetry: 6,
+          manifestLoadingMaxRetry: 4,
+          levelLoadingMaxRetry: 4,
           xhrSetup: (xhr) => { xhr.withCredentials = false; },
         });
         hlsRef.current = hls;

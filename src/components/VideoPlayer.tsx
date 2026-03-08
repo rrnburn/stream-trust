@@ -173,49 +173,53 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
     };
 
     if (streamType === 'hls') {
-      log('INFO', 'Initializing HLS player');
-      if (Hls.isSupported()) {
-        const hls = new Hls({
-          enableWorker: true,
-          lowLatencyMode: isLive,
-          fragLoadingTimeOut: 20000,
-          manifestLoadingTimeOut: 15000,
-          levelLoadingTimeOut: 15000,
-          fragLoadingMaxRetry: 6,
-          manifestLoadingMaxRetry: 4,
-          levelLoadingMaxRetry: 4,
-          xhrSetup: (xhr) => { xhr.withCredentials = false; },
-        });
-        hlsRef.current = hls;
-        hls.loadSource(playbackUrl);
-        hls.attachMedia(video);
-        hls.on(Hls.Events.MANIFEST_PARSED, (_, data) => {
-          log('INFO', `HLS manifest parsed: ${data.levels.length} quality levels`);
+      log('INFO', 'Initializing HLS playback');
+      
+      // Strategy 1: Try native video.src (bypasses CORS — works on Safari, some mobile browsers)
+      // Strategy 2: Try hls.js (uses XHR, subject to CORS)  
+      // Strategy 3: Fall back to proxy
+      
+      const tryNativeFirst = !useProxy;
+      
+      if (tryNativeFirst) {
+        log('INFO', 'Trying native video.src for HLS (CORS bypass)');
+        video.src = playbackUrl;
+        
+        let nativeWorked = false;
+        const nativeTimeout = setTimeout(() => {
+          if (!nativeWorked) {
+            log('WARN', 'Native HLS timed out after 8s, trying hls.js');
+            video.removeAttribute('src');
+            video.load();
+            initHlsJs(video, playbackUrl, isLive, startWithPreBuffer, handleFatalError);
+          }
+        }, 8000);
+        
+        const onNativeCanPlay = () => {
+          nativeWorked = true;
+          clearTimeout(nativeTimeout);
+          log('INFO', 'Native HLS playback working');
           setBuffering(false);
           startWithPreBuffer();
-        });
-        hls.on(Hls.Events.ERROR, (_, data) => {
-          if (data.fatal) {
-            log('ERROR', `HLS fatal error: type=${data.type} details=${data.details}`, { status: data.response?.code });
-            if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
-              log('INFO', 'Attempting HLS media error recovery');
-              hls.recoverMediaError();
-            } else {
-              hls.destroy();
-              handleFatalError(`HLS ${data.type}: ${data.details}`);
-            }
-          } else {
-            log('WARN', `HLS non-fatal: ${data.type} ${data.details}`);
-          }
-        });
-      } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-        log('INFO', 'Using native HLS (Safari)');
-        video.src = playbackUrl;
-        video.addEventListener('loadedmetadata', () => startWithPreBuffer(), { once: true });
+        };
+        
+        const onNativeError = () => {
+          if (nativeWorked) return;
+          clearTimeout(nativeTimeout);
+          log('WARN', 'Native HLS failed, trying hls.js');
+          video.removeAttribute('src');
+          video.load();
+          initHlsJs(video, playbackUrl, isLive, startWithPreBuffer, handleFatalError);
+        };
+        
+        video.addEventListener('canplay', onNativeCanPlay, { once: true });
+        video.addEventListener('error', onNativeError, { once: true });
+        video.addEventListener('loadedmetadata', () => {
+          log('INFO', 'Native HLS metadata loaded');
+        }, { once: true });
       } else {
-        log('ERROR', 'HLS not supported in this browser');
-        setError('HLS playback not supported');
-        setBuffering(false);
+        // Using proxy URL — go straight to hls.js
+        initHlsJs(video, playbackUrl, isLive, startWithPreBuffer, handleFatalError);
       }
     } else if (streamType === 'mpegts' && mpegts.isSupported()) {
       log('INFO', 'Initializing mpegts.js player');

@@ -69,7 +69,7 @@ Deno.serve(async (req) => {
         clearTimeout(timeoutId2);
       } else {
         const msg = fetchErr instanceof Error ? fetchErr.message : 'Unknown';
-        console.error(`[${reqId}] Fetch failed: ${msg}`);
+        console.error(`[stream-proxy] [ERROR] [${reqId}] Fetch failed | error=${msg}`);
         return new Response(JSON.stringify({ error: `Fetch failed: ${msg}` }), {
           status: 502,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },

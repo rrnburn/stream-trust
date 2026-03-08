@@ -151,7 +151,7 @@ Deno.serve(async (req) => {
         return line;
       }).join('\n');
 
-      console.log(`[${reqId}] Manifest rewritten: ${lines.length} lines, base=${baseUrl.substring(0, 60)}`);
+      console.log(`[stream-proxy] [INFO] [${reqId}] Manifest rewritten | lines=${lines.length} baseUrl=${baseUrl.substring(0, 60)}`);
 
       responseHeaders['Content-Type'] = 'application/vnd.apple.mpegurl';
       delete responseHeaders['Content-Length'];

@@ -547,16 +547,12 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
     // Also try without extension (some Xtream providers serve at bare URL)
     const bareSrc = isMovie ? src.replace(/\.mp4$/, '') : null;
 
+    // For movies, use original .mp4 URL directly (matching Tivimate behavior)
+    const primarySrc = isMovie ? src : nativeSrc;
+
     const handleVlcPlay = async () => {
-      if (isMovie) {
-        // Try HLS first for movies (most compatible with Xtream providers)
-        log('INFO', `Movie: trying VLC with .m3u8 first`);
-        await playInVlc(hlsSrc!, title);
-        // Note: we can't detect VLC failure from intent result alone,
-        // so we also show alternate format buttons below
-      } else {
-        await playInVlc(nativeSrc, title);
-      }
+      log('INFO', `Opening VLC with ${isMovie ? 'original .mp4' : 'normalized'} URL`);
+      await playInVlc(primarySrc, title);
     };
 
     return (
@@ -577,10 +573,10 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
           {isMovie && (
             <div className="flex gap-2 w-full max-w-xs">
               <button
-                onClick={() => playInVlc(nativeSrc, title)}
+                onClick={() => playInVlc(hlsSrc!, title)}
                 className="flex-1 px-3 py-2 rounded-lg bg-muted text-muted-foreground text-xs font-medium hover:bg-muted/80 transition-colors"
               >
-                VLC (MP4)
+                VLC (HLS)
               </button>
               <button
                 onClick={() => playInVlc(bareSrc!, title)}
@@ -592,14 +588,14 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
           )}
           <div className="flex gap-3 w-full max-w-xs">
             <button
-              onClick={() => playInMxPlayer(isMovie ? hlsSrc! : nativeSrc, title)}
+              onClick={() => playInMxPlayer(primarySrc, title)}
               className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-secondary text-secondary-foreground text-sm font-medium hover:bg-secondary/80 transition-colors"
             >
               <ExternalLink className="w-4 h-4" />
               MX Player
             </button>
             <button
-              onClick={() => playInSystemChooser(isMovie ? hlsSrc! : nativeSrc)}
+              onClick={() => playInSystemChooser(primarySrc)}
               className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-secondary text-secondary-foreground text-sm font-medium hover:bg-secondary/80 transition-colors"
             >
               <Play className="w-4 h-4" />

@@ -1,5 +1,5 @@
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
-import { Home, Film, Tv, Search, Heart, Settings, Play, Radio, PlayCircle, LogOut, Terminal, ChevronDown, ChevronRight } from 'lucide-react';
+import { Home, Film, Tv, Search, Heart, Settings, Play, Radio, LogOut, Terminal, ChevronDown, ChevronRight } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useMedia } from '@/context/AppContext';
 import { useMemo, useState } from 'react';

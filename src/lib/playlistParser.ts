@@ -66,6 +66,8 @@ async function parseXtream(
   password: string,
 ): Promise<ParsedItem[]> {
   let base = baseUrl.replace(/\/$/, '');
+  // Preserve original protocol from user's source URL
+  const originalProtocol = /^https:\/\//i.test(base) ? 'https://' : 'http://';
   base = base.replace(/^https?:\/\//i, '');
   base = 'http://' + base;
   base = base.replace(/\/player_api\.php.*$/i, '');
@@ -73,7 +75,8 @@ async function parseXtream(
   base = base.replace(/\/$/, '');
 
   const apiBase = `${base}/player_api.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`;
-  const streamBase = base.replace(/^http:\/\//i, 'https://');
+  // Use original protocol for stream URLs instead of forcing HTTPS
+  const streamBase = base.replace(/^http:\/\//i, originalProtocol);
 
   const fetchOpts: RequestInit = {
     headers: { 'User-Agent': 'okhttp/4.9.2', Accept: '*/*' },

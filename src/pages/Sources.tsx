@@ -172,17 +172,27 @@ const Sources = () => {
             <motion.div
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
-              className="glass rounded-xl p-4 flex items-center justify-between gap-3"
+              className="glass rounded-xl p-4 space-y-3"
             >
-              <div>
-                <p className="font-medium text-foreground text-sm">{latestRelease.name}</p>
-                <p className="text-xs text-muted-foreground">
-                  {latestRelease.tagName} · {new Date(latestRelease.publishedAt).toLocaleDateString()}
-                </p>
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="font-medium text-foreground text-sm">{latestRelease.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {latestRelease.tagName} · {new Date(latestRelease.publishedAt).toLocaleDateString()}
+                  </p>
+                </div>
+                <Button onClick={handleDownload} disabled={downloading} className="gap-2 bg-primary text-primary-foreground hover:bg-primary/90">
+                  {downloading ? (
+                    <><Loader2 className="w-4 h-4 animate-spin" /> Downloading...</>
+                  ) : (
+                    <><Download className="w-4 h-4" /> Download & Install</>
+                  )}
+                </Button>
               </div>
-              <Button onClick={handleDownload} className="gap-2 bg-primary text-primary-foreground hover:bg-primary/90">
-                <Download className="w-4 h-4" /> Download APK
-              </Button>
+              {downloading && (
+                <Progress value={downloadProgress} className="h-2" />
+              )}
+            </motion.div>
             </motion.div>
           ) : (
             <Button

@@ -147,6 +147,8 @@ const Sources = () => {
               ))}
             </div>
           )}
+        </AnimatePresence>
+
         {/* App Update Section */}
         <div className="mt-10 pt-6 border-t border-border">
           <h2 className="text-lg font-display font-semibold text-foreground mb-1">App Update</h2>

@@ -1,11 +1,12 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import Hls from 'hls.js';
 import mpegts from 'mpegts.js';
-import { Play, Pause, Maximize, Minimize, Volume2, VolumeX, SkipBack, SkipForward, Loader2 } from 'lucide-react';
+import { Play, Pause, Maximize, Minimize, Volume2, VolumeX, SkipBack, SkipForward, Loader2, ExternalLink } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '@/integrations/supabase/client';
 import { isNativePlatform } from '@/lib/platform';
 import { logger } from '@/lib/logger';
+import { playNative, stopNative } from '@/lib/nativePlayer';
 
 interface VideoPlayerProps {
   src: string;
@@ -63,8 +64,10 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
   const [retryCount, setRetryCount] = useState(0);
   const [retrying, setRetrying] = useState(false);
   const [autoplayMuted, setAutoplayMuted] = useState(false);
-  const [hlsFallback, setHlsFallback] = useState(false); // When true, retry movie .mp4 as .m3u8
+  const [hlsFallback, setHlsFallback] = useState(false);
+  const [nativePlayerLaunching, setNativePlayerLaunching] = useState(false);
   const MAX_RETRIES = 3;
+  const isNative = isNativePlatform();
 
   const getProxiedUrl = useCallback((streamUrl: string) => {
     // Native apps don't need the proxy — direct playback with residential IP
@@ -173,8 +176,31 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
     }
   }, []);
 
-  // Initialize playback
+  // Launch native ExoPlayer/AVPlayer
+  const launchNativePlayer = useCallback(async () => {
+    if (!src) return;
+    setNativePlayerLaunching(true);
+    setError(null);
+    try {
+      const normalizedSrc = normalizeStreamUrl(src);
+      await playNative(normalizedSrc, title);
+    } catch (err: any) {
+      setError(err?.message || 'Native player failed');
+    }
+    setNativePlayerLaunching(false);
+  }, [src, title, normalizeStreamUrl]);
+
+  // Auto-launch native player on native platforms
   useEffect(() => {
+    if (isNative && src) {
+      launchNativePlayer();
+    }
+    return () => { if (isNative) stopNative(); };
+  }, [isNative, src, launchNativePlayer]);
+
+  // Initialize web playback (skip on native)
+  useEffect(() => {
+    if (isNative) return; // native uses ExoPlayer
     const video = videoRef.current;
     if (!video || !src) return;
 
@@ -530,6 +556,40 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
   }, [togglePlay, duration, playing]);
+
+  // Native platform: show poster + play button that launches ExoPlayer/AVPlayer
+  if (isNative) {
+    return (
+      <div className="relative w-full aspect-video bg-black rounded-xl overflow-hidden flex items-center justify-center">
+        {poster && (
+          <img src={poster} alt={title || ''} className="absolute inset-0 w-full h-full object-cover opacity-60" />
+        )}
+        <div className="relative z-10 flex flex-col items-center gap-4">
+          {nativePlayerLaunching ? (
+            <Loader2 className="w-14 h-14 text-primary animate-spin" />
+          ) : error ? (
+            <>
+              <p className="text-destructive font-medium text-base">⚠️ {error}</p>
+              <button
+                onClick={launchNativePlayer}
+                className="px-5 py-2.5 rounded-lg bg-primary text-primary-foreground font-medium text-sm hover:bg-primary/90 transition-colors flex items-center gap-2"
+              >
+                <Play className="w-4 h-4 fill-current" /> Retry
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={launchNativePlayer}
+              className="w-16 h-16 rounded-full bg-primary/90 flex items-center justify-center hover:bg-primary transition-colors"
+            >
+              <Play className="w-7 h-7 text-primary-foreground fill-primary-foreground ml-1" />
+            </button>
+          )}
+          {title && <p className="text-white font-semibold text-sm">{title}</p>}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div

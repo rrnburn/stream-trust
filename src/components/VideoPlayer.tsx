@@ -289,17 +289,11 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
     } else {
       log('INFO', 'Using direct HTML5 video playback');
 
-      // Strategy for MP4/direct streams from IPTV:
-      // 1. Try original MP4 URL directly via video.src
-      // 2. Try HLS variant (.mp4 → .m3u8) — Xtream servers support both formats
-      //    HLS via native video.src bypasses CORS entirely
-      // 3. Try HLS variant via hls.js  
-      // 4. Fall back to proxy
-
+      // Simple 2-stage approach: direct → proxy (fast fail)
       let resolved = false;
 
-      const tryDirectMp4 = () => {
-        log('INFO', `Stage 1: Trying direct MP4: ${playbackUrl.substring(0, 100)}`);
+      const playUrl = (url: string, label: string, onFail: () => void) => {
+        log('INFO', `${label}: ${url.substring(0, 100)}`);
         video.removeAttribute('src');
         video.load();
 
@@ -307,7 +301,8 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
           if (resolved) return;
           resolved = true;
           video.removeEventListener('error', onErr);
-          log('INFO', 'Stage 1 success: Direct MP4 metadata loaded');
+          clearTimeout(loadTimeout);
+          log('INFO', `${label} success: metadata loaded`);
           setBuffering(false);
           video.play().catch((e) => log('WARN', 'Autoplay blocked', { msg: e?.message }));
         };
@@ -315,126 +310,41 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
         const onErr = () => {
           if (resolved) return;
           video.removeEventListener('loadedmetadata', onMeta);
+          clearTimeout(loadTimeout);
           const code = video.error?.code;
           const msg = video.error?.message || 'Unknown';
-          log('WARN', `Stage 1 failed: Direct MP4 error code=${code} message=${msg}`);
-          tryHlsVariant();
+          log('WARN', `${label} failed: code=${code} msg=${msg}`);
+          onFail();
         };
+
+        // Fast timeout - don't make users wait
+        const loadTimeout = setTimeout(() => {
+          if (resolved) return;
+          video.removeEventListener('loadedmetadata', onMeta);
+          video.removeEventListener('error', onErr);
+          log('WARN', `${label} timed out (8s)`);
+          onFail();
+        }, 8000);
 
         video.addEventListener('loadedmetadata', onMeta, { once: true });
         video.addEventListener('error', onErr, { once: true });
-        video.src = playbackUrl;
-      };
-
-      const tryHlsVariant = () => {
-        // Convert .mp4/.mkv/.avi to .m3u8 — Xtream IPTV servers usually support HLS output
-        const hlsUrl = normalizedSrc.replace(/\.(mp4|mkv|avi)$/i, '.m3u8');
-        if (hlsUrl === normalizedSrc) {
-          // No extension to swap, skip to proxy
-          log('WARN', 'No HLS variant available, skipping to proxy');
-          handleFatalError('Direct playback failed, no HLS variant');
-          return;
-        }
-
-        log('INFO', `Stage 2: Trying HLS variant (native): ${hlsUrl.substring(0, 100)}`);
-        video.removeAttribute('src');
-        video.load();
-
-        let hlsNativeWorked = false;
-
-        const onCanPlay = () => {
-          if (resolved) return;
-          hlsNativeWorked = true;
-          resolved = true;
-          video.removeEventListener('error', onHlsErr);
-          log('INFO', 'Stage 2 success: Native HLS variant playing');
-          setBuffering(false);
-          video.play().catch((e) => log('WARN', 'Autoplay blocked', { msg: e?.message }));
-        };
-
-        const onHlsErr = () => {
-          if (resolved || hlsNativeWorked) return;
-          video.removeEventListener('canplay', onCanPlay);
-          log('WARN', 'Stage 2 failed: Native HLS variant error, trying hls.js');
-          tryHlsJsVariant(hlsUrl);
-        };
-
-        video.addEventListener('canplay', onCanPlay, { once: true });
-        video.addEventListener('error', onHlsErr, { once: true });
-        video.src = hlsUrl;
-
-        // Timeout for native HLS attempt
-        setTimeout(() => {
-          if (!resolved && !hlsNativeWorked) {
-            video.removeEventListener('canplay', onCanPlay);
-            video.removeEventListener('error', onHlsErr);
-            log('WARN', 'Stage 2 timed out (6s), trying hls.js');
-            tryHlsJsVariant(hlsUrl);
-          }
-        }, 6000);
-      };
-
-      const tryHlsJsVariant = (hlsUrl: string) => {
-        if (resolved || errorHandled) return;
-        log('INFO', `Stage 3: Trying HLS variant via hls.js: ${hlsUrl.substring(0, 100)}`);
-        video.removeAttribute('src');
-        video.load();
-        initHlsJs(video, hlsUrl, false, () => {
-          if (resolved) return;
-          resolved = true;
-          log('INFO', 'Stage 3 success: hls.js HLS variant playing');
-          setBuffering(false);
-          video.play().catch((e) => log('WARN', 'Autoplay blocked', { msg: e?.message }));
-        }, (reason) => {
-          log('WARN', `Stage 3 failed: hls.js error: ${reason}`);
-          handleFatalError(`All direct strategies failed (last: ${reason})`);
-        });
+        video.src = url;
       };
 
       if (useProxy) {
-        // Already on proxy pass — try proxy URL directly
-        log('INFO', `Proxy stage: Trying proxied MP4: ${playbackUrl.substring(0, 100)}`);
-        video.src = playbackUrl;
-        video.addEventListener('loadedmetadata', () => {
-          if (resolved) return;
-          resolved = true;
-          log('INFO', 'Proxy MP4 metadata loaded');
+        playUrl(playbackUrl, 'Proxy MP4', () => {
+          log('ERROR', `Proxy playback failed | Title="${title}"`);
+          setError('This stream is currently unavailable. The provider may be blocking playback from web browsers.');
           setBuffering(false);
-          video.play().catch((e) => log('WARN', 'Autoplay blocked', { msg: e?.message }));
-        }, { once: true });
-        video.addEventListener('error', () => {
-          if (resolved) return;
-          // Try proxied HLS variant
-          const hlsUrl = getProxiedUrl(normalizedSrc.replace(/\.(mp4|mkv|avi)$/i, '.m3u8'));
-          log('INFO', `Proxy HLS stage: Trying proxied HLS: ${hlsUrl.substring(0, 80)}`);
-          video.removeAttribute('src');
-          video.load();
-          initHlsJs(video, hlsUrl, false, () => {
-            if (resolved) return;
-            resolved = true;
-            log('INFO', 'Proxy HLS success');
-            setBuffering(false);
-            video.play().catch((e) => log('WARN', 'Autoplay blocked', { msg: e?.message }));
-          }, (reason) => {
-            log('ERROR', `All proxy strategies failed: ${reason}`);
-            setError(`Playback failed: ${reason}`);
-            setBuffering(false);
-          });
-        }, { once: true });
+        });
       } else {
-        tryDirectMp4();
+        playUrl(playbackUrl, 'Direct MP4', () => {
+          handleFatalError('Direct playback failed');
+        });
       }
-
-      const timeout = setTimeout(() => {
-        if (!resolved && !errorHandled) {
-          log('WARN', 'Overall load timeout (20s), giving up');
-          handleFatalError('Load timeout');
-        }
-      }, 20000);
 
       return () => {
         resolved = true;
-        clearTimeout(timeout);
         cleanup();
       };
     }

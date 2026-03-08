@@ -28,9 +28,9 @@ const flushLogs = () => {
 const log = (level: 'INFO' | 'DEBUG' | 'WARN' | 'ERROR', msg: string, meta?: Record<string, unknown>) => {
   const ts = new Date().toISOString();
   const formatted = `[${ts}] [Player] [${level}] ${msg}`;
-  if (level === 'ERROR') console.error(formatted, meta || '');
-  else if (level === 'WARN') console.warn(formatted, meta || '');
-  else console.log(formatted, meta || '');
+  // Feed in-app logger
+  const lvl = level.toLowerCase() as 'info' | 'debug' | 'warn' | 'error';
+  logger[lvl]('Player', msg, meta);
 
   // Queue for backend
   logBuffer.push({ level, component: 'Player', message: msg, meta });

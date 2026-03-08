@@ -1,32 +1,24 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import { isNativePlatform } from '@/lib/platform';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './AuthContext';
 import { toast } from 'sonner';
+import type { IPTVSource, MediaItem } from './AppContext.types';
+import {
+  getSources,
+  addSourceLocal,
+  removeSourceLocal,
+  getParsedMedia,
+  insertParsedMedia,
+  getFavorites,
+  toggleFavoriteLocal,
+  getWatchHistory,
+  addToHistoryLocal,
+  initLocalDb,
+} from '@/lib/localDb';
+import { parsePlaylistLocally } from '@/lib/playlistParser';
 
-export interface IPTVSource {
-  id: string;
-  name: string;
-  type: 'm3u' | 'xtream';
-  url: string;
-  username?: string;
-  password?: string;
-  created_at: string;
-}
-
-export interface MediaItem {
-  id: string;
-  title: string;
-  poster: string;
-  category: 'movie' | 'series' | 'vod' | 'channel';
-  genre: string;
-  year?: number;
-  duration?: string;
-  rating?: number;
-  description: string;
-  sourceId: string;
-  streamUrl?: string;
-  group?: string;
-}
+export type { IPTVSource, MediaItem };
 
 interface AppState {
   sources: IPTVSource[];
@@ -56,7 +48,109 @@ export const useMedia = () => {
   return parsedMedia;
 };
 
-export const AppProvider = ({ children }: { children: ReactNode }) => {
+// ══════════════════════════════════════════════
+// LOCAL (SQLite) provider — used on native builds
+// ══════════════════════════════════════════════
+
+const LocalAppProvider = ({ children }: { children: ReactNode }) => {
+  const [sources, setSources] = useState<IPTVSource[]>([]);
+  const [favorites, setFavorites] = useState<string[]>([]);
+  const [watchHistory, setWatchHistory] = useState<{ id: string; progress: number; timestamp: string }[]>([]);
+  const [loadingSources, setLoadingSources] = useState(true);
+  const [parsedMedia, setParsedMedia] = useState<MediaItem[]>([]);
+  const [parsingPlaylist, setParsingPlaylist] = useState(false);
+
+  const reload = useCallback(async () => {
+    setLoadingSources(true);
+    try {
+      await initLocalDb();
+      const [s, f, h, m] = await Promise.all([getSources(), getFavorites(), getWatchHistory(), getParsedMedia()]);
+      setSources(s.map((r: any) => ({
+        id: r.id, name: r.name, type: r.type, url: r.url,
+        username: r.username || undefined, password: r.password || undefined,
+        created_at: r.created_at,
+      })));
+      setFavorites(f);
+      setWatchHistory(h);
+      setParsedMedia(m.map((r: any) => ({
+        id: r.id, title: r.title, poster: r.poster || '',
+        category: r.category as MediaItem['category'],
+        genre: r.genre || 'Uncategorized', description: r.description || '',
+        sourceId: r.source_id, streamUrl: r.stream_url || '',
+        group: r.group_name || undefined,
+      })));
+    } catch (e) {
+      console.error('Local DB load error:', e);
+    }
+    setLoadingSources(false);
+  }, []);
+
+  useEffect(() => { reload(); }, [reload]);
+
+  const addSource = async (source: Omit<IPTVSource, 'id' | 'created_at'>) => {
+    await addSourceLocal(source);
+    await reload();
+  };
+
+  const removeSource = async (id: string) => {
+    await removeSourceLocal(id);
+    await reload();
+  };
+
+  const toggleFavorite = async (mediaId: string) => {
+    await toggleFavoriteLocal(mediaId);
+    const f = await getFavorites();
+    setFavorites(f);
+  };
+
+  const isFavorite = (id: string) => favorites.includes(id);
+
+  const addToHistory = async (mediaId: string, progress: number) => {
+    await addToHistoryLocal(mediaId, progress);
+    const h = await getWatchHistory();
+    setWatchHistory(h);
+  };
+
+  const parsePlaylist = async (source: IPTVSource) => {
+    setParsingPlaylist(true);
+    try {
+      const result = await parsePlaylistLocally(source.url, source.type as 'm3u' | 'xtream', source.username, source.password);
+      if (result.items.length > 0) {
+        await insertParsedMedia(source.id, result.items.map(i => ({
+          ...i, sourceName: source.name,
+        })));
+        const parts = [];
+        if (result.channels) parts.push(`${result.channels} channels`);
+        if (result.movies) parts.push(`${result.movies} movies`);
+        if (result.series) parts.push(`${result.series} series`);
+        toast.success(`Parsed ${result.total} items (${parts.join(', ')}) from ${source.name}`);
+        await reload();
+      } else {
+        toast.info('No items found in playlist');
+      }
+    } catch (e: any) {
+      console.error('Failed to parse playlist:', e);
+      toast.error(`Failed to parse: ${e.message || 'Unknown error'}`);
+    }
+    setParsingPlaylist(false);
+  };
+
+  return (
+    <AppContext.Provider value={{
+      sources, favorites, watchHistory,
+      addSource, removeSource, toggleFavorite, isFavorite, addToHistory,
+      loadingSources, parsedMedia, parsePlaylist, parsingPlaylist,
+    }}>
+      {children}
+    </AppContext.Provider>
+  );
+};
+
+// ══════════════════════════════════════════════
+// CLOUD (Supabase) provider — used on web
+// ══════════════════════════════════════════════
+
+const CloudAppProvider = ({ children }: { children: ReactNode }) => {
   const { user } = useAuth();
   const [sources, setSources] = useState<IPTVSource[]>([]);
   const [favorites, setFavorites] = useState<string[]>([]);
@@ -94,7 +188,6 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
 
   const loadParsedMedia = useCallback(async () => {
     if (!user) { setParsedMedia([]); return; }
-    // Fetch all media in pages to avoid 1000-row default limit
     let allData: any[] = [];
     let from = 0;
     const pageSize = 1000;
@@ -109,17 +202,12 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       if (page.length < pageSize) break;
       from += pageSize;
     }
-    const data = allData;
-    if (data) {
-      setParsedMedia(data.map((row: any) => ({
-        id: row.id,
-        title: row.title,
-        poster: row.poster || '',
+    if (allData.length) {
+      setParsedMedia(allData.map((row: any) => ({
+        id: row.id, title: row.title, poster: row.poster || '',
         category: row.category as MediaItem['category'],
-        genre: row.genre || 'Uncategorized',
-        description: row.description || '',
-        sourceId: row.source_id,
-        streamUrl: row.stream_url || '',
+        genre: row.genre || 'Uncategorized', description: row.description || '',
+        sourceId: row.source_id, streamUrl: row.stream_url || '',
         group: row.group_name || undefined,
       })));
     }
@@ -135,12 +223,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const addSource = async (source: Omit<IPTVSource, 'id' | 'created_at'>) => {
     if (!user) return;
     await supabase.from('iptv_sources').insert({
-      user_id: user.id,
-      name: source.name,
-      type: source.type,
-      url: source.url,
-      username: source.username || null,
-      password: source.password || null,
+      user_id: user.id, name: source.name, type: source.type,
+      url: source.url, username: source.username || null, password: source.password || null,
     });
     await loadSources();
   };
@@ -148,7 +232,6 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const removeSource = async (id: string) => {
     await supabase.from('iptv_sources').delete().eq('id', id);
     await loadSources();
-    // parsed_media cascade-deletes with source
     await loadParsedMedia();
   };
 
@@ -166,11 +249,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
 
   const addToHistory = async (mediaId: string, progress: number) => {
     if (!user) return;
-    await supabase.from('watch_history').insert({
-      user_id: user.id,
-      media_id: mediaId,
-      progress,
-    });
+    await supabase.from('watch_history').insert({ user_id: user.id, media_id: mediaId, progress });
     await loadHistory();
   };
 
@@ -178,16 +257,10 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     if (!user) return;
     setParsingPlaylist(true);
     try {
-      // Server-side parsing AND insertion — avoids client timeout for large libraries
       const { data, error } = await supabase.functions.invoke('parse-playlist', {
         body: {
-          url: source.url,
-          type: source.type,
-          username: source.username,
-          password: source.password,
-          sourceId: source.id,
-          userId: user.id,
-          sourceName: source.name,
+          url: source.url, type: source.type, username: source.username,
+          password: source.password, sourceId: source.id, userId: user.id, sourceName: source.name,
         },
       });
       if (error) throw error;
@@ -219,4 +292,15 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       {children}
     </AppContext.Provider>
   );
+};
+
+// ══════════════════════════════════════════════
+// Auto-selecting provider
+// ══════════════════════════════════════════════
+
+export const AppProvider = ({ children }: { children: ReactNode }) => {
+  if (isNativePlatform()) {
+    return <LocalAppProvider>{children}</LocalAppProvider>;
+  }
+  return <CloudAppProvider>{children}</CloudAppProvider>;
 };

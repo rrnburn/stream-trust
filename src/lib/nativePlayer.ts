@@ -1,6 +1,6 @@
 import { logger } from '@/lib/logger';
 import { isNativePlatform } from '@/lib/platform';
-import { CapacitorVideoPlayer } from '@capgo/capacitor-video-player';
+import { VideoPlayer } from '@capgo/capacitor-video-player';
 
 const PLAYER_ID = 'streamvault';
 const INIT_TIMEOUT_MS = 15000;

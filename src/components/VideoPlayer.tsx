@@ -395,6 +395,7 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
   // Reset proxy and retry state when src changes
   useEffect(() => {
     setUseProxy(false);
+    setHlsFallback(false);
     setRetryCount(0);
     setRetrying(false);
     setError(null);

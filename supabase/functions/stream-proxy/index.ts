@@ -43,59 +43,56 @@ Deno.serve(async (req) => {
       console.log(`[stream-proxy] [DEBUG] [${reqId}] Range header | range=${rangeHeader}`);
     }
 
-    // Fetch with timeout and abort
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+    // Try multiple fetch strategies: HTTPS → HTTP → different User-Agent
+    const fetchStrategies = [
+      { url: streamUrl, ua: 'okhttp/4.9.2', label: 'HTTPS+okhttp' },
+      { url: streamUrl.replace(/^https:\/\//i, 'http://'), ua: 'okhttp/4.9.2', label: 'HTTP+okhttp' },
+      { url: streamUrl, ua: 'VLC/3.0.20 LibVLC/3.0.20', label: 'HTTPS+VLC' },
+      { url: streamUrl.replace(/^https:\/\//i, 'http://'), ua: 'VLC/3.0.20 LibVLC/3.0.20', label: 'HTTP+VLC' },
+      { url: streamUrl, ua: 'Lavf/60.16.100', label: 'HTTPS+ffmpeg' },
+      { url: streamUrl.replace(/^https:\/\//i, 'http://'), ua: 'Lavf/60.16.100', label: 'HTTP+ffmpeg' },
+    ];
 
-    let upstream: Response;
-    try {
-      upstream = await fetch(streamUrl, { headers, signal: controller.signal });
-    } catch (fetchErr: unknown) {
-      clearTimeout(timeoutId);
-      // If HTTPS fails, try HTTP fallback
-      if (streamUrl.startsWith('https://')) {
-        const httpUrl = streamUrl.replace(/^https:\/\//i, 'http://');
-        console.log(`[stream-proxy] [WARN] [${reqId}] HTTPS failed, trying HTTP | url=${httpUrl.substring(0, 80)}`);
-        const controller2 = new AbortController();
-        const timeoutId2 = setTimeout(() => controller2.abort(), FETCH_TIMEOUT_MS);
-        try {
-          upstream = await fetch(httpUrl, { headers, signal: controller2.signal });
-        } catch (httpErr: unknown) {
-          clearTimeout(timeoutId2);
-          const msg = httpErr instanceof Error ? httpErr.message : 'Unknown';
-          console.error(`[stream-proxy] [ERROR] [${reqId}] Both HTTPS and HTTP failed | error=${msg}`);
-          return new Response(JSON.stringify({ error: `Fetch failed: ${msg}` }), {
-            status: 502,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          });
+    let upstream: Response | null = null;
+    let lastError = '';
+
+    for (const strategy of fetchStrategies) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+      try {
+        const stratHeaders = { ...headers, 'User-Agent': strategy.ua };
+        const res = await fetch(strategy.url, { headers: stratHeaders, signal: controller.signal, redirect: 'follow' });
+        clearTimeout(timeoutId);
+        
+        if (res.ok || res.status === 206) {
+          console.log(`[stream-proxy] [INFO] [${reqId}] Strategy "${strategy.label}" succeeded | status=${res.status}`);
+          upstream = res;
+          break;
+        } else {
+          lastError = `${strategy.label}: HTTP ${res.status}`;
+          console.log(`[stream-proxy] [WARN] [${reqId}] Strategy "${strategy.label}" failed | status=${res.status}`);
+          // Consume body to free connection
+          try { await res.text(); } catch {}
         }
-        clearTimeout(timeoutId2);
-      } else {
-        const msg = fetchErr instanceof Error ? fetchErr.message : 'Unknown';
-        console.error(`[stream-proxy] [ERROR] [${reqId}] Fetch failed | error=${msg}`);
-        return new Response(JSON.stringify({ error: `Fetch failed: ${msg}` }), {
-          status: 502,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
+      } catch (err: unknown) {
+        clearTimeout(timeoutId);
+        const msg = err instanceof Error ? err.message : 'Unknown';
+        lastError = `${strategy.label}: ${msg}`;
+        console.log(`[stream-proxy] [WARN] [${reqId}] Strategy "${strategy.label}" errored | error=${msg}`);
       }
     }
-    clearTimeout(timeoutId);
 
-    if (!upstream!.ok && upstream!.status !== 206) {
-      const statusText = upstream!.statusText || 'Unknown';
-      console.error(`[stream-proxy] [ERROR] [${reqId}] Upstream error | status=${upstream!.status} statusText=${statusText}`);
-      let errorBody = '';
-      try { errorBody = await upstream!.text(); } catch {}
-      if (errorBody) console.error(`[stream-proxy] [ERROR] [${reqId}] Upstream response body | body=${errorBody.substring(0, 200)}`);
-      return new Response(JSON.stringify({ error: `Upstream ${upstream!.status}: ${statusText}` }), {
-        status: upstream!.status,
+    if (!upstream) {
+      console.error(`[stream-proxy] [ERROR] [${reqId}] All strategies failed | last=${lastError}`);
+      return new Response(JSON.stringify({ error: `All fetch strategies failed: ${lastError}` }), {
+        status: 502,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
     // Determine content type
-    const contentType = upstream!.headers.get('content-type') || 'application/octet-stream';
-    console.log(`[stream-proxy] [INFO] [${reqId}] Upstream OK | status=${upstream!.status} contentType=${contentType}`);
+    const contentType = upstream.headers.get('content-type') || 'application/octet-stream';
+    console.log(`[stream-proxy] [INFO] [${reqId}] Upstream OK | status=${upstream.status} contentType=${contentType}`);
 
     const responseHeaders: Record<string, string> = {
       ...corsHeaders,

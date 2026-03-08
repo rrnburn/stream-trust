@@ -147,7 +147,45 @@ const Sources = () => {
               ))}
             </div>
           )}
-        </AnimatePresence>
+        {/* App Update Section */}
+        <div className="mt-10 pt-6 border-t border-border">
+          <h2 className="text-lg font-display font-semibold text-foreground mb-1">App Update</h2>
+          <p className="text-xs text-muted-foreground mb-4">
+            Current version: <span className="font-mono text-foreground">{currentBuild.version}</span>
+            {currentBuild.date && <> · Built {new Date(currentBuild.date).toLocaleDateString()}</>}
+          </p>
+
+          {updateAvailable && latestRelease ? (
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="glass rounded-xl p-4 flex items-center justify-between gap-3"
+            >
+              <div>
+                <p className="font-medium text-foreground text-sm">{latestRelease.name}</p>
+                <p className="text-xs text-muted-foreground">
+                  {latestRelease.tagName} · {new Date(latestRelease.publishedAt).toLocaleDateString()}
+                </p>
+              </div>
+              <Button onClick={handleDownload} className="gap-2 bg-primary text-primary-foreground hover:bg-primary/90">
+                <Download className="w-4 h-4" /> Download APK
+              </Button>
+            </motion.div>
+          ) : (
+            <Button
+              variant="outline"
+              onClick={handleCheckUpdate}
+              disabled={checking}
+              className="gap-2"
+            >
+              {checking ? (
+                <><Loader2 className="w-4 h-4 animate-spin" /> Checking...</>
+              ) : (
+                <><RefreshCw className="w-4 h-4" /> Check for updates</>
+              )}
+            </Button>
+          )}
+        </div>
       </div>
     </AppLayout>
   );

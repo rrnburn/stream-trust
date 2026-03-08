@@ -1,5 +1,5 @@
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
-import { Home, Film, Tv, Search, Heart, Settings, Play, Radio, PlayCircle, LogOut, Terminal, ChevronDown, ChevronRight } from 'lucide-react';
+import { Home, Film, Tv, Search, Heart, Settings, Play, Radio, LogOut, Terminal, ChevronDown, ChevronRight } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useMedia } from '@/context/AppContext';
 import { useMemo, useState } from 'react';
@@ -15,7 +15,6 @@ interface NavItem {
 const navItems: NavItem[] = [
   { to: '/', icon: Home, label: 'Home' },
   { to: '/live-tv', icon: Radio, label: 'Live TV', category: 'channel' },
-  { to: '/vod', icon: PlayCircle, label: 'VOD', category: 'vod_movies' },
   { to: '/movies', icon: Film, label: 'Movies', category: 'movie' },
   { to: '/series', icon: Tv, label: 'Series', category: 'series' },
   { to: '/search', icon: Search, label: 'Search' },
@@ -47,9 +46,6 @@ const AppSidebar = () => {
     const series = media.filter(m => m.category === 'series');
     map['series'] = [...new Set(series.map(c => c.group || 'Uncategorized'))].sort();
     
-    // vod (movies + vod)
-    const vod = media.filter(m => m.category === 'movie' || m.category === 'vod');
-    map['vod_movies'] = [...new Set(vod.map(c => c.group || 'Uncategorized'))].sort();
     
     return map;
   }, [media]);

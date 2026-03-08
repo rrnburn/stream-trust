@@ -540,7 +540,12 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
 
   // Native platform: show poster + buttons to open in specific external players
   if (isNative && nativeActive) {
-    const normalizedSrc = normalizeStreamUrl(src);
+    // For native players, always use .m3u8 for movies (providers serve HLS there)
+    let nativeSrc = normalizeStreamUrl(src);
+    if (nativeSrc.includes('/movie/') && nativeSrc.endsWith('.mp4')) {
+      nativeSrc = nativeSrc.replace(/\.mp4$/, '.m3u8');
+      log('INFO', `Native: converted movie .mp4 → .m3u8: ${nativeSrc.substring(0, 80)}...`);
+    }
     return (
       <div className="relative w-full aspect-video bg-black rounded-xl overflow-hidden flex items-center justify-center">
         {poster && (
@@ -550,7 +555,7 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
           {title && <p className="text-white font-semibold text-sm text-center">{title}</p>}
           <p className="text-white/70 text-xs">Choose a player</p>
           <button
-            onClick={() => playInVlc(normalizedSrc, title)}
+            onClick={() => playInVlc(nativeSrc, title)}
             className="w-full max-w-xs flex items-center justify-center gap-3 px-6 py-4 rounded-xl bg-primary text-primary-foreground font-semibold text-base hover:bg-primary/90 transition-colors"
           >
             <ExternalLink className="w-5 h-5" />
@@ -558,14 +563,14 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
           </button>
           <div className="flex gap-3 w-full max-w-xs">
             <button
-              onClick={() => playInMxPlayer(normalizedSrc, title)}
+              onClick={() => playInMxPlayer(nativeSrc, title)}
               className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-secondary text-secondary-foreground text-sm font-medium hover:bg-secondary/80 transition-colors"
             >
               <ExternalLink className="w-4 h-4" />
               MX Player
             </button>
             <button
-              onClick={() => playInSystemChooser(normalizedSrc)}
+              onClick={() => playInSystemChooser(nativeSrc)}
               className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-secondary text-secondary-foreground text-sm font-medium hover:bg-secondary/80 transition-colors"
             >
               <Play className="w-4 h-4" />

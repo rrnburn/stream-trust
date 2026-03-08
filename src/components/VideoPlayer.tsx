@@ -176,8 +176,31 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
     }
   }, []);
 
-  // Initialize playback
+  // Launch native ExoPlayer/AVPlayer
+  const launchNativePlayer = useCallback(async () => {
+    if (!src) return;
+    setNativePlayerLaunching(true);
+    setError(null);
+    try {
+      const normalizedSrc = normalizeStreamUrl(src);
+      await playNative(normalizedSrc, title);
+    } catch (err: any) {
+      setError(err?.message || 'Native player failed');
+    }
+    setNativePlayerLaunching(false);
+  }, [src, title, normalizeStreamUrl]);
+
+  // Auto-launch native player on native platforms
   useEffect(() => {
+    if (isNative && src) {
+      launchNativePlayer();
+    }
+    return () => { if (isNative) stopNative(); };
+  }, [isNative, src, launchNativePlayer]);
+
+  // Initialize web playback (skip on native)
+  useEffect(() => {
+    if (isNative) return; // native uses ExoPlayer
     const video = videoRef.current;
     if (!video || !src) return;
 

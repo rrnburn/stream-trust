@@ -4,6 +4,7 @@ import mpegts from 'mpegts.js';
 import { Play, Pause, Maximize, Minimize, Volume2, VolumeX, SkipBack, SkipForward, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '@/integrations/supabase/client';
+import { isNativePlatform } from '@/lib/platform';
 
 interface VideoPlayerProps {
   src: string;

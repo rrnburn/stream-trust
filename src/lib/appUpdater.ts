@@ -95,7 +95,7 @@ async function downloadAndInstallApk(
     const reader = response.body?.getReader();
     if (!reader) throw new Error('No response body');
 
-    const chunks: Uint8Array[] = [];
+    const chunks: BlobPart[] = [];
     let received = 0;
 
     while (true) {

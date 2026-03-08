@@ -1,9 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Play, Mail, Lock, AlertCircle } from 'lucide-react';
+import { Play, Mail, Lock, AlertCircle, Fingerprint } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { getBiometricStatus, biometricLogin, saveCredentials, type BiometricStatus } from '@/lib/biometric';
+import { isNativePlatform } from '@/lib/platform';
 
 const AuthPage = () => {
   const { signIn, signUp } = useAuth();
@@ -13,6 +15,14 @@ const AuthPage = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState('');
+  const [bioStatus, setBioStatus] = useState<BiometricStatus | null>(null);
+  const [bioLoading, setBioLoading] = useState(false);
+
+  useEffect(() => {
+    if (isNativePlatform()) {
+      getBiometricStatus().then(setBioStatus);
+    }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,9 +38,38 @@ const AuthPage = () => {
       setError(authError.message);
     } else if (isSignUp) {
       setSuccess('Check your email for a confirmation link!');
+    } else if (bioStatus?.available && !bioStatus.hasCredentials) {
+      // After successful email/password login, offer to save for biometric
+      try {
+        await saveCredentials(email, password);
+        setBioStatus(prev => prev ? { ...prev, hasCredentials: true } : prev);
+      } catch {
+        // Non-critical, silently ignore
+      }
     }
     setLoading(false);
   };
+
+  const handleBiometricLogin = async () => {
+    setError('');
+    setBioLoading(true);
+    try {
+      const { email: storedEmail, password: storedPassword } = await biometricLogin();
+      const { error: authError } = await signIn(storedEmail, storedPassword);
+      if (authError) {
+        setError(authError.message);
+      }
+    } catch (e: any) {
+      if (e?.message?.includes('cancel') || e?.message?.includes('Cancel')) {
+        // User cancelled, don't show error
+      } else {
+        setError('Biometric authentication failed');
+      }
+    }
+    setBioLoading(false);
+  };
+
+  const biometricLabel = bioStatus?.biometryType === 'face' ? 'Face ID' : 'Fingerprint';
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
@@ -53,6 +92,29 @@ const AuthPage = () => {
           <p className="text-sm text-muted-foreground text-center mb-6">
             {isSignUp ? 'Sign up to start streaming' : 'Sign in to continue'}
           </p>
+
+          {/* Biometric login button — shown on native when credentials are stored */}
+          {!isSignUp && bioStatus?.available && bioStatus.hasCredentials && (
+            <div className="mb-6">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleBiometricLogin}
+                disabled={bioLoading}
+                className="w-full h-14 border-primary/30 hover:bg-primary/10 gap-3 text-foreground"
+              >
+                <Fingerprint className="w-6 h-6 text-primary" />
+                <span className="text-base font-medium">
+                  {bioLoading ? 'Verifying...' : `Sign in with ${biometricLabel}`}
+                </span>
+              </Button>
+              <div className="flex items-center gap-3 my-4">
+                <div className="flex-1 h-px bg-border" />
+                <span className="text-xs text-muted-foreground uppercase">or use email</span>
+                <div className="flex-1 h-px bg-border" />
+              </div>
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="relative">

@@ -25,13 +25,16 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Extract origin domain for Referer header
+    const streamOrigin = new URL(streamUrl).origin;
+    
     console.log(`[stream-proxy] [INFO] [${reqId}] Incoming request | url=${streamUrl.substring(0, 120)}`);
 
-    // Forward range headers for video seeking
+    // Use minimal headers — Xtream panels are sensitive to extra headers
     const headers: Record<string, string> = {
       'User-Agent': 'okhttp/4.9.2',
       'Accept': '*/*',
-      'Connection': 'keep-alive',
+      'Referer': streamOrigin + '/',
     };
 
     const rangeHeader = req.headers.get('range');

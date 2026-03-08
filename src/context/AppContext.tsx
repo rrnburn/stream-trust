@@ -125,6 +125,7 @@ const LocalAppProvider = ({ children }: { children: ReactNode }) => {
         if (result.movies) parts.push(`${result.movies} movies`);
         if (result.series) parts.push(`${result.series} series`);
         toast.success(`Parsed ${result.total} items (${parts.join(', ')}) from ${source.name}`);
+        logger.info('AppContext', `Parsed ${result.total} items from ${source.name}`, { channels: result.channels, movies: result.movies, series: result.series });
         await reload();
       } else {
         toast.info('No items found in playlist');

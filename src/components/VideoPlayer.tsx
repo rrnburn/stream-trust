@@ -80,8 +80,8 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
     return proxy ? getProxiedUrl(streamUrl) : streamUrl;
   }, [getProxiedUrl]);
 
-  // Normalize stream URLs: convert .ts to .m3u8 for live streams only.
-  // Movies/VOD stay as .mp4 — most Xtream providers serve direct MP4 files, not HLS manifests.
+  // Normalize stream URLs: convert .ts to .m3u8 for live streams.
+  // For movies, try .mp4 first; if hlsFallback is set, convert to .m3u8.
   const normalizeStreamUrl = useCallback((url: string): string => {
     // Live TV: .ts → .m3u8
     if (url.includes('/live/') && url.endsWith('.ts')) {
@@ -89,8 +89,14 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
       log('INFO', `Converted live .ts → .m3u8: ${hlsUrl.substring(0, 80)}...`);
       return hlsUrl;
     }
+    // Movie HLS fallback: .mp4 → .m3u8 when direct MP4 failed
+    if (hlsFallback && url.includes('/movie/') && url.endsWith('.mp4')) {
+      const hlsUrl = url.replace(/\.mp4$/, '.m3u8');
+      log('INFO', `HLS fallback: movie .mp4 → .m3u8: ${hlsUrl.substring(0, 80)}...`);
+      return hlsUrl;
+    }
     return url;
-  }, []);
+  }, [hlsFallback]);
 
   const getStreamType = (url: string): 'hls' | 'mpegts' | 'direct' => {
     const cleanUrl = url.split('?')[0];

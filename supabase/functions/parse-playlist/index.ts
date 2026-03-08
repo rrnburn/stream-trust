@@ -50,7 +50,7 @@ function parseM3U(content: string): M3UItem[] {
   return items;
 }
 
-serve(async (req) => {
+Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }

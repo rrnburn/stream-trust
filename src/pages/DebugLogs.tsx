@@ -3,7 +3,8 @@ import AppLayout from '@/components/AppLayout';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
-import { Trash2, ArrowDown } from 'lucide-react';
+import { Trash2, Copy } from 'lucide-react';
+import { toast } from '@/hooks/use-toast';
 import { logger, type LogEntry, type LogLevel } from '@/lib/logger';
 
 const levelColor: Record<LogLevel, string> = {
@@ -52,6 +53,12 @@ const DebugLogs = () => {
                 {lvl}
               </Button>
             ))}
+            <Button size="sm" variant="outline" onClick={() => {
+              const text = filtered.map(e => `[${new Date(e.timestamp).toLocaleTimeString()}] [${e.level.toUpperCase()}] [${e.component}] ${e.message}`).join('\n');
+              navigator.clipboard.writeText(text).then(() => toast({ title: 'Copied', description: `${filtered.length} log entries copied to clipboard` }));
+            }} className="shrink-0 h-7 px-2">
+              <Copy className="w-3 h-3 mr-1" /> Copy
+            </Button>
             <Button size="sm" variant="destructive" onClick={() => logger.clear()} className="shrink-0 h-7 px-2">
               <Trash2 className="w-3 h-3 mr-1" /> Clear
             </Button>

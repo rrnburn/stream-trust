@@ -16,6 +16,7 @@ import AuthPage from "./pages/AuthPage";
 import LiveTV from "./pages/LiveTV";
 import VOD from "./pages/VOD";
 import NotFound from "./pages/NotFound";
+import DebugLogs from "./pages/DebugLogs";
 
 const queryClient = new QueryClient();
 

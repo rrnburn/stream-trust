@@ -65,7 +65,7 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
   const [retrying, setRetrying] = useState(false);
   const [autoplayMuted, setAutoplayMuted] = useState(false);
   const [hlsFallback, setHlsFallback] = useState(false);
-  const [nativePlayerLaunching, setNativePlayerLaunching] = useState(false);
+  
   const MAX_RETRIES = 3;
   const isNative = isNativePlatform();
 

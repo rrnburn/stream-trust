@@ -137,12 +137,15 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
     const handleFatalError = (reason: string) => {
       if (errorHandled) return;
       errorHandled = true;
-      
-      // Skip proxy fallback — most IPTV providers block datacenter IPs (HTTP 458).
-      // Direct playback from the user's residential IP is the only viable path.
-      log('ERROR', `Playback failed: ${reason} | Title="${title}" retryCount=${retryCount}`);
-      setError(reason);
-      setBuffering(false);
+      if (!useProxy) {
+        log('WARN', `Direct playback failed (${reason}), retrying via proxy...`, { title, src: normalizedSrc.substring(0, 80) });
+        cleanup();
+        setUseProxy(true);
+      } else {
+        log('ERROR', `Playback failed: ${reason} | Title="${title}" retryCount=${retryCount}`);
+        setError(reason);
+        setBuffering(false);
+      }
     };
 
     // Pre-buffer for live streams

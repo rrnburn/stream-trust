@@ -46,6 +46,7 @@ const AppRoutes = () => (
     <Route path="/favorites" element={<ProtectedRoute><Favorites /></ProtectedRoute>} />
     <Route path="/sources" element={<ProtectedRoute><Sources /></ProtectedRoute>} />
     <Route path="/media/:id" element={<ProtectedRoute><MediaDetail /></ProtectedRoute>} />
+    <Route path="/debug" element={<ProtectedRoute><DebugLogs /></ProtectedRoute>} />
     <Route path="*" element={<NotFound />} />
   </Routes>
 );

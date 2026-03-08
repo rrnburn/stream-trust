@@ -11,6 +11,7 @@ const navItems = [
   { to: '/search', icon: Search, label: 'Search' },
   { to: '/favorites', icon: Heart, label: 'Favorites' },
   { to: '/sources', icon: Settings, label: 'Sources' },
+  { to: '/debug', icon: Terminal, label: 'Logs' },
 ];
 
 const AppSidebar = () => {

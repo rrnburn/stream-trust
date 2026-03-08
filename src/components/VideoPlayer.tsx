@@ -154,6 +154,12 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
         const hls = new Hls({
           enableWorker: true,
           lowLatencyMode: isLive,
+          fragLoadingTimeOut: 20000,
+          manifestLoadingTimeOut: 15000,
+          levelLoadingTimeOut: 15000,
+          fragLoadingMaxRetry: 6,
+          manifestLoadingMaxRetry: 4,
+          levelLoadingMaxRetry: 4,
           xhrSetup: (xhr) => { xhr.withCredentials = false; },
         });
         hlsRef.current = hls;

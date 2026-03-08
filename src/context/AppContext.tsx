@@ -3,6 +3,7 @@ import { isNativePlatform } from '@/lib/platform';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './AuthContext';
 import { toast } from 'sonner';
+import { logger } from '@/lib/logger';
 import type { IPTVSource, MediaItem } from './AppContext.types';
 import {
   getSources,

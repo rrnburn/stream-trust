@@ -52,7 +52,7 @@ Deno.serve(async (req) => {
       // If HTTPS fails, try HTTP fallback
       if (streamUrl.startsWith('https://')) {
         const httpUrl = streamUrl.replace(/^https:\/\//i, 'http://');
-        console.log(`[${reqId}] HTTPS failed, retrying HTTP: ${httpUrl.substring(0, 80)}`);
+        console.log(`[stream-proxy] [WARN] [${reqId}] HTTPS failed, trying HTTP | url=${httpUrl.substring(0, 80)}`);
         const controller2 = new AbortController();
         const timeoutId2 = setTimeout(() => controller2.abort(), FETCH_TIMEOUT_MS);
         try {

@@ -1,49 +1,58 @@
 
+## Live TV and VOD Sections
 
-## Analysis: Why Playback Stopped Working
+### Overview
+Add a dedicated **Live TV** page for live channel streams and a **VOD** page for video-on-demand content. Both will integrate with the existing parsed media data and video player.
 
-### Root Cause
+### Changes
 
-The IPTV provider (`cf.gaminghub8k.xyz`) is actively blocking requests from two directions:
+#### 1. Edge Function -- Fetch VOD and Movies from Xtream
+Currently the edge function only fetches `get_live_streams` for Xtream sources. It needs to also fetch `get_vod_streams` and `get_series` so that Movies/VOD content is actually populated.
 
-1. **Direct browser playback** -- Error code 4 on `video.src`. The provider is likely checking the `Origin`/`Referer` header and rejecting requests from web app domains. This is a server-side restriction, not a code bug.
+- After fetching live streams, make two additional API calls:
+  - `player_api.php?...&action=get_vod_streams` -- map these as category `movie`
+  - `player_api.php?...&action=get_series` -- map these as category `series`
+- Merge all three result sets into one `items` array before returning
+- Construct VOD stream URLs as `http://server/movie/username/password/stream_id.ext`
+- Construct series URLs as `http://server/series/username/password/stream_id.ext`
 
-2. **Proxy (Edge Function)** -- HTTP 458 on every single request, across all 6 User-Agent strategies and both HTTP/HTTPS. The provider has blocklisted datacenter/cloud IP ranges (which is where backend functions run).
+#### 2. New Page -- Live TV (`src/pages/LiveTV.tsx`)
+- Filter `parsedMedia` to `category === 'channel'`
+- Display channels in a grid layout (using `MediaGrid`)
+- Clicking a channel opens an inline `VideoPlayer` directly on the page (no detail page needed for live TV -- instant playback)
+- Group channels by their `group` field with collapsible sections or tabs
 
-This is a **provider-side change**, not a code regression. The code is correct -- the provider has tightened their anti-piracy/anti-scraping rules since it last worked.
+#### 3. New Page -- VOD (`src/pages/VOD.tsx`)  
+- Filter `parsedMedia` to `category === 'vod'` or `category === 'movie'`
+- Display in the standard `MediaGrid` linking to `MediaDetail` for playback
 
-### What Won't Fix It
+#### 4. Sidebar Navigation Update (`src/components/AppSidebar.tsx`)
+- Add "Live TV" nav item with `Radio` icon pointing to `/live-tv`
+- Add "VOD" nav item with `PlayCircle` icon pointing to `/vod`
 
-- Changing User-Agent strings (already tried 6 variants -- all get 458)
-- Switching HTTP/HTTPS protocols (already tried both -- all get 458)
-- Converting MP4 to M3U8 URLs (provider returns 551 for those)
-- Native `video.src` vs hls.js vs mpegts.js (all fail at the network level)
+#### 5. Routes (`src/App.tsx`)
+- Add protected routes for `/live-tv` and `/vod`
 
-### Viable Solutions
+#### 6. Home Page Update (`src/pages/Index.tsx`)
+- Add a "Live TV" row showing up to 12 channels
 
-**Option A: External CORS Proxy Service (Recommended)**
-- Use a third-party CORS proxy with residential IPs (e.g., a self-hosted proxy on a VPS with a residential IP, or a service like AllOrigins/cors-anywhere)
-- The Edge Function would route requests through this external proxy instead of fetching directly
-- Requires setting up or subscribing to such a service and adding the URL as a secret
+### Technical Details
 
-**Option B: Embed an External Player**
-- Use an `<iframe>` pointing to a lightweight HTML page hosted elsewhere (e.g., on a VPS with a residential IP) that loads the video natively
-- The video element on the external page wouldn't have CORS restrictions from the provider's perspective
+**Edge function changes** (`supabase/functions/parse-playlist/index.ts`):
+- Three parallel fetches for Xtream: `get_live_streams`, `get_vod_streams`, `get_series`
+- Different URL patterns per type: `/username/password/id` (live), `/movie/username/password/id.mp4` (VOD), `/series/username/password/id.mp4` (series)
 
-**Option C: Accept the Limitation**
-- Show a clear, user-friendly error explaining the provider is blocking web playback
-- Suggest the user try a different IPTV source/provider that doesn't block datacenter IPs
-- Add a "Copy Stream URL" button so users can paste into VLC or another native player
+**Live TV page** will feature:
+- Inline video player that plays the selected channel immediately
+- Channel list alongside the player (split layout on desktop, stacked on mobile)
+- Active channel highlighting
 
-### Technical Plan for Option A
+**Files to create:**
+- `src/pages/LiveTV.tsx`
+- `src/pages/VOD.tsx`
 
-1. **Add a secret** for an external proxy URL (e.g., `EXTERNAL_PROXY_URL`)
-2. **Update `stream-proxy` Edge Function** to route requests through the external proxy when direct fetch fails with 458
-3. **No changes needed to `VideoPlayer.tsx`** -- the existing proxy fallback logic would work once the Edge Function can successfully fetch
-
-### Technical Plan for Option C (Simplest)
-
-1. **Update `VideoPlayer.tsx`** error UI to show provider-specific messaging
-2. **Add a "Copy URL to clipboard"** button so users can open streams in VLC/native players
-3. Minimal code changes, no external dependencies
-
+**Files to modify:**
+- `supabase/functions/parse-playlist/index.ts`
+- `src/components/AppSidebar.tsx`
+- `src/App.tsx`
+- `src/pages/Index.tsx`

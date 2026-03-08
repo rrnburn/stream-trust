@@ -82,12 +82,53 @@ Deno.serve(async (req) => {
       }
     }
 
+    // If all direct strategies failed, try external proxy
     if (!upstream) {
-      console.error(`[stream-proxy] [ERROR] [${reqId}] All strategies failed | last=${lastError}`);
-      return new Response(JSON.stringify({ error: `All fetch strategies failed: ${lastError}` }), {
-        status: 502,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      const externalProxyUrl = Deno.env.get('EXTERNAL_PROXY_URL');
+      if (externalProxyUrl) {
+        console.log(`[stream-proxy] [INFO] [${reqId}] Direct fetch failed, trying external proxy`);
+        const proxyStrategies = [
+          { url: streamUrl, label: 'proxy-original' },
+          { url: streamUrl.replace(/^https:\/\//i, 'http://'), label: 'proxy-http' },
+        ];
+
+        for (const ps of proxyStrategies) {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+          try {
+            const proxyTarget = `${externalProxyUrl}?url=${encodeURIComponent(ps.url)}`;
+            const res = await fetch(proxyTarget, {
+              headers: rangeHeader ? { 'Range': rangeHeader } : {},
+              signal: controller.signal,
+              redirect: 'follow',
+            });
+            clearTimeout(timeoutId);
+
+            if (res.ok || res.status === 206) {
+              console.log(`[stream-proxy] [INFO] [${reqId}] External proxy "${ps.label}" succeeded | status=${res.status}`);
+              upstream = res;
+              break;
+            } else {
+              lastError = `${ps.label}: HTTP ${res.status}`;
+              console.log(`[stream-proxy] [WARN] [${reqId}] External proxy "${ps.label}" failed | status=${res.status}`);
+              try { await res.text(); } catch {}
+            }
+          } catch (err: unknown) {
+            clearTimeout(timeoutId);
+            const msg = err instanceof Error ? err.message : 'Unknown';
+            lastError = `${ps.label}: ${msg}`;
+            console.log(`[stream-proxy] [WARN] [${reqId}] External proxy "${ps.label}" errored | error=${msg}`);
+          }
+        }
+      }
+
+      if (!upstream) {
+        console.error(`[stream-proxy] [ERROR] [${reqId}] All strategies (including external proxy) failed | last=${lastError}`);
+        return new Response(JSON.stringify({ error: `All fetch strategies failed: ${lastError}` }), {
+          status: 502,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
     }
 
     // Determine content type

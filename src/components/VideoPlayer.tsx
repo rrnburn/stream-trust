@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '@/integrations/supabase/client';
 import { isNativePlatform } from '@/lib/platform';
 import { logger } from '@/lib/logger';
-import { playNative, stopNative } from '@/lib/nativePlayer';
+import { playInVlc, playInMxPlayer, playInSystemChooser, stopNative } from '@/lib/nativePlayer';
 
 interface VideoPlayerProps {
   src: string;

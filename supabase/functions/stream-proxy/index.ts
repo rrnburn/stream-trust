@@ -37,7 +37,7 @@ Deno.serve(async (req) => {
     const rangeHeader = req.headers.get('range');
     if (rangeHeader) {
       headers['Range'] = rangeHeader;
-      console.log(`[${reqId}] Range: ${rangeHeader}`);
+      console.log(`[stream-proxy] [DEBUG] [${reqId}] Range header | range=${rangeHeader}`);
     }
 
     // Fetch with timeout and abort

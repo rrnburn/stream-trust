@@ -193,10 +193,18 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
     log('DEBUG', `Playback URL: ${playbackUrl.substring(0, 120)}`);
 
     let errorHandled = false;
+    const isMovieMp4 = src.includes('/movie/') && src.endsWith('.mp4');
     const handleFatalError = (reason: string) => {
       if (errorHandled) return;
       errorHandled = true;
-      if (!useProxy) {
+      // On native: if movie .mp4 failed and we haven't tried HLS yet, try .m3u8
+      if (isMovieMp4 && !hlsFallback && isNativePlatform()) {
+        log('WARN', `Movie MP4 failed (${reason}), trying HLS .m3u8 fallback...`);
+        cleanup();
+        setHlsFallback(true);
+        return;
+      }
+      if (!useProxy && !isNativePlatform()) {
         log('WARN', `Direct playback failed (${reason}), retrying via proxy...`, { title, src: normalizedSrc.substring(0, 80) });
         cleanup();
         setUseProxy(true);

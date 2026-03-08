@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react';
-import { Plus, Trash2, Link, Server, RefreshCw, Download, CheckCircle, Loader2 } from 'lucide-react';
+import { useState } from 'react';
+import { Plus, Trash2, Link, Server, RefreshCw, Download, Loader2 } from 'lucide-react';
 import { useAppContext } from '@/context/AppContext';
 import AppLayout from '@/components/AppLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Progress } from '@/components/ui/progress';
 import { motion, AnimatePresence } from 'framer-motion';
 import { checkForUpdate, downloadUpdate, getCurrentBuild, type ReleaseInfo } from '@/lib/appUpdater';
 import { toast } from 'sonner';

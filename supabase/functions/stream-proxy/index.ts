@@ -25,7 +25,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    console.log(`[${reqId}] REQ ${streamUrl.substring(0, 120)}`);
+    console.log(`[stream-proxy] [INFO] [${reqId}] Incoming request | url=${streamUrl.substring(0, 120)}`);
 
     // Forward range headers for video seeking
     const headers: Record<string, string> = {
@@ -37,7 +37,7 @@ Deno.serve(async (req) => {
     const rangeHeader = req.headers.get('range');
     if (rangeHeader) {
       headers['Range'] = rangeHeader;
-      console.log(`[${reqId}] Range: ${rangeHeader}`);
+      console.log(`[stream-proxy] [DEBUG] [${reqId}] Range header | range=${rangeHeader}`);
     }
 
     // Fetch with timeout and abort
@@ -52,7 +52,7 @@ Deno.serve(async (req) => {
       // If HTTPS fails, try HTTP fallback
       if (streamUrl.startsWith('https://')) {
         const httpUrl = streamUrl.replace(/^https:\/\//i, 'http://');
-        console.log(`[${reqId}] HTTPS failed, retrying HTTP: ${httpUrl.substring(0, 80)}`);
+        console.log(`[stream-proxy] [WARN] [${reqId}] HTTPS failed, trying HTTP | url=${httpUrl.substring(0, 80)}`);
         const controller2 = new AbortController();
         const timeoutId2 = setTimeout(() => controller2.abort(), FETCH_TIMEOUT_MS);
         try {
@@ -60,7 +60,7 @@ Deno.serve(async (req) => {
         } catch (httpErr: unknown) {
           clearTimeout(timeoutId2);
           const msg = httpErr instanceof Error ? httpErr.message : 'Unknown';
-          console.error(`[${reqId}] Both HTTPS and HTTP failed: ${msg}`);
+          console.error(`[stream-proxy] [ERROR] [${reqId}] Both HTTPS and HTTP failed | error=${msg}`);
           return new Response(JSON.stringify({ error: `Fetch failed: ${msg}` }), {
             status: 502,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -69,7 +69,7 @@ Deno.serve(async (req) => {
         clearTimeout(timeoutId2);
       } else {
         const msg = fetchErr instanceof Error ? fetchErr.message : 'Unknown';
-        console.error(`[${reqId}] Fetch failed: ${msg}`);
+        console.error(`[stream-proxy] [ERROR] [${reqId}] Fetch failed | error=${msg}`);
         return new Response(JSON.stringify({ error: `Fetch failed: ${msg}` }), {
           status: 502,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -80,11 +80,10 @@ Deno.serve(async (req) => {
 
     if (!upstream!.ok && upstream!.status !== 206) {
       const statusText = upstream!.statusText || 'Unknown';
-      console.error(`[${reqId}] Upstream ${upstream!.status} ${statusText}`);
-      // Try to read error body for diagnostics
+      console.error(`[stream-proxy] [ERROR] [${reqId}] Upstream error | status=${upstream!.status} statusText=${statusText}`);
       let errorBody = '';
       try { errorBody = await upstream!.text(); } catch {}
-      console.error(`[${reqId}] Upstream body: ${errorBody.substring(0, 200)}`);
+      if (errorBody) console.error(`[stream-proxy] [ERROR] [${reqId}] Upstream response body | body=${errorBody.substring(0, 200)}`);
       return new Response(JSON.stringify({ error: `Upstream ${upstream!.status}: ${statusText}` }), {
         status: upstream!.status,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -93,7 +92,7 @@ Deno.serve(async (req) => {
 
     // Determine content type
     const contentType = upstream!.headers.get('content-type') || 'application/octet-stream';
-    console.log(`[${reqId}] OK ${upstream!.status} type=${contentType}`);
+    console.log(`[stream-proxy] [INFO] [${reqId}] Upstream OK | status=${upstream!.status} contentType=${contentType}`);
 
     const responseHeaders: Record<string, string> = {
       ...corsHeaders,
@@ -152,7 +151,7 @@ Deno.serve(async (req) => {
         return line;
       }).join('\n');
 
-      console.log(`[${reqId}] Manifest rewritten: ${lines.length} lines, base=${baseUrl.substring(0, 60)}`);
+      console.log(`[stream-proxy] [INFO] [${reqId}] Manifest rewritten | lines=${lines.length} baseUrl=${baseUrl.substring(0, 60)}`);
 
       responseHeaders['Content-Type'] = 'application/vnd.apple.mpegurl';
       delete responseHeaders['Content-Length'];
@@ -164,7 +163,7 @@ Deno.serve(async (req) => {
     }
 
     // For binary content (ts segments, mp4, etc.), stream directly
-    console.log(`[${reqId}] Streaming binary, len=${contentLength || 'unknown'}`);
+    console.log(`[stream-proxy] [INFO] [${reqId}] Streaming binary | contentLength=${contentLength || 'unknown'}`);
     return new Response(upstream!.body, {
       status: upstream!.status,
       headers: responseHeaders,
@@ -172,8 +171,8 @@ Deno.serve(async (req) => {
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : 'Unknown error';
     const stack = error instanceof Error ? error.stack : '';
-    console.error(`[${reqId}] FATAL: ${msg}`);
-    if (stack) console.error(`[${reqId}] Stack: ${stack}`);
+    console.error(`[stream-proxy] [ERROR] [${reqId}] Unhandled exception | error=${msg}`);
+    if (stack) console.error(`[stream-proxy] [ERROR] [${reqId}] Stack trace | ${stack}`);
     return new Response(JSON.stringify({ error: msg }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

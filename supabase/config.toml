@@ -8,3 +8,6 @@ verify_jwt = false
 
 [functions.get-series-info]
 verify_jwt = false
+
+[functions.log-event]
+verify_jwt = false

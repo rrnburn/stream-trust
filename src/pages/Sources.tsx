@@ -193,7 +193,6 @@ const Sources = () => {
                 <Progress value={downloadProgress} className="h-2" />
               )}
             </motion.div>
-            </motion.div>
           ) : (
             <Button
               variant="outline"

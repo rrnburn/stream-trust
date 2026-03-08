@@ -3,7 +3,8 @@ import AppLayout from '@/components/AppLayout';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
-import { Trash2, ArrowDown } from 'lucide-react';
+import { Trash2, Copy } from 'lucide-react';
+import { toast } from '@/hooks/use-toast';
 import { logger, type LogEntry, type LogLevel } from '@/lib/logger';
 
 const levelColor: Record<LogLevel, string> = {

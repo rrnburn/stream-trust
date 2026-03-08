@@ -65,6 +65,14 @@ Deno.serve(async (req) => {
         clearTimeout(timeoutId);
         
         if (res.ok || res.status === 206) {
+          // Reject HTML responses from direct fetch too
+          const directCt = (res.headers.get('content-type') || '').toLowerCase();
+          if (directCt.includes('text/html') && !strategy.url.endsWith('.html')) {
+            lastError = `${strategy.label}: returned HTML instead of media`;
+            console.log(`[stream-proxy] [WARN] [${reqId}] Strategy "${strategy.label}" returned HTML | ct=${directCt}`);
+            try { await res.text(); } catch {}
+            continue;
+          }
           console.log(`[stream-proxy] [INFO] [${reqId}] Strategy "${strategy.label}" succeeded | status=${res.status}`);
           upstream = res;
           break;

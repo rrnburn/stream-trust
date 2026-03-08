@@ -74,6 +74,8 @@ Deno.serve(async (req: Request) => {
 
     if (type === 'xtream' && username && password) {
       let base = url.replace(/\/$/, '');
+      // Preserve original protocol from user's source URL
+      const originalProtocol = /^https:\/\//i.test(base) ? 'https://' : 'http://';
       base = base.replace(/^https?:\/\//i, '');
       base = 'http://' + base;
       base = base.replace(/\/player_api\.php.*$/i, '');
@@ -81,7 +83,8 @@ Deno.serve(async (req: Request) => {
       base = base.replace(/\/$/, '');
 
       const apiBase = `${base}/player_api.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`;
-      const streamBase = base.replace(/^http:\/\//i, 'https://');
+      // Use original protocol for stream URLs instead of forcing HTTPS
+      const streamBase = base.replace(/^http:\/\//i, originalProtocol);
 
       console.log('[XTREAM] API base:', apiBase);
       console.log('[XTREAM] Stream base (HTTPS):', streamBase);

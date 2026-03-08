@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '@/integrations/supabase/client';
 import { isNativePlatform } from '@/lib/platform';
 import { logger } from '@/lib/logger';
-import { playNative, stopNative } from '@/lib/nativePlayer';
+import { playInVlc, playInMxPlayer, playInSystemChooser, stopNative } from '@/lib/nativePlayer';
 
 interface VideoPlayerProps {
   src: string;
@@ -65,7 +65,7 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
   const [retrying, setRetrying] = useState(false);
   const [autoplayMuted, setAutoplayMuted] = useState(false);
   const [hlsFallback, setHlsFallback] = useState(false);
-  const [nativePlayerLaunching, setNativePlayerLaunching] = useState(false);
+  
   const MAX_RETRIES = 3;
   const isNative = isNativePlatform();
 
@@ -176,54 +176,8 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
     }
   }, []);
 
-  // Launch native ExoPlayer/AVPlayer — returns true if native handled it
-  const launchNativePlayer = useCallback(async (): Promise<boolean> => {
-    if (!src) return false;
-    setNativePlayerLaunching(true);
-    setError(null);
-    log('INFO', `Launching native player for: ${src.substring(0, 100)}`);
-    try {
-      const normalizedSrc = normalizeStreamUrl(src);
-      log('INFO', `Normalized URL: ${normalizedSrc.substring(0, 100)}`);
-      const success = await playNative(normalizedSrc, title);
-      if (success) {
-        log('INFO', 'Native player launched successfully');
-      } else {
-        log('WARN', 'Native player unavailable, falling back to web player');
-      }
-      setNativePlayerLaunching(false);
-      return success;
-    } catch (err: any) {
-      const msg = err?.message || 'Native player failed';
-      log('ERROR', `Native player error: ${msg}`);
-      setNativePlayerLaunching(false);
-      return false;
-    }
-  }, [src, title, normalizeStreamUrl]);
-
-  // Track whether native player is active (so web player knows to skip)
-  const [nativeActive, setNativeActive] = useState(false);
-
-  // Auto-launch native player on native platforms; fall back to web if it fails
-  useEffect(() => {
-    if (!isNative || !src) return;
-    let cancelled = false;
-
-    launchNativePlayer().then((success) => {
-      if (cancelled) return;
-      if (success) {
-        setNativeActive(true);
-      } else {
-        // Native failed — let web player take over
-        setNativeActive(false);
-      }
-    });
-
-    return () => {
-      cancelled = true;
-      if (isNative) stopNative();
-    };
-  }, [isNative, src, launchNativePlayer]);
+  // Track whether native player chooser is active
+  const [nativeActive, setNativeActive] = useState(isNative);
 
   // Initialize web playback (skip if native player is active)
   useEffect(() => {
@@ -584,28 +538,47 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
     return () => window.removeEventListener('keydown', handleKey);
   }, [togglePlay, duration, playing]);
 
-  // Native platform: show poster + button to open in external player (VLC, MX Player, etc.)
-  if (isNative) {
+  // Native platform: show poster + buttons to open in specific external players
+  if (isNative && nativeActive) {
+    const normalizedSrc = normalizeStreamUrl(src);
     return (
       <div className="relative w-full aspect-video bg-black rounded-xl overflow-hidden flex items-center justify-center">
         {poster && (
           <img src={poster} alt={title || ''} className="absolute inset-0 w-full h-full object-cover opacity-60" />
         )}
-        <div className="relative z-10 flex flex-col items-center gap-4">
-          {nativePlayerLaunching ? (
-            <Loader2 className="w-14 h-14 text-primary animate-spin" />
-          ) : (
-            <>
-              <button
-                onClick={launchNativePlayer}
-                className="w-16 h-16 rounded-full bg-primary/90 flex items-center justify-center hover:bg-primary transition-colors"
-              >
-                <ExternalLink className="w-7 h-7 text-primary-foreground" />
-              </button>
-              <p className="text-white/80 text-xs">Open in external player</p>
-            </>
-          )}
-          {title && <p className="text-white font-semibold text-sm">{title}</p>}
+        <div className="relative z-10 flex flex-col items-center gap-5 px-4">
+          {title && <p className="text-white font-semibold text-sm text-center">{title}</p>}
+          <p className="text-white/70 text-xs">Choose a player</p>
+          <div className="grid grid-cols-2 gap-3 w-full max-w-xs">
+            <button
+              onClick={() => playInVlc(normalizedSrc)}
+              className="flex flex-col items-center gap-1.5 px-4 py-3 rounded-lg bg-orange-600/90 hover:bg-orange-600 transition-colors text-white"
+            >
+              <ExternalLink className="w-5 h-5" />
+              <span className="text-xs font-medium">VLC</span>
+            </button>
+            <button
+              onClick={() => playInMxPlayer(normalizedSrc, title)}
+              className="flex flex-col items-center gap-1.5 px-4 py-3 rounded-lg bg-blue-600/90 hover:bg-blue-600 transition-colors text-white"
+            >
+              <ExternalLink className="w-5 h-5" />
+              <span className="text-xs font-medium">MX Player</span>
+            </button>
+            <button
+              onClick={() => playInSystemChooser(normalizedSrc)}
+              className="flex flex-col items-center gap-1.5 px-4 py-3 rounded-lg bg-white/20 hover:bg-white/30 transition-colors text-white"
+            >
+              <Play className="w-5 h-5" />
+              <span className="text-xs font-medium">System Player</span>
+            </button>
+            <button
+              onClick={() => setNativeActive(false)}
+              className="flex flex-col items-center gap-1.5 px-4 py-3 rounded-lg bg-white/10 hover:bg-white/20 transition-colors text-white"
+            >
+              <Play className="w-5 h-5" />
+              <span className="text-xs font-medium">Web Player</span>
+            </button>
+          </div>
         </div>
       </div>
     );

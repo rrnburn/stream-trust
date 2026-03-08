@@ -1,64 +1,25 @@
+import { Browser } from '@capacitor/browser';
 import { logger } from '@/lib/logger';
 import { isNativePlatform } from '@/lib/platform';
 
-/**
- * Launch an external video player via Android Intent URI or app deep links.
- * Tries multiple strategies since Capacitor WebView handles intents differently.
- */
 export function isNativePlayerAvailable(): boolean {
   return isNativePlatform();
 }
 
-export async function playNative(url: string, title?: string): Promise<boolean> {
-  if (!isNativePlatform()) return false;
+export async function playInVlc(url: string): Promise<void> {
+  logger.info('NativePlayer', `Opening VLC for: ${url.substring(0, 120)}`);
+  await Browser.open({ url: `vlc://${url}`, windowName: '_system' });
+}
 
-  logger.info('NativePlayer', `Opening external player for: ${url.substring(0, 120)}`, { title });
+export async function playInMxPlayer(url: string, title?: string): Promise<void> {
+  logger.info('NativePlayer', `Opening MX Player for: ${url.substring(0, 120)}`);
+  const intentUri = `intent:${url}#Intent;package=com.mxtech.videoplayer.ad;type=video/*;S.title=${encodeURIComponent(title || 'Video')};end`;
+  await Browser.open({ url: intentUri, windowName: '_system' });
+}
 
-  // Strategy 1: Direct intent via window.location.href (most likely to work in Capacitor WebView)
-  try {
-    const intentUri = `intent:${url}#Intent;action=android.intent.action.VIEW;type=video/*;S.title=${encodeURIComponent(title || 'Video')};end`;
-    logger.info('NativePlayer', `Trying window.location.href intent`);
-    window.location.href = intentUri;
-    
-    // Wait briefly to see if it worked (page won't unload if it failed silently)
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    logger.info('NativePlayer', 'Intent via location.href attempted');
-    return true;
-  } catch (err: any) {
-    logger.warn('NativePlayer', `location.href intent failed: ${err?.message}`);
-  }
-
-  // Strategy 2: Try VLC deep link directly
-  try {
-    const vlcUri = `vlc://${url}`;
-    logger.info('NativePlayer', `Trying VLC deep link: ${vlcUri.substring(0, 80)}`);
-    window.location.href = vlcUri;
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    return true;
-  } catch (err: any) {
-    logger.warn('NativePlayer', `VLC deep link failed: ${err?.message}`);
-  }
-
-  // Strategy 3: Try MX Player deep link
-  try {
-    const mxUri = `intent:${url}#Intent;package=com.mxtech.videoplayer.ad;type=video/*;end`;
-    logger.info('NativePlayer', `Trying MX Player intent`);
-    window.location.href = mxUri;
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    return true;
-  } catch (err: any) {
-    logger.warn('NativePlayer', `MX Player intent failed: ${err?.message}`);
-  }
-
-  // Strategy 4: window.open as last resort
-  try {
-    logger.info('NativePlayer', 'Trying window.open fallback');
-    window.open(url, '_system');
-    return true;
-  } catch (err: any) {
-    logger.error('NativePlayer', `All methods failed: ${err?.message}`);
-    return false;
-  }
+export async function playInSystemChooser(url: string): Promise<void> {
+  logger.info('NativePlayer', `Opening system chooser for: ${url.substring(0, 120)}`);
+  await Browser.open({ url, windowName: '_system' });
 }
 
 // No-op: external players manage their own lifecycle

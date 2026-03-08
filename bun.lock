@@ -10,6 +10,7 @@
         "@capacitor/cli": "^8.2.0",
         "@capacitor/core": "^8.2.0",
         "@capgo/capacitor-native-biometric": "^8.4.2",
+        "@capgo/capacitor-video-player": "^8.0.15",
         "@hookform/resolvers": "^3.10.0",
         "@radix-ui/react-accordion": "^1.2.11",
         "@radix-ui/react-alert-dialog": "^1.1.14",
@@ -286,6 +287,8 @@
     "@capacitor/core": ["@capacitor/core@8.2.0", "", { "dependencies": { "tslib": "^2.1.0" } }, "sha512-oKaoNeNtH2iIZMDFVrb1atoyRECDGHcfLMunJ5KWN8DtvpVBeeA4c41e20NTuhMxw1cSYbpq2PV2hb+/9CJxlQ=="],
 
     "@capgo/capacitor-native-biometric": ["@capgo/capacitor-native-biometric@8.4.2", "", { "peerDependencies": { "@capacitor/core": ">=8.0.0" } }, "sha512-mue8KmjtOO3l4vymwM34tHGt6NVg0Wg3GqdOPsjqoFAGrZC+tRPa4Xzn5n0B2XzDtAeMtfynxSJOhl8l1c2X0Q=="],
+
+    "@capgo/capacitor-video-player": ["@capgo/capacitor-video-player@8.0.15", "", { "peerDependencies": { "@capacitor/core": ">=8.0.0", "hls.js": "^1.4.0" } }, "sha512-2pfwDfP1/LQHqnrNuDcQj/WYn7hPyITNpCDPwrjmlMKAoilo4ddhUEbThQVz8++dVxjlnLEGq75s0wzE5Qwffw=="],
 
     "@esbuild/aix-ppc64": ["@esbuild/aix-ppc64@0.25.0", "", { "os": "aix", "cpu": "ppc64" }, "sha512-O7vun9Sf8DFjH2UtqK8Ku3LkquL9SZL8OLY1T5NZkA34+wG3OQF7cl4Ql8vdNzM6fzBbYfLaiRLIOZ+2FOCgBQ=="],
 

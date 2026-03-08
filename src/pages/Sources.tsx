@@ -21,6 +21,8 @@ const Sources = () => {
 
   // Update checker state
   const [checking, setChecking] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState(0);
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [latestRelease, setLatestRelease] = useState<ReleaseInfo | null>(null);
   const currentBuild = getCurrentBuild();

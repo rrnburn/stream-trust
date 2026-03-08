@@ -540,12 +540,8 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
 
   // Native platform: show poster + buttons to open in specific external players
   if (isNative && nativeActive) {
-    // For native players, always use .m3u8 for movies (providers serve HLS there)
-    let nativeSrc = normalizeStreamUrl(src);
-    if (nativeSrc.includes('/movie/') && nativeSrc.endsWith('.mp4')) {
-      nativeSrc = nativeSrc.replace(/\.mp4$/, '.m3u8');
-      log('INFO', `Native: converted movie .mp4 → .m3u8: ${nativeSrc.substring(0, 80)}...`);
-    }
+    // Native players (VLC) handle MP4 natively — don't convert movie URLs
+    const nativeSrc = normalizeStreamUrl(src);
     return (
       <div className="relative w-full aspect-video bg-black rounded-xl overflow-hidden flex items-center justify-center">
         {poster && (

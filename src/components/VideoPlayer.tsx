@@ -193,7 +193,7 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
         });
         hls.on(Hls.Events.ERROR, (_, data) => {
           if (data.fatal) {
-            log('ERROR', `HLS fatal error: type=${data.type} details=${data.details}`, data.response ? `status=${data.response.code}` : '');
+            log('ERROR', `HLS fatal error: type=${data.type} details=${data.details}`, { status: data.response?.code });
             if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
               log('INFO', 'Attempting HLS media error recovery');
               hls.recoverMediaError();

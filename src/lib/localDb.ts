@@ -110,12 +110,15 @@ export async function insertParsedMedia(
   // Delete old records for this source
   await d.run('DELETE FROM parsed_media WHERE source_id = ?', [sourceId]);
 
-  // Batch insert
-  for (const item of items) {
-    await d.run(
-      'INSERT INTO parsed_media (id, source_id, title, poster, category, genre, description, stream_url, group_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [uuid(), sourceId, item.title, item.logo || '', item.category, item.group || 'Uncategorized', `From ${item.sourceName || 'source'}`, item.url, item.group || null],
-    );
+  // Batch insert inside a single transaction for massive speedup
+  const BATCH_SIZE = 500;
+  for (let i = 0; i < items.length; i += BATCH_SIZE) {
+    const batch = items.slice(i, i + BATCH_SIZE);
+    const statements = batch.map(item => ({
+      statement: 'INSERT INTO parsed_media (id, source_id, title, poster, category, genre, description, stream_url, group_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      values: [uuid(), sourceId, item.title, item.logo || '', item.category, item.group || 'Uncategorized', `From ${item.sourceName || 'source'}`, item.url, item.group || null],
+    }));
+    await d.executeSet(statements);
   }
 }
 

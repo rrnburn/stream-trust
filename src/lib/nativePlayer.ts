@@ -47,13 +47,17 @@ export async function playInMxPlayer(url: string, title?: string): Promise<void>
   if (!(await ensureAndroid())) return;
   logger.info('NativePlayer', `Opening MX Player for: ${url.substring(0, 120)}`);
   try {
-    const { IntentLauncher, ActivityAction } = await import('@capgo/capacitor-intent-launcher');
+    const { IntentLauncher } = await import('@capgo/capacitor-intent-launcher');
+    // MX Player accepts headers array and title via extras
     const result = await IntentLauncher.startActivityAsync({
-      action: ActivityAction.VIEW,
+      action: 'android.intent.action.VIEW',
       data: url,
       type: 'video/*',
       packageName: 'com.mxtech.videoplayer.ad',
-      extra: { title: title || 'Video' },
+      extra: {
+        title: title || 'Video',
+        'headers': [`User-Agent: ${PLAYER_UA}`],
+      },
     });
     logger.info('NativePlayer', `MX Player intent result: ${JSON.stringify(result)}`);
   } catch (e: any) {

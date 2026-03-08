@@ -63,6 +63,7 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
   const [retryCount, setRetryCount] = useState(0);
   const [retrying, setRetrying] = useState(false);
   const [autoplayMuted, setAutoplayMuted] = useState(false);
+  const [hlsFallback, setHlsFallback] = useState(false); // When true, retry movie .mp4 as .m3u8
   const MAX_RETRIES = 3;
 
   const getProxiedUrl = useCallback((streamUrl: string) => {
@@ -79,8 +80,8 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
     return proxy ? getProxiedUrl(streamUrl) : streamUrl;
   }, [getProxiedUrl]);
 
-  // Normalize stream URLs: convert .ts to .m3u8 for live streams only.
-  // Movies/VOD stay as .mp4 — most Xtream providers serve direct MP4 files, not HLS manifests.
+  // Normalize stream URLs: convert .ts to .m3u8 for live streams.
+  // For movies, try .mp4 first; if hlsFallback is set, convert to .m3u8.
   const normalizeStreamUrl = useCallback((url: string): string => {
     // Live TV: .ts → .m3u8
     if (url.includes('/live/') && url.endsWith('.ts')) {
@@ -88,8 +89,14 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
       log('INFO', `Converted live .ts → .m3u8: ${hlsUrl.substring(0, 80)}...`);
       return hlsUrl;
     }
+    // Movie HLS fallback: .mp4 → .m3u8 when direct MP4 failed
+    if (hlsFallback && url.includes('/movie/') && url.endsWith('.mp4')) {
+      const hlsUrl = url.replace(/\.mp4$/, '.m3u8');
+      log('INFO', `HLS fallback: movie .mp4 → .m3u8: ${hlsUrl.substring(0, 80)}...`);
+      return hlsUrl;
+    }
     return url;
-  }, []);
+  }, [hlsFallback]);
 
   const getStreamType = (url: string): 'hls' | 'mpegts' | 'direct' => {
     const cleanUrl = url.split('?')[0];
@@ -186,10 +193,18 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
     log('DEBUG', `Playback URL: ${playbackUrl.substring(0, 120)}`);
 
     let errorHandled = false;
+    const isMovieMp4 = src.includes('/movie/') && src.endsWith('.mp4');
     const handleFatalError = (reason: string) => {
       if (errorHandled) return;
       errorHandled = true;
-      if (!useProxy) {
+      // On native: if movie .mp4 failed and we haven't tried HLS yet, try .m3u8
+      if (isMovieMp4 && !hlsFallback && isNativePlatform()) {
+        log('WARN', `Movie MP4 failed (${reason}), trying HLS .m3u8 fallback...`);
+        cleanup();
+        setHlsFallback(true);
+        return;
+      }
+      if (!useProxy && !isNativePlatform()) {
         log('WARN', `Direct playback failed (${reason}), retrying via proxy...`, { title, src: normalizedSrc.substring(0, 80) });
         cleanup();
         setUseProxy(true);
@@ -358,6 +373,13 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
 
       if (useProxy) {
         playUrl(playbackUrl, 'Proxy MP4', () => {
+          // If proxy MP4 failed and it's a movie, try HLS fallback
+          if (isMovieMp4 && !hlsFallback) {
+            log('WARN', `Proxy MP4 failed, trying HLS .m3u8 fallback...`);
+            cleanup();
+            setHlsFallback(true);
+            return;
+          }
           log('ERROR', `Proxy playback failed | Title="${title}"`);
           setError('This stream is currently unavailable. The provider may be blocking playback from web browsers.');
           setBuffering(false);
@@ -375,11 +397,12 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
     }
 
     return cleanup;
-  }, [src, useProxy, retryCount, getPlaybackUrl, cleanup, isLiveStream, normalizeStreamUrl, title]);
+  }, [src, useProxy, hlsFallback, retryCount, getPlaybackUrl, cleanup, isLiveStream, normalizeStreamUrl, title]);
 
   // Reset proxy and retry state when src changes
   useEffect(() => {
     setUseProxy(false);
+    setHlsFallback(false);
     setRetryCount(0);
     setRetrying(false);
     setError(null);

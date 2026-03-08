@@ -1,15 +1,29 @@
-import { VideoPlayer } from '@capgo/capacitor-video-player';
 import { logger } from '@/lib/logger';
+import { isNativePlatform } from '@/lib/platform';
 
 const PLAYER_ID = 'streamvault';
+
+/**
+ * Dynamically import the plugin only on native platforms.
+ */
+async function getVideoPlayer() {
+  const { VideoPlayer } = await import('@capgo/capacitor-video-player');
+  return VideoPlayer;
+}
 
 /**
  * Launch the native ExoPlayer (Android) / AVPlayer (iOS) fullscreen.
  */
 export async function playNative(url: string, title?: string): Promise<void> {
+  if (!isNativePlatform()) {
+    logger.warn('NativePlayer', 'playNative called on non-native platform, ignoring');
+    return;
+  }
+
   logger.info('NativePlayer', `Playing: ${url.substring(0, 100)}`, { title });
 
   try {
+    const VideoPlayer = await getVideoPlayer();
     const result = await VideoPlayer.initPlayer({
       mode: 'fullscreen',
       url,
@@ -32,7 +46,9 @@ export async function playNative(url: string, title?: string): Promise<void> {
 }
 
 export async function stopNative(): Promise<void> {
+  if (!isNativePlatform()) return;
   try {
+    const VideoPlayer = await getVideoPlayer();
     await VideoPlayer.stopAllPlayers();
   } catch {
     // ignore

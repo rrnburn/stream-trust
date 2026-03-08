@@ -1,17 +1,16 @@
-import { CapacitorVideoPlayer } from '@capgo/capacitor-video-player';
+import { VideoPlayer } from '@capgo/capacitor-video-player';
 import { logger } from '@/lib/logger';
 
 const PLAYER_ID = 'streamvault';
 
 /**
  * Launch the native ExoPlayer (Android) / AVPlayer (iOS) fullscreen.
- * Returns when the user exits the player.
  */
 export async function playNative(url: string, title?: string): Promise<void> {
   logger.info('NativePlayer', `Playing: ${url.substring(0, 100)}`, { title });
 
   try {
-    const result = await CapacitorVideoPlayer.initPlayer({
+    const result = await VideoPlayer.initPlayer({
       mode: 'fullscreen',
       url,
       playerId: PLAYER_ID,
@@ -22,6 +21,7 @@ export async function playNative(url: string, title?: string): Promise<void> {
       loopOnEnd: false,
       pipEnabled: true,
       displayMode: 'landscape',
+      accentColor: '#E5A535',
     });
 
     logger.info('NativePlayer', `initPlayer result: ${JSON.stringify(result)}`);
@@ -33,7 +33,7 @@ export async function playNative(url: string, title?: string): Promise<void> {
 
 export async function stopNative(): Promise<void> {
   try {
-    await CapacitorVideoPlayer.stopAllPlayers();
+    await VideoPlayer.stopAllPlayers();
   } catch {
     // ignore
   }

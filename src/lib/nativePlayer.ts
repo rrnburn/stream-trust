@@ -70,9 +70,9 @@ export async function playInSystemChooser(url: string): Promise<void> {
   if (!(await ensureAndroid())) return;
   logger.info('NativePlayer', `Opening system chooser for: ${url.substring(0, 120)}`);
   try {
-    const { IntentLauncher, ActivityAction } = await import('@capgo/capacitor-intent-launcher');
+    const { IntentLauncher } = await import('@capgo/capacitor-intent-launcher');
     const result = await IntentLauncher.startActivityAsync({
-      action: ActivityAction.VIEW,
+      action: 'android.intent.action.VIEW',
       data: url,
       type: 'video/*',
     });

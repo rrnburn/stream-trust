@@ -60,7 +60,7 @@ Deno.serve(async (req) => {
         } catch (httpErr: unknown) {
           clearTimeout(timeoutId2);
           const msg = httpErr instanceof Error ? httpErr.message : 'Unknown';
-          console.error(`[${reqId}] Both HTTPS and HTTP failed: ${msg}`);
+          console.error(`[stream-proxy] [ERROR] [${reqId}] Both HTTPS and HTTP failed | error=${msg}`);
           return new Response(JSON.stringify({ error: `Fetch failed: ${msg}` }), {
             status: 502,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },

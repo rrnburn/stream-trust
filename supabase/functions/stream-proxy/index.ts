@@ -108,7 +108,15 @@ Deno.serve(async (req) => {
             });
             clearTimeout(timeoutId);
 
-            if (res.ok || res.status === 206) {
+        if (res.ok || res.status === 206) {
+              // Validate that the proxy actually returned media, not an HTML error page
+              const proxyCt = res.headers.get('content-type') || '';
+              if (proxyCt.includes('text/html') && !ps.url.endsWith('.html')) {
+                lastError = `${ps.label}: proxy returned HTML instead of media (content-type: ${proxyCt})`;
+                console.log(`[stream-proxy] [WARN] [${reqId}] ${lastError}`);
+                try { await res.text(); } catch {}
+                continue;
+              }
               console.log(`[stream-proxy] [INFO] [${reqId}] External proxy "${ps.label}" succeeded | status=${res.status}`);
               upstream = res;
               break;

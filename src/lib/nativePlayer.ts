@@ -25,7 +25,7 @@ export function isNativePlayerAvailable(): boolean {
 
 /**
  * Ensure the required <div id="fullscreen"> exists in the DOM.
- * The @capgo/capacitor-video-player plugin needs this element on Android.
+ * The plugin needs this element on Android for fullscreen mode.
  */
 function ensureFullscreenDiv() {
   if (!document.getElementById('fullscreen')) {
@@ -37,7 +37,7 @@ function ensureFullscreenDiv() {
     div.style.width = '100vw';
     div.style.height = '100vh';
     div.style.zIndex = '99999';
-    div.style.display = 'none'; // plugin will show it
+    div.style.display = 'none';
     document.body.appendChild(div);
     logger.info('NativePlayer', 'Created <div id="fullscreen"> for native player');
   }
@@ -61,18 +61,16 @@ export async function playNative(url: string, title?: string): Promise<boolean> 
   logger.info('NativePlayer', `Playing: ${url.substring(0, 100)}`, { title });
 
   try {
-    // Ensure the fullscreen container div exists (required by Android)
     ensureFullscreenDiv();
 
-    // Log plugin availability
-    logger.info('NativePlayer', `CapacitorVideoPlayer type: ${typeof CapacitorVideoPlayer}`);
-    if (CapacitorVideoPlayer) {
-      const methods = Object.getOwnPropertyNames(Object.getPrototypeOf(CapacitorVideoPlayer) || CapacitorVideoPlayer);
+    logger.info('NativePlayer', `VideoPlayer type: ${typeof VideoPlayer}`);
+    if (VideoPlayer) {
+      const methods = Object.getOwnPropertyNames(Object.getPrototypeOf(VideoPlayer) || VideoPlayer);
       logger.info('NativePlayer', `Plugin keys: [${methods.join(', ')}]`);
     }
 
-    if (!CapacitorVideoPlayer || typeof CapacitorVideoPlayer.initPlayer !== 'function') {
-      throw new Error('CapacitorVideoPlayer.initPlayer is not a function — plugin not registered');
+    if (!VideoPlayer || typeof VideoPlayer.initPlayer !== 'function') {
+      throw new Error('VideoPlayer.initPlayer is not a function — plugin not registered');
     }
 
     const initOptions = {
@@ -92,7 +90,7 @@ export async function playNative(url: string, title?: string): Promise<boolean> 
     logger.debug('NativePlayer', `Options: ${JSON.stringify(initOptions)}`);
 
     const result = await withTimeout(
-      CapacitorVideoPlayer.initPlayer(initOptions),
+      VideoPlayer.initPlayer(initOptions),
       INIT_TIMEOUT_MS,
       'initPlayer'
     );
@@ -115,7 +113,7 @@ export async function playNative(url: string, title?: string): Promise<boolean> 
 export async function stopNative(): Promise<void> {
   if (!isNativePlatform() || nativeUnavailable) return;
   try {
-    await CapacitorVideoPlayer.stopAllPlayers();
+    await VideoPlayer.stopAllPlayers();
   } catch {
     // ignore
   }

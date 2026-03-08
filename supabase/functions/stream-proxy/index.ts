@@ -25,7 +25,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    console.log(`[${reqId}] REQ ${streamUrl.substring(0, 120)}`);
+    console.log(`[stream-proxy] [INFO] [${reqId}] Incoming request | url=${streamUrl.substring(0, 120)}`);
 
     // Forward range headers for video seeking
     const headers: Record<string, string> = {

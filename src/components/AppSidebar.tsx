@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Home, Film, Tv, Search, Heart, Settings, Play, Radio, PlayCircle, LogOut } from 'lucide-react';
+import { Home, Film, Tv, Search, Heart, Settings, Play, Radio, PlayCircle, LogOut, Terminal } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 
 const navItems = [

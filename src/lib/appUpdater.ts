@@ -2,7 +2,7 @@ import { logger } from '@/lib/logger';
 import { isNativePlatform } from '@/lib/platform';
 
 // ⚠️ UPDATE THIS to match your GitHub repo (owner/repo)
-const GITHUB_REPO = 'your-username/streaminstuff';
+const GITHUB_REPO = 'rrnburn/stream-trust';
 
 const CURRENT_BUILD = import.meta.env.VITE_APP_BUILD_VERSION || 'dev';
 const CURRENT_DATE = import.meta.env.VITE_APP_BUILD_DATE || '';

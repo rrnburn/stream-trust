@@ -1,9 +1,10 @@
 import { logger } from '@/lib/logger';
 import { isNativePlatform } from '@/lib/platform';
+import { Browser } from '@capacitor/browser';
 
 /**
- * Launch an external video player (VLC, MX Player, system default) via Android Intent URI.
- * Falls back to window.open() if the Intent scheme doesn't work.
+ * Launch an external video player (VLC, MX Player, system default) via Capacitor Browser plugin.
+ * This opens the stream URL in the system browser / app chooser, which handles video/* content.
  */
 export function isNativePlayerAvailable(): boolean {
   return isNativePlatform();
@@ -15,25 +16,19 @@ export async function playNative(url: string, title?: string): Promise<boolean> 
   logger.info('NativePlayer', `Opening external player for: ${url.substring(0, 100)}`, { title });
 
   try {
-    // Android Intent URI: launches ACTION_VIEW with video/* MIME type
-    // This will open VLC, MX Player, or the system default video player
-    const intentUri = `intent://${url}#Intent;action=android.intent.action.VIEW;type=video/*;S.title=${encodeURIComponent(title || 'Video')};end`;
-
-    logger.info('NativePlayer', 'Firing Android Intent URI');
-    window.location.href = intentUri;
-
-    // Give the OS a moment to handle the intent
-    await new Promise(resolve => setTimeout(resolve, 1500));
-
-    // If we're still here, the intent may have been handled or not.
-    // On Android, if no app handles it, the browser stays on the page.
-    // Try a direct window.open as fallback
+    // Use Capacitor Browser to open the URL in the system browser / external app
+    // On Android, if VLC or MX Player is installed and registered for .m3u8/.mp4,
+    // the OS will show the app chooser or open directly in the preferred player.
+    await Browser.open({ url, windowName: '_system' });
+    logger.info('NativePlayer', 'Browser.open() succeeded — external player should launch');
     return true;
   } catch (err: any) {
-    logger.warn('NativePlayer', `Intent URI failed: ${err?.message}, trying window.open fallback`);
+    logger.warn('NativePlayer', `Browser.open failed: ${err?.message}, trying window.open fallback`);
 
     try {
+      // Fallback: try window.open with _system target
       window.open(url, '_system');
+      logger.info('NativePlayer', 'window.open(_system) fallback fired');
       return true;
     } catch (fallbackErr: any) {
       logger.error('NativePlayer', `All external player methods failed: ${fallbackErr?.message}`);

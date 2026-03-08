@@ -64,12 +64,16 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
   const MAX_RETRIES = 3;
 
   const getProxiedUrl = useCallback((streamUrl: string) => {
+    // Native apps don't need the proxy — direct playback with residential IP
+    if (isNativePlatform()) return streamUrl;
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
     if (!supabaseUrl || !streamUrl) return streamUrl;
     return `${supabaseUrl}/functions/v1/stream-proxy?url=${encodeURIComponent(streamUrl)}`;
   }, []);
 
   const getPlaybackUrl = useCallback((streamUrl: string, proxy: boolean) => {
+    // On native, never proxy
+    if (isNativePlatform()) return streamUrl;
     return proxy ? getProxiedUrl(streamUrl) : streamUrl;
   }, [getProxiedUrl]);
 

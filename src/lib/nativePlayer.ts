@@ -24,8 +24,8 @@ export async function playInVlc(url: string, title?: string): Promise<void> {
       action: 'android.intent.action.VIEW',
       data: url,
       type: 'video/*',
-      package: 'org.videolan.vlc',
-      extras: {
+      packageName: 'org.videolan.vlc',
+      extra: {
         title: title || 'Video',
       },
     });
@@ -43,8 +43,8 @@ export async function playInMxPlayer(url: string, title?: string): Promise<void>
       action: 'android.intent.action.VIEW',
       data: url,
       type: 'video/*',
-      package: 'com.mxtech.videoplayer.ad',
-      extras: {
+      packageName: 'com.mxtech.videoplayer.ad',
+      extra: {
         title: title || 'Video',
       },
     });

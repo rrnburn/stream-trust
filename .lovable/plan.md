@@ -1,58 +1,42 @@
+## Fix Movie URL Construction
 
-## Live TV and VOD Sections
+### Problems Found
 
-### Overview
-Add a dedicated **Live TV** page for live channel streams and a **VOD** page for video-on-demand content. Both will integrate with the existing parsed media data and video player.
+**1. Forced HTTPS on stream URLs**
+In `src/lib/playlistParser.ts` line 76 (and `supabase/functions/parse-playlist/index.ts` line 84):
 
-### Changes
+```js
+const streamBase = base.replace(/^http:\/\//i, 'https://');
+```
 
-#### 1. Edge Function -- Fetch VOD and Movies from Xtream
-Currently the edge function only fetches `get_live_streams` for Xtream sources. It needs to also fetch `get_vod_streams` and `get_series` so that Movies/VOD content is actually populated.
+The API base is forced to HTTP, then stream URLs are forced to HTTPS. Many IPTV providers only serve streams over HTTP — HTTPS returns errors, redirects, or connection failures. This explains why ALL players fail with the same error: they're all hitting an HTTPS URL that the provider doesn't support.
 
-- After fetching live streams, make two additional API calls:
-  - `player_api.php?...&action=get_vod_streams` -- map these as category `movie`
-  - `player_api.php?...&action=get_series` -- map these as category `series`
-- Merge all three result sets into one `items` array before returning
-- Construct VOD stream URLs as `http://server/movie/username/password/stream_id.ext`
-- Construct series URLs as `http://server/series/username/password/stream_id.ext`
+**2. Hardcoded `.mp4` extension ignores `container_extension**`
+The Xtream API returns a `container_extension` field per VOD item (e.g. `mkv`, `avi`, `ts`). The series parser already uses it (`ep.container_extension || 'mp4'`), but the VOD parser hardcodes `.mp4` on line 137. If a movie's actual container is `.mkv`, the URL is wrong.
 
-#### 2. New Page -- Live TV (`src/pages/LiveTV.tsx`)
-- Filter `parsedMedia` to `category === 'channel'`
-- Display channels in a grid layout (using `MediaGrid`)
-- Clicking a channel opens an inline `VideoPlayer` directly on the page (no detail page needed for live TV -- instant playback)
-- Group channels by their `group` field with collapsible sections or tabs
+### Plan
 
-#### 3. New Page -- VOD (`src/pages/VOD.tsx`)  
-- Filter `parsedMedia` to `category === 'vod'` or `category === 'movie'`
-- Display in the standard `MediaGrid` linking to `MediaDetail` for playback
+**File 1: `src/lib/playlistParser.ts**`
 
-#### 4. Sidebar Navigation Update (`src/components/AppSidebar.tsx`)
-- Add "Live TV" nav item with `Radio` icon pointing to `/live-tv`
-- Add "VOD" nav item with `PlayCircle` icon pointing to `/vod`
+- Line 76: Use the original protocol from the user's source URL instead of forcing HTTPS. For native platforms (which don't need the proxy), keep the original protocol. For web, keep HTTPS to avoid mixed-content issues.
+- Line 137: Use `s.container_extension || 'mp4'` instead of hardcoded `.mp4`
 
-#### 5. Routes (`src/App.tsx`)
-- Add protected routes for `/live-tv` and `/vod`
+**File 2: `supabase/functions/parse-playlist/index.ts**`  
 
-#### 6. Home Page Update (`src/pages/Index.tsx`)
-- Add a "Live TV" row showing up to 12 channels
+- Same two fixes: respect original protocol, use `container_extension`
 
-### Technical Details
+**File 3: `src/components/VideoPlayer.tsx**`
 
-**Edge function changes** (`supabase/functions/parse-playlist/index.ts`):
-- Three parallel fetches for Xtream: `get_live_streams`, `get_vod_streams`, `get_series`
-- Different URL patterns per type: `/username/password/id` (live), `/movie/username/password/id.mp4` (VOD), `/series/username/password/id.mp4` (series)
+- Update the movie detection logic (lines 203, 545-548) to not assume `.mp4` — check for `/movie/` path instead of `.mp4` extension
 
-**Live TV page** will feature:
-- Inline video player that plays the selected channel immediately
-- Channel list alongside the player (split layout on desktop, stacked on mobile)
-- Active channel highlighting
+**File 4: `src/lib/nativePlayer.ts**`
 
-**Files to create:**
-- `src/pages/LiveTV.tsx`
-- `src/pages/VOD.tsx`
+- No changes needed — the URL itself was the problem, not the intent construction
 
-**Files to modify:**
-- `supabase/functions/parse-playlist/index.ts`
-- `src/components/AppSidebar.tsx`
-- `src/App.tsx`
-- `src/pages/Index.tsx`
+### Why this fixes "all players fail"
+
+Every player receives the same broken HTTPS URL. Fixing the URL protocol to match what the provider actually serves will fix playback across VLC, MX Player, system chooser, and the web player simultaneously.
+
+&nbsp;
+
+**DO NOT CHANGE HOW LIVE TV OR SERIES WORK!**

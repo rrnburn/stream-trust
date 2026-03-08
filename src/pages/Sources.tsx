@@ -31,7 +31,7 @@ const Sources = () => {
       setUpdateAvailable(result.available);
       setLatestRelease(result.latest);
       if (!result.available) {
-        toast.success('You're on the latest version');
+        toast.success("You're on the latest version");
       }
     } catch {
       toast.error('Failed to check for updates');

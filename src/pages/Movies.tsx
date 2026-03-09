@@ -40,27 +40,6 @@ const Movies = () => {
           </div>
         </div>
 
-        {groups.length > 1 && (
-          <div className="w-full overflow-x-auto scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
-            <div className="flex gap-2 pb-2 w-max">
-              <button
-                onClick={() => setSelectedGroup('all')}
-                className={`px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
-                  selectedGroup === 'all' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                All ({allMovies.length})
-              </button>
-              {groups.map(g => (
-                <button key={g} onClick={() => setSelectedGroup(g)}
-                  className={`px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
-                    selectedGroup === g ? 'bg-primary text-primary-foreground' : 'bg-secondary text-muted-foreground hover:text-foreground'
-                  }`}
-                >{g}</button>
-              ))}
-            </div>
-          </div>
-        )}
 
         <MediaGrid items={filtered} />
       </div>

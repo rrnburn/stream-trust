@@ -102,31 +102,6 @@ const LiveTV = () => {
               />
             </div>
             {/* Group filter */}
-            {allGroups.length > 1 && (
-              <div className="w-full overflow-x-auto scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
-                <div className="flex gap-1.5 pb-1 w-max">
-                  <button
-                    onClick={() => setSelectedGroup('all')}
-                    className={`px-2.5 py-1 rounded-md text-xs font-medium whitespace-nowrap transition-colors ${
-                      selectedGroup === 'all' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    All ({channels.length})
-                  </button>
-                  {allGroups.map(g => (
-                    <button
-                      key={g}
-                      onClick={() => setSelectedGroup(g)}
-                      className={`px-2.5 py-1 rounded-md text-xs font-medium whitespace-nowrap transition-colors ${
-                        selectedGroup === g ? 'bg-primary text-primary-foreground' : 'bg-secondary text-muted-foreground hover:text-foreground'
-                      }`}
-                    >
-                      {g}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
             <p className="text-xs text-muted-foreground">{filtered.length} channels</p>
           </div>
 

@@ -2,7 +2,7 @@ import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { Home, Film, Tv, Search, Heart, Settings, Play, Radio, LogOut, Terminal, ChevronDown, ChevronRight } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useMedia } from '@/context/AppContext';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
 
 interface NavItem {
@@ -36,6 +36,18 @@ const AppSidebar = () => {
     return initial;
   });
 
+  useEffect(() => {
+    const matchingItem = navItems.find(item => item.to === location.pathname);
+    if (matchingItem?.category) {
+      setExpandedSections(prev => {
+        if (prev.has(matchingItem.to)) return prev;
+        const next = new Set(prev);
+        next.add(matchingItem.to);
+        return next;
+      });
+    }
+  }, [location.pathname]);
+
   // Build groups per category
   const groupsByCategory = useMemo(() => {
     const map: Record<string, string[]> = {};
@@ -51,8 +63,19 @@ const AppSidebar = () => {
     // series
     const series = media.filter(m => m.category === 'series');
     map['series'] = [...new Set(series.map(c => c.group || 'Uncategorized'))].sort();
-    
-    
+
+  useEffect(() => {
+    const matchingItem = navItems.find(item => item.to === location.pathname);
+    if (matchingItem?.category) {
+      setExpandedSections(prev => {
+        if (prev.has(matchingItem.to)) return prev;
+        const next = new Set(prev);
+        next.add(matchingItem.to);
+        return next;
+      });
+    }
+  }, [location.pathname]);
+
     return map;
   }, [media]);
 

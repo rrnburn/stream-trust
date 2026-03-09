@@ -18,9 +18,6 @@ const Series = () => {
 
   const allSeries = useMemo(() => media.filter(m => m.category === 'series'), [media]);
 
-  const groups = useMemo(() => {
-    return [...new Set(allSeries.map(i => i.group || 'Uncategorized'))].sort();
-  }, [allSeries]);
 
   const filtered = useMemo(() => {
     let items = allSeries;

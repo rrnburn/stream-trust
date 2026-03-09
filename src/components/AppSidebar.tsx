@@ -28,7 +28,13 @@ const AppSidebar = () => {
   const [searchParams] = useSearchParams();
   const { signOut, user } = useAuth();
   const media = useMedia();
-  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
+  // Auto-expand the section matching the current route
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(() => {
+    const initial = new Set<string>();
+    const matchingItem = navItems.find(item => item.to === location.pathname);
+    if (matchingItem) initial.add(matchingItem.to);
+    return initial;
+  });
 
   // Build groups per category
   const groupsByCategory = useMemo(() => {

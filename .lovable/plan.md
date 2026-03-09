@@ -1,58 +1,30 @@
 
-## Live TV and VOD Sections
 
-### Overview
-Add a dedicated **Live TV** page for live channel streams and a **VOD** page for video-on-demand content. Both will integrate with the existing parsed media data and video player.
+## Move Sub-Category Filters to the Sidebar
+
+Currently, Movies, Series, and Live TV pages show horizontal scrolling group/category filter buttons at the top of the content area. The user wants these moved into the left sidebar instead.
+
+### Approach
+
+The sidebar already has expandable sub-menus for Live TV, Movies, and Series (with group links). The sub-menu in the sidebar and the top filter buttons do the same thing — they set `?group=X` in the URL. So the fix is simply to **remove the horizontal filter bars from the three pages** and rely on the existing sidebar sub-menus.
 
 ### Changes
 
-#### 1. Edge Function -- Fetch VOD and Movies from Xtream
-Currently the edge function only fetches `get_live_streams` for Xtream sources. It needs to also fetch `get_vod_streams` and `get_series` so that Movies/VOD content is actually populated.
+**File 1: `src/pages/Movies.tsx`**
+- Remove the horizontal group filter bar (lines 46-66) — the `groups.length > 1 && (...)` block
+- Remove the `groups` useMemo (lines 21-23) since it's no longer needed in this component
 
-- After fetching live streams, make two additional API calls:
-  - `player_api.php?...&action=get_vod_streams` -- map these as category `movie`
-  - `player_api.php?...&action=get_series` -- map these as category `series`
-- Merge all three result sets into one `items` array before returning
-- Construct VOD stream URLs as `http://server/movie/username/password/stream_id.ext`
-- Construct series URLs as `http://server/series/username/password/stream_id.ext`
+**File 2: `src/pages/Series.tsx`**
+- Same removal: delete the horizontal group filter bar (lines 46-66)
+- Remove the `groups` useMemo (lines 21-23)
 
-#### 2. New Page -- Live TV (`src/pages/LiveTV.tsx`)
-- Filter `parsedMedia` to `category === 'channel'`
-- Display channels in a grid layout (using `MediaGrid`)
-- Clicking a channel opens an inline `VideoPlayer` directly on the page (no detail page needed for live TV -- instant playback)
-- Group channels by their `group` field with collapsible sections or tabs
+**File 3: `src/pages/LiveTV.tsx`**
+- Remove the group filter buttons inside the channel list panel (lines 109-133) — the `allGroups.length > 1 && (...)` block
+- Remove the `allGroups` useMemo (lines 24-27)
 
-#### 3. New Page -- VOD (`src/pages/VOD.tsx`)  
-- Filter `parsedMedia` to `category === 'vod'` or `category === 'movie'`
-- Display in the standard `MediaGrid` linking to `MediaDetail` for playback
+**File 4: `src/components/AppSidebar.tsx`**
+- Auto-expand the sidebar section for the current active route (e.g. if on `/movies`, the Movies sub-menu should be open by default)
+- This makes the sidebar groups immediately visible when navigating to those pages
 
-#### 4. Sidebar Navigation Update (`src/components/AppSidebar.tsx`)
-- Add "Live TV" nav item with `Radio` icon pointing to `/live-tv`
-- Add "VOD" nav item with `PlayCircle` icon pointing to `/vod`
+No other changes needed — the sidebar already constructs the correct `?group=` links and highlights the active group.
 
-#### 5. Routes (`src/App.tsx`)
-- Add protected routes for `/live-tv` and `/vod`
-
-#### 6. Home Page Update (`src/pages/Index.tsx`)
-- Add a "Live TV" row showing up to 12 channels
-
-### Technical Details
-
-**Edge function changes** (`supabase/functions/parse-playlist/index.ts`):
-- Three parallel fetches for Xtream: `get_live_streams`, `get_vod_streams`, `get_series`
-- Different URL patterns per type: `/username/password/id` (live), `/movie/username/password/id.mp4` (VOD), `/series/username/password/id.mp4` (series)
-
-**Live TV page** will feature:
-- Inline video player that plays the selected channel immediately
-- Channel list alongside the player (split layout on desktop, stacked on mobile)
-- Active channel highlighting
-
-**Files to create:**
-- `src/pages/LiveTV.tsx`
-- `src/pages/VOD.tsx`
-
-**Files to modify:**
-- `supabase/functions/parse-playlist/index.ts`
-- `src/components/AppSidebar.tsx`
-- `src/App.tsx`
-- `src/pages/Index.tsx`

@@ -36,6 +36,18 @@ const AppSidebar = () => {
     return initial;
   });
 
+  useEffect(() => {
+    const matchingItem = navItems.find(item => item.to === location.pathname);
+    if (matchingItem?.category) {
+      setExpandedSections(prev => {
+        if (prev.has(matchingItem.to)) return prev;
+        const next = new Set(prev);
+        next.add(matchingItem.to);
+        return next;
+      });
+    }
+  }, [location.pathname]);
+
   // Build groups per category
   const groupsByCategory = useMemo(() => {
     const map: Record<string, string[]> = {};

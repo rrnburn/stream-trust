@@ -18,9 +18,6 @@ const Movies = () => {
 
   const allMovies = useMemo(() => media.filter(m => m.category === 'movie'), [media]);
 
-  const groups = useMemo(() => {
-    return [...new Set(allMovies.map(i => i.group || 'Uncategorized'))].sort();
-  }, [allMovies]);
 
   const filtered = useMemo(() => {
     let items = allMovies;

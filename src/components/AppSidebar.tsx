@@ -51,8 +51,19 @@ const AppSidebar = () => {
     // series
     const series = media.filter(m => m.category === 'series');
     map['series'] = [...new Set(series.map(c => c.group || 'Uncategorized'))].sort();
-    
-    
+
+  useEffect(() => {
+    const matchingItem = navItems.find(item => item.to === location.pathname);
+    if (matchingItem?.category) {
+      setExpandedSections(prev => {
+        if (prev.has(matchingItem.to)) return prev;
+        const next = new Set(prev);
+        next.add(matchingItem.to);
+        return next;
+      });
+    }
+  }, [location.pathname]);
+
     return map;
   }, [media]);
 

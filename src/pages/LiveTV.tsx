@@ -21,10 +21,6 @@ const LiveTV = () => {
   };
 
   // Get all unique groups for filtering
-  const allGroups = useMemo(() => {
-    const groups = [...new Set(channels.map(c => c.group || 'Uncategorized'))].sort();
-    return groups;
-  }, [channels]);
 
   const filtered = useMemo(() => {
     let items = channels;

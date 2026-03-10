@@ -166,6 +166,7 @@ export async function parsePlaylistLocally(
   password?: string,
 ): Promise<ParseResult> {
   let items: ParsedItem[];
+  let epgUrl: string | undefined;
 
   if (type === 'xtream' && username && password) {
     items = await parseXtream(url, username, password);
@@ -174,7 +175,9 @@ export async function parsePlaylistLocally(
       headers: { 'User-Agent': 'okhttp/4.9.2', Accept: '*/*' },
     });
     if (!response.ok) throw new Error(`Failed to fetch: ${response.status}`);
-    items = parseM3U(await response.text());
+    const result = parseM3U(await response.text());
+    items = result.items;
+    epgUrl = result.epgUrl;
   }
 
   return {
@@ -183,5 +186,6 @@ export async function parsePlaylistLocally(
     channels: items.filter(i => i.category === 'channel').length,
     movies: items.filter(i => i.category === 'movie').length,
     series: items.filter(i => i.category === 'series').length,
+    epgUrl,
   };
 }

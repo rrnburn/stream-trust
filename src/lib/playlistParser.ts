@@ -18,6 +18,7 @@ export interface ParseResult {
   channels: number;
   movies: number;
   series: number;
+  epgUrl?: string;
 }
 
 // ── M3U parser ──────────────────────────────────────────────

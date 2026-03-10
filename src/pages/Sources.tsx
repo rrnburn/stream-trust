@@ -115,7 +115,6 @@ const Sources = () => {
   variant="ghost"
   size="icon"
   onClick={() => parseEpg(source)}
-  disabled={!source.epg_url}
   className="text-muted-foreground hover:text-primary"
   title={source.epg_url ? "Download EPG" : "No EPG configured"}
 >

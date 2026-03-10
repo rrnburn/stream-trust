@@ -14,6 +14,53 @@ export type Database = {
   }
   public: {
     Tables: {
+      epg_programs: {
+        Row: {
+          category: string | null
+          channel_id: string
+          created_at: string | null
+          description: string | null
+          end_time: string
+          id: string
+          source_id: string
+          start_time: string
+          title: string
+          user_id: string
+        }
+        Insert: {
+          category?: string | null
+          channel_id: string
+          created_at?: string | null
+          description?: string | null
+          end_time: string
+          id?: string
+          source_id: string
+          start_time: string
+          title: string
+          user_id: string
+        }
+        Update: {
+          category?: string | null
+          channel_id?: string
+          created_at?: string | null
+          description?: string | null
+          end_time?: string
+          id?: string
+          source_id?: string
+          start_time?: string
+          title?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "epg_programs_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "iptv_sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       favorites: {
         Row: {
           created_at: string
@@ -38,6 +85,7 @@ export type Database = {
       iptv_sources: {
         Row: {
           created_at: string
+          epg_url: string | null
           id: string
           name: string
           password: string | null
@@ -49,6 +97,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          epg_url?: string | null
           id?: string
           name: string
           password?: string | null
@@ -60,6 +109,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          epg_url?: string | null
           id?: string
           name?: string
           password?: string | null

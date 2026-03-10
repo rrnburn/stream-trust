@@ -1,26 +1,27 @@
 import { useState } from 'react';
-import { Plus, Trash2, Link, Server, RefreshCw } from 'lucide-react';
+import { Plus, Trash2, Link, Server, RefreshCw, Loader2, BookOpen } from 'lucide-react';
 import { useAppContext } from '@/context/AppContext';
 import AppLayout from '@/components/AppLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { motion, AnimatePresence } from 'framer-motion';
+import { toast } from 'sonner';
 
 const Sources = () => {
-  const { sources, addSource, removeSource, parsePlaylist, parsingPlaylist } = useAppContext();
+  const { sources, addSource, removeSource, parsePlaylist, parsingPlaylist, parseEpg, parsingEpg } = useAppContext();
   const [open, setOpen] = useState(false);
   const [type, setType] = useState<'m3u' | 'xtream'>('m3u');
   const [name, setName] = useState('');
   const [url, setUrl] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-
+  const [epgUrl, setEpgUrl] = useState('');
 
   const handleAdd = () => {
     if (!name || !url) return;
-    addSource({ name, type, url, username: type === 'xtream' ? username : undefined, password: type === 'xtream' ? password : undefined });
-    setName(''); setUrl(''); setUsername(''); setPassword('');
+    addSource({ name, type, url, username: type === 'xtream' ? username : undefined, password: type === 'xtream' ? password : undefined, epg_url: epgUrl || undefined });
+    setName(''); setUrl(''); setUsername(''); setPassword(''); setEpgUrl('');
     setOpen(false);
   };
 
@@ -69,6 +70,8 @@ const Sources = () => {
                   </>
                 )}
 
+                <Input placeholder="EPG URL (optional, XMLTV)" value={epgUrl} onChange={(e) => setEpgUrl(e.target.value)} className="bg-secondary border-border text-foreground" />
+
                 <Button onClick={handleAdd} className="w-full bg-primary text-primary-foreground hover:bg-primary/90">
                   Add Source
                 </Button>
@@ -105,9 +108,14 @@ const Sources = () => {
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
-                    <Button variant="ghost" size="icon" onClick={() => parsePlaylist(source)} disabled={parsingPlaylist} className="text-muted-foreground hover:text-primary">
+                    <Button variant="ghost" size="icon" onClick={() => parsePlaylist(source)} disabled={parsingPlaylist} className="text-muted-foreground hover:text-primary" title="Refresh playlist">
                       <RefreshCw className={`w-4 h-4 ${parsingPlaylist ? 'animate-spin' : ''}`} />
                     </Button>
+                    {source.epg_url && (
+                      <Button variant="ghost" size="icon" onClick={() => parseEpg(source)} disabled={parsingEpg} className="text-muted-foreground hover:text-primary" title="Download EPG">
+                        {parsingEpg ? <Loader2 className="w-4 h-4 animate-spin" /> : <BookOpen className="w-4 h-4" />}
+                      </Button>
+                    )}
                     <Button variant="ghost" size="icon" onClick={() => removeSource(source.id)} className="text-muted-foreground hover:text-destructive">
                       <Trash2 className="w-4 h-4" />
                     </Button>

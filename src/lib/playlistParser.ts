@@ -18,16 +18,23 @@ export interface ParseResult {
   channels: number;
   movies: number;
   series: number;
+  epgUrl?: string;
 }
 
 // ── M3U parser ──────────────────────────────────────────────
 
-function parseM3U(content: string): ParsedItem[] {
+function parseM3U(content: string): { items: ParsedItem[]; epgUrl?: string } {
   const lines = content.split('\n').map(l => l.trim()).filter(Boolean);
   const items: ParsedItem[] = [];
   let i = 0;
+  let epgUrl: string | undefined;
 
-  if (lines[0]?.startsWith('#EXTM3U')) i = 1;
+  if (lines[0]?.startsWith('#EXTM3U')) {
+    // Extract url-tvg from the #EXTM3U header
+    const tvgMatch = lines[0].match(/url-tvg="([^"]*)"/i);
+    if (tvgMatch?.[1]) epgUrl = tvgMatch[1];
+    i = 1;
+  }
 
   while (i < lines.length) {
     if (lines[i].startsWith('#EXTINF:')) {
@@ -55,7 +62,7 @@ function parseM3U(content: string): ParsedItem[] {
     }
   }
 
-  return items;
+  return { items, epgUrl };
 }
 
 // ── Xtream parser ───────────────────────────────────────────
@@ -159,6 +166,7 @@ export async function parsePlaylistLocally(
   password?: string,
 ): Promise<ParseResult> {
   let items: ParsedItem[];
+  let epgUrl: string | undefined;
 
   if (type === 'xtream' && username && password) {
     items = await parseXtream(url, username, password);
@@ -167,7 +175,9 @@ export async function parsePlaylistLocally(
       headers: { 'User-Agent': 'okhttp/4.9.2', Accept: '*/*' },
     });
     if (!response.ok) throw new Error(`Failed to fetch: ${response.status}`);
-    items = parseM3U(await response.text());
+    const result = parseM3U(await response.text());
+    items = result.items;
+    epgUrl = result.epgUrl;
   }
 
   return {
@@ -176,5 +186,6 @@ export async function parsePlaylistLocally(
     channels: items.filter(i => i.category === 'channel').length,
     movies: items.filter(i => i.category === 'movie').length,
     series: items.filter(i => i.category === 'series').length,
+    epgUrl,
   };
 }

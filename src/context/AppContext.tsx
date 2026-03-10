@@ -34,6 +34,9 @@ interface AppState {
   parsedMedia: MediaItem[];
   parsePlaylist: (source: IPTVSource) => Promise<void>;
   parsingPlaylist: boolean;
+  epgPrograms: any[];
+  parseEpg: (source: IPTVSource) => Promise<void>;
+  parsingEpg: boolean;
 }
 
 const AppContext = createContext<AppState | null>(null);
@@ -60,6 +63,8 @@ const LocalAppProvider = ({ children }: { children: ReactNode }) => {
   const [loadingSources, setLoadingSources] = useState(true);
   const [parsedMedia, setParsedMedia] = useState<MediaItem[]>([]);
   const [parsingPlaylist, setParsingPlaylist] = useState(false);
+  const [epgPrograms, setEpgPrograms] = useState<any[]>([]);
+  const [parsingEpg, setParsingEpg] = useState(false);
 
   const reload = useCallback(async () => {
     setLoadingSources(true);
@@ -69,6 +74,7 @@ const LocalAppProvider = ({ children }: { children: ReactNode }) => {
       setSources(s.map((r: any) => ({
         id: r.id, name: r.name, type: r.type, url: r.url,
         username: r.username || undefined, password: r.password || undefined,
+        epg_url: r.epg_url || undefined,
         created_at: r.created_at,
       })));
       setFavorites(f);
@@ -138,11 +144,17 @@ const LocalAppProvider = ({ children }: { children: ReactNode }) => {
     setParsingPlaylist(false);
   };
 
+  const parseEpg = async (_source: IPTVSource) => {
+    // EPG parsing not supported in local/native mode yet
+    toast.info('EPG is only available in cloud mode');
+  };
+
   return (
     <AppContext.Provider value={{
       sources, favorites, watchHistory,
       addSource, removeSource, toggleFavorite, isFavorite, addToHistory,
       loadingSources, parsedMedia, parsePlaylist, parsingPlaylist,
+      epgPrograms, parseEpg, parsingEpg,
     }}>
       {children}
     </AppContext.Provider>
@@ -161,6 +173,8 @@ const CloudAppProvider = ({ children }: { children: ReactNode }) => {
   const [loadingSources, setLoadingSources] = useState(false);
   const [parsedMedia, setParsedMedia] = useState<MediaItem[]>([]);
   const [parsingPlaylist, setParsingPlaylist] = useState(false);
+  const [epgPrograms, setEpgPrograms] = useState<any[]>([]);
+  const [parsingEpg, setParsingEpg] = useState(false);
 
   const loadSources = useCallback(async () => {
     if (!user) { setSources([]); return; }
@@ -228,6 +242,7 @@ const CloudAppProvider = ({ children }: { children: ReactNode }) => {
     await supabase.from('iptv_sources').insert({
       user_id: user.id, name: source.name, type: source.type,
       url: source.url, username: source.username || null, password: source.password || null,
+      epg_url: source.epg_url || null,
     });
     await loadSources();
   };
@@ -286,11 +301,45 @@ const CloudAppProvider = ({ children }: { children: ReactNode }) => {
     setParsingPlaylist(false);
   };
 
+  const loadEpgPrograms = useCallback(async () => {
+    if (!user) { setEpgPrograms([]); return; }
+    const { data } = await supabase
+      .from('epg_programs')
+      .select('*')
+      .gte('end_time', new Date().toISOString())
+      .lte('start_time', new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString())
+      .order('start_time', { ascending: true });
+    setEpgPrograms(data || []);
+  }, [user]);
+
+  useEffect(() => {
+    loadEpgPrograms();
+  }, [loadEpgPrograms]);
+
+  const parseEpg = async (source: IPTVSource) => {
+    if (!user || !source.epg_url) return;
+    setParsingEpg(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('parse-epg', {
+        body: { epgUrl: source.epg_url, sourceId: source.id, userId: user.id },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      toast.success(`Loaded ${data?.total || 0} programs for ${data?.channels || 0} channels`);
+      await loadEpgPrograms();
+    } catch (e: any) {
+      console.error('Failed to parse EPG:', e);
+      toast.error(`Failed to load EPG: ${e.message || 'Unknown error'}`);
+    }
+    setParsingEpg(false);
+  };
+
   return (
     <AppContext.Provider value={{
       sources, favorites, watchHistory,
       addSource, removeSource, toggleFavorite, isFavorite, addToHistory,
       loadingSources, parsedMedia, parsePlaylist, parsingPlaylist,
+      epgPrograms, parseEpg, parsingEpg,
     }}>
       {children}
     </AppContext.Provider>

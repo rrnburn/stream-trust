@@ -176,8 +176,18 @@ export async function parsePlaylistLocally(
   let epgUrl: string | undefined;
 
   if (type === 'xtream' && username && password) {
-    items = await parseXtream(url, username, password);
-  } else {
+  items = await parseXtream(url, username, password);
+
+  // Auto-build Xtream EPG URL
+  let base = url.replace(/\/$/, '');
+  base = base.replace(/^https?:\/\//i, '');
+  base = base.replace(/\/player_api\.php.*$/i, '');
+  base = base.replace(/\/get\.php.*$/i, '');
+
+  epgUrl = `http://${base}/xmltv.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`;
+
+  console.log("📺 Xtream EPG URL generated:", epgUrl);
+} else {
     const response = await fetch(url, {
       headers: { 'User-Agent': 'okhttp/4.9.2', Accept: '*/*' },
     });
@@ -185,6 +195,7 @@ export async function parsePlaylistLocally(
     const result = parseM3U(await response.text());
     items = result.items;
     epgUrl = result.epgUrl;
+    console.log("📺 Xtream EPG URL generated:", epgUrl);
   }
 
   return {

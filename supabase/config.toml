@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.log-event]
 verify_jwt = false
+
+[functions.parse-epg]
+verify_jwt = false

@@ -74,6 +74,7 @@ const LocalAppProvider = ({ children }: { children: ReactNode }) => {
       setSources(s.map((r: any) => ({
         id: r.id, name: r.name, type: r.type, url: r.url,
         username: r.username || undefined, password: r.password || undefined,
+        epg_url: r.epg_url || undefined,
         created_at: r.created_at,
       })));
       setFavorites(f);

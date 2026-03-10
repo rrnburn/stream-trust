@@ -23,12 +23,18 @@ export interface ParseResult {
 
 // ── M3U parser ──────────────────────────────────────────────
 
-function parseM3U(content: string): ParsedItem[] {
+function parseM3U(content: string): { items: ParsedItem[]; epgUrl?: string } {
   const lines = content.split('\n').map(l => l.trim()).filter(Boolean);
   const items: ParsedItem[] = [];
   let i = 0;
+  let epgUrl: string | undefined;
 
-  if (lines[0]?.startsWith('#EXTM3U')) i = 1;
+  if (lines[0]?.startsWith('#EXTM3U')) {
+    // Extract url-tvg from the #EXTM3U header
+    const tvgMatch = lines[0].match(/url-tvg="([^"]*)"/i);
+    if (tvgMatch?.[1]) epgUrl = tvgMatch[1];
+    i = 1;
+  }
 
   while (i < lines.length) {
     if (lines[i].startsWith('#EXTINF:')) {

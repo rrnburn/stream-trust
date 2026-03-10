@@ -44,7 +44,7 @@ const HeroBanner = ({ item }: { item: MediaItem }) => {
             onClick={() => toggleFavorite(item.id)}
           >
             <Plus className={`w-4 h-4 ${isFavorite(item.id) ? 'rotate-45' : ''} transition-transform`} />
-            {isFavorite(item.id) ? 'Remove' : 'My List'}
+            {isFavorite(item.id) ? 'Unfavourite' : 'Favourite'}
           </Button>
         </div>
       </motion.div>

@@ -301,11 +301,45 @@ const CloudAppProvider = ({ children }: { children: ReactNode }) => {
     setParsingPlaylist(false);
   };
 
+  const loadEpgPrograms = useCallback(async () => {
+    if (!user) { setEpgPrograms([]); return; }
+    const { data } = await supabase
+      .from('epg_programs')
+      .select('*')
+      .gte('end_time', new Date().toISOString())
+      .lte('start_time', new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString())
+      .order('start_time', { ascending: true });
+    setEpgPrograms(data || []);
+  }, [user]);
+
+  useEffect(() => {
+    loadEpgPrograms();
+  }, [loadEpgPrograms]);
+
+  const parseEpg = async (source: IPTVSource) => {
+    if (!user || !source.epg_url) return;
+    setParsingEpg(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('parse-epg', {
+        body: { epgUrl: source.epg_url, sourceId: source.id, userId: user.id },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      toast.success(`Loaded ${data?.total || 0} programs for ${data?.channels || 0} channels`);
+      await loadEpgPrograms();
+    } catch (e: any) {
+      console.error('Failed to parse EPG:', e);
+      toast.error(`Failed to load EPG: ${e.message || 'Unknown error'}`);
+    }
+    setParsingEpg(false);
+  };
+
   return (
     <AppContext.Provider value={{
       sources, favorites, watchHistory,
       addSource, removeSource, toggleFavorite, isFavorite, addToHistory,
       loadingSources, parsedMedia, parsePlaylist, parsingPlaylist,
+      epgPrograms, parseEpg, parsingEpg,
     }}>
       {children}
     </AppContext.Provider>

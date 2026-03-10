@@ -29,13 +29,20 @@ function parseM3U(content: string): { items: ParsedItem[]; epgUrl?: string } {
   let i = 0;
   let epgUrl: string | undefined;
 
-  if (lines[0]?.startsWith('#EXTM3U')) {
-    // Extract url-tvg from the #EXTM3U header
-    const tvgMatch = lines[0].match(/url-tvg="([^"]*)"/i);
-    if (tvgMatch?.[1]) epgUrl = tvgMatch[1];
-    i = 1;
-  }
+  // Detect EPG URL from header
+for (let j = 0; j < Math.min(lines.length, 5); j++) {
+  if (lines[j].startsWith('#EXTM3U')) {
+    const match =
+      lines[j].match(/url-tvg="([^"]+)"/i) ||
+      lines[j].match(/x-tvg-url="([^"]+)"/i) ||
+      lines[j].match(/tvg-url="([^"]+)"/i);
 
+    if (match?.[1]) {
+      epgUrl = match[1].split(',')[0].trim(); // take first if multiple
+      break;
+    }
+  }
+}
   while (i < lines.length) {
     if (lines[i].startsWith('#EXTINF:')) {
       const info = lines[i];

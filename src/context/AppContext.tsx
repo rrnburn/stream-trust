@@ -242,6 +242,9 @@ const CloudAppProvider = ({ children }: { children: ReactNode }) => {
     await supabase.from('iptv_sources').insert({
       user_id: user.id, name: source.name, type: source.type,
       url: source.url, username: source.username || null, password: source.password || null,
+      epg_url: source.epg_url || null,
+    });
+      url: source.url, username: source.username || null, password: source.password || null,
     });
     await loadSources();
   };

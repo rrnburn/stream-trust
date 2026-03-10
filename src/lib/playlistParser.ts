@@ -62,7 +62,7 @@ function parseM3U(content: string): { items: ParsedItem[]; epgUrl?: string } {
     }
   }
 
-  return items;
+  return { items, epgUrl };
 }
 
 // ── Xtream parser ───────────────────────────────────────────

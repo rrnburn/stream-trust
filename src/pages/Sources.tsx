@@ -70,6 +70,8 @@ const Sources = () => {
                   </>
                 )}
 
+                <Input placeholder="EPG URL (optional, XMLTV)" value={epgUrl} onChange={(e) => setEpgUrl(e.target.value)} className="bg-secondary border-border text-foreground" />
+
                 <Button onClick={handleAdd} className="w-full bg-primary text-primary-foreground hover:bg-primary/90">
                   Add Source
                 </Button>

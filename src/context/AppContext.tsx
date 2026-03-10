@@ -145,7 +145,6 @@ const LocalAppProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const parseEpg = async (_source: IPTVSource) => {
-    const parseEpg = async (source: IPTVSource) => {
   if (!source.epg_url) return;
 
   setParsingEpg(true);
@@ -171,7 +170,6 @@ const LocalAppProvider = ({ children }: { children: ReactNode }) => {
 
   setParsingEpg(false);
 };
-  };
 
   return (
     <AppContext.Provider value={{

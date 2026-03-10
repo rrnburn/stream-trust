@@ -108,9 +108,14 @@ const Sources = () => {
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
-                    <Button variant="ghost" size="icon" onClick={() => parsePlaylist(source)} disabled={parsingPlaylist} className="text-muted-foreground hover:text-primary">
+                    <Button variant="ghost" size="icon" onClick={() => parsePlaylist(source)} disabled={parsingPlaylist} className="text-muted-foreground hover:text-primary" title="Refresh playlist">
                       <RefreshCw className={`w-4 h-4 ${parsingPlaylist ? 'animate-spin' : ''}`} />
                     </Button>
+                    {source.epg_url && (
+                      <Button variant="ghost" size="icon" onClick={() => parseEpg(source)} disabled={parsingEpg} className="text-muted-foreground hover:text-primary" title="Download EPG">
+                        {parsingEpg ? <Loader2 className="w-4 h-4 animate-spin" /> : <BookOpen className="w-4 h-4" />}
+                      </Button>
+                    )}
                     <Button variant="ghost" size="icon" onClick={() => removeSource(source.id)} className="text-muted-foreground hover:text-destructive">
                       <Trash2 className="w-4 h-4" />
                     </Button>

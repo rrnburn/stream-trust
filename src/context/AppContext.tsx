@@ -65,7 +65,7 @@ const LocalAppProvider = ({ children }: { children: ReactNode }) => {
   const [parsingPlaylist, setParsingPlaylist] = useState(false);
   const [epgPrograms, setEpgPrograms] = useState<any[]>([]);
   const [parsingEpg, setParsingEpg] = useState(false);
-  const [epgUrl, setEpgUrl] = useState<string>;
+  const [epgUrl, setEpgUrl] = useState<string>("");
   const reload = useCallback(async () => {
     setLoadingSources(true);
     try {

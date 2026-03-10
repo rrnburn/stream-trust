@@ -244,8 +244,6 @@ const CloudAppProvider = ({ children }: { children: ReactNode }) => {
       url: source.url, username: source.username || null, password: source.password || null,
       epg_url: source.epg_url || null,
     });
-      url: source.url, username: source.username || null, password: source.password || null,
-    });
     await loadSources();
   };
 

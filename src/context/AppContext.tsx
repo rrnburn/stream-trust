@@ -145,8 +145,32 @@ const LocalAppProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const parseEpg = async (_source: IPTVSource) => {
-    // EPG parsing not supported in local/native mode yet
-    toast.info('EPG is only available in cloud mode');
+    const parseEpg = async (source: IPTVSource) => {
+  if (!source.epg_url) return;
+
+  setParsingEpg(true);
+
+  try {
+    console.log("📥 Downloading EPG:", source.epg_url);
+
+    const res = await fetch(source.epg_url);
+    const xml = await res.text();
+
+    console.log("EPG size:", xml.length);
+
+    const programmes = xml.match(/<programme/g) || [];
+
+    console.log("Programs found:", programmes.length);
+
+    toast.success(`Loaded ${programmes.length} programs`);
+
+  } catch (e) {
+    console.error("EPG parse error:", e);
+    toast.error("Failed to parse EPG");
+  }
+
+  setParsingEpg(false);
+};
   };
 
   return (

@@ -34,6 +34,9 @@ interface AppState {
   parsedMedia: MediaItem[];
   parsePlaylist: (source: IPTVSource) => Promise<void>;
   parsingPlaylist: boolean;
+  epgPrograms: any[];
+  parseEpg: (source: IPTVSource) => Promise<void>;
+  parsingEpg: boolean;
 }
 
 const AppContext = createContext<AppState | null>(null);

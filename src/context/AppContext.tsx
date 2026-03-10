@@ -144,11 +144,17 @@ const LocalAppProvider = ({ children }: { children: ReactNode }) => {
     setParsingPlaylist(false);
   };
 
+  const parseEpg = async (_source: IPTVSource) => {
+    // EPG parsing not supported in local/native mode yet
+    toast.info('EPG is only available in cloud mode');
+  };
+
   return (
     <AppContext.Provider value={{
       sources, favorites, watchHistory,
       addSource, removeSource, toggleFavorite, isFavorite, addToHistory,
       loadingSources, parsedMedia, parsePlaylist, parsingPlaylist,
+      epgPrograms, parseEpg, parsingEpg,
     }}>
       {children}
     </AppContext.Provider>

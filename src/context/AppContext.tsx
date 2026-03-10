@@ -65,7 +65,7 @@ const LocalAppProvider = ({ children }: { children: ReactNode }) => {
   const [parsingPlaylist, setParsingPlaylist] = useState(false);
   const [epgPrograms, setEpgPrograms] = useState<any[]>([]);
   const [parsingEpg, setParsingEpg] = useState(false);
-
+  const [epgUrl, setEpgUrl] = useState<string>;
   const reload = useCallback(async () => {
     setLoadingSources(true);
     try {
@@ -95,8 +95,7 @@ const LocalAppProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => { reload(); }, [reload]);
 
   const addSource = async (source: Omit<IPTVSource, 'id' | 'created_at'>) => {
-    await addSourceLocal(source);
-    await reload();
+    await addSourceLocal(source);  await reload();
   };
 
   const removeSource = async (id: string) => {
@@ -123,6 +122,7 @@ const LocalAppProvider = ({ children }: { children: ReactNode }) => {
     try {
       const result = await parsePlaylistLocally(source.url, source.type as 'm3u' | 'xtream', source.username, source.password);
       if (result.items.length > 0) {
+        setEpgUrl(result.epgUrl);
         await insertParsedMedia(source.id, result.items.map(i => ({
           ...i, sourceName: source.name,
         })));
@@ -145,14 +145,14 @@ const LocalAppProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const parseEpg = async (_source: IPTVSource) => {
-  if (!source.epg_url) return;
+  if (!epgUrl) return;
 
   setParsingEpg(true);
 
   try {
-    console.log("📥 Downloading EPG:", source.epg_url);
+    console.log("📥 Downloading EPG:", epgUrl);
 
-    const res = await fetch(source.epg_url);
+    const res = await fetch(epg_url);
     const xml = await res.text();
 
     console.log("EPG size:", xml.length);

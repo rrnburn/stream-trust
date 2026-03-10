@@ -115,15 +115,11 @@ const Sources = () => {
   variant="ghost"
   size="icon"
   onClick={() => parseEpg(source)}
-  disabled={!source.epg_url || parsingEpg}
+  disabled={!source.epg_url}
   className="text-muted-foreground hover:text-primary"
   title={source.epg_url ? "Download EPG" : "No EPG configured"}
 >
-  {parsingEpg ? (
-    <Loader2 className="w-4 h-4 animate-spin" />
-  ) : (
     <BookOpen className="w-4 h-4" />
-  )}
 </Button>
                     <Button variant="ghost" size="icon" onClick={() => removeSource(source.id)} className="text-muted-foreground hover:text-destructive">
                       <Trash2 className="w-4 h-4" />

@@ -168,3 +168,34 @@ export async function addToHistoryLocal(mediaId: string, progress: number) {
     [uuid(), mediaId, progress],
   );
 }
+
+// ── EPG Programs ───────────────────────────────────────────
+
+export async function getEpgPrograms() {
+  const d = await initLocalDb();
+  const now = new Date().toISOString();
+  const cutoff = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+  const res = await d.query(
+    'SELECT * FROM epg_programs WHERE end_time > ? AND start_time < ? ORDER BY start_time ASC',
+    [now, cutoff],
+  );
+  return res.values || [];
+}
+
+export async function insertEpgPrograms(
+  sourceId: string,
+  programs: Array<{ channel_id: string; title: string; description: string; start_time: string; end_time: string; category: string }>,
+) {
+  const d = await initLocalDb();
+  await d.run('DELETE FROM epg_programs WHERE source_id = ?', [sourceId]);
+
+  const BATCH_SIZE = 500;
+  for (let i = 0; i < programs.length; i += BATCH_SIZE) {
+    const batch = programs.slice(i, i + BATCH_SIZE);
+    const statements = batch.map(p => ({
+      statement: 'INSERT INTO epg_programs (id, source_id, channel_id, title, description, start_time, end_time, category) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      values: [uuid(), sourceId, p.channel_id, p.title, p.description, p.start_time, p.end_time, p.category],
+    }));
+    await d.executeSet(statements);
+  }
+}

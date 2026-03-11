@@ -73,7 +73,7 @@ const LocalAppProvider = ({ children }: { children: ReactNode }) => {
     setLoadingSources(true);
     try {
       await initLocalDb();
-      const [s, f, h, m] = await Promise.all([getSources(), getFavorites(), getWatchHistory(), getParsedMedia()]);
+      const [s, f, h, m, epg] = await Promise.all([getSources(), getFavorites(), getWatchHistory(), getParsedMedia(), getEpgPrograms()]);
       setSources(s.map((r: any) => ({
         id: r.id, name: r.name, type: r.type, url: r.url,
         username: r.username || undefined, password: r.password || undefined,

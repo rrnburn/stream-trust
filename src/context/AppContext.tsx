@@ -83,6 +83,7 @@ const LocalAppProvider = ({ children }: { children: ReactNode }) => {
         genre: r.genre || 'Uncategorized', description: r.description || '',
         sourceId: r.source_id, streamUrl: r.stream_url || '',
         group: r.group_name || undefined,
+        tvgId: r.tvg_id || undefined,
       })));
       setEpgPrograms(epg);
     } catch (e) {
@@ -306,6 +307,7 @@ const CloudAppProvider = ({ children }: { children: ReactNode }) => {
         genre: row.genre || 'Uncategorized', description: row.description || '',
         sourceId: row.source_id, streamUrl: row.stream_url || '',
         group: row.group_name || undefined,
+        tvgId: row.tvg_id || undefined,
       })));
     }
   }, [user]);

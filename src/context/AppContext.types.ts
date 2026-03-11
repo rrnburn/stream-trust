@@ -22,6 +22,7 @@ export interface MediaItem {
   sourceId: string;
   streamUrl?: string;
   group?: string;
+  tvgId?: string;
 }
 
 export interface EpgProgram {
@@ -55,4 +56,5 @@ export interface MediaRow {
   source_id: string;
   stream_url?: string | null;
   group_name?: string | null;
+  tvg_id?: string | null;
 }

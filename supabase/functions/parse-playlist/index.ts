@@ -12,6 +12,7 @@ interface M3UItem {
   logo: string;
   url: string;
   category: 'movie' | 'series' | 'vod' | 'channel';
+  tvgId?: string;
 }
 
 function parseM3U(content: string): M3UItem[] {
@@ -30,10 +31,12 @@ function parseM3U(content: string): M3UItem[] {
       const titleMatch = info.match(/,(.+)$/);
       const groupMatch = info.match(/group-title="([^"]*)"/);
       const logoMatch = info.match(/tvg-logo="([^"]*)"/);
+      const tvgIdMatch = info.match(/tvg-id="([^"]*)"/);
 
       const title = titleMatch?.[1]?.trim() || 'Unknown';
       const group = groupMatch?.[1] || 'Uncategorized';
       const logo = logoMatch?.[1] || '';
+      const tvgId = tvgIdMatch?.[1] || undefined;
 
       const groupLower = group.toLowerCase();
       let category: M3UItem['category'] = 'channel';
@@ -41,7 +44,7 @@ function parseM3U(content: string): M3UItem[] {
       else if (groupLower.includes('series') || groupLower.includes('show')) category = 'series';
       else if (groupLower.includes('vod')) category = 'vod';
 
-      items.push({ title, group, logo, url: streamUrl, category });
+      items.push({ title, group, logo, url: streamUrl, category, tvgId });
     } else {
       i++;
     }
@@ -184,6 +187,7 @@ Deno.serve(async (req: Request) => {
           description: `From ${sourceName || 'source'}`,
           stream_url: item.url,
           group_name: item.group || null,
+          tvg_id: item.tvgId || null,
         }));
 
         const { error: insErr } = await supabase.from('parsed_media').insert(batch);

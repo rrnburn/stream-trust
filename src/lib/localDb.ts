@@ -47,6 +47,7 @@ export async function initLocalDb() {
       description TEXT DEFAULT '',
       stream_url TEXT DEFAULT '',
       group_name TEXT,
+      tvg_id TEXT,
       FOREIGN KEY (source_id) REFERENCES iptv_sources(id) ON DELETE CASCADE
     );
 
@@ -75,6 +76,14 @@ export async function initLocalDb() {
       FOREIGN KEY (source_id) REFERENCES iptv_sources(id) ON DELETE CASCADE
     );
   `);
+
+  // Migrations for existing databases
+  try {
+    // Add tvg_id column if it doesn't exist (for existing databases)
+    await db.execute('ALTER TABLE parsed_media ADD COLUMN tvg_id TEXT');
+  } catch (e) {
+    // Column already exists or other error (sqlite throws on duplicate column)
+  }
 
   return db;
 }
@@ -117,7 +126,7 @@ export async function getParsedMedia() {
 
 export async function insertParsedMedia(
   sourceId: string,
-  items: Array<{ title: string; logo: string; category: string; group: string; url: string; sourceName?: string }>,
+  items: Array<{ title: string; logo: string; category: string; group: string; url: string; sourceName?: string; tvgId?: string }>,
 ) {
   const d = await initLocalDb();
   // Delete old records for this source
@@ -128,8 +137,8 @@ export async function insertParsedMedia(
   for (let i = 0; i < items.length; i += BATCH_SIZE) {
     const batch = items.slice(i, i + BATCH_SIZE);
     const statements = batch.map(item => ({
-      statement: 'INSERT INTO parsed_media (id, source_id, title, poster, category, genre, description, stream_url, group_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      values: [uuid(), sourceId, item.title, item.logo || '', item.category, item.group || 'Uncategorized', `From ${item.sourceName || 'source'}`, item.url, item.group || null],
+      statement: 'INSERT INTO parsed_media (id, source_id, title, poster, category, genre, description, stream_url, group_name, tvg_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      values: [uuid(), sourceId, item.title, item.logo || '', item.category, item.group || 'Uncategorized', `From ${item.sourceName || 'source'}`, item.url, item.group || null, item.tvgId || null],
     }));
     await d.executeSet(statements);
   }

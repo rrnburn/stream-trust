@@ -150,7 +150,7 @@ const TVGuide = ({ channels, programs, loading, onChannelSelect }: TVGuideProps)
         >
           <div className="relative" style={{ width: totalWidth }}>
             {channels.map((ch) => {
-              const chPrograms = programsByChannel[ch.id] || programsByChannel[ch.title] || [];
+              const chPrograms = programsByChannel[ch.tvgId || ''] || programsByChannel[ch.id] || programsByChannel[ch.title] || [];
               return (
                 <div
                   key={ch.id}

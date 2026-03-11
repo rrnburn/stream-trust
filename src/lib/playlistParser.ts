@@ -10,6 +10,7 @@ export interface ParsedItem {
   logo: string;
   url: string;
   category: 'movie' | 'series' | 'vod' | 'channel';
+  tvgId?: string;
 }
 
 export interface ParseResult {
@@ -52,10 +53,12 @@ for (let j = 0; j < Math.min(lines.length, 5); j++) {
       const titleMatch = info.match(/,(.+)$/);
       const groupMatch = info.match(/group-title="([^"]*)"/);
       const logoMatch = info.match(/tvg-logo="([^"]*)"/);
+      const tvgIdMatch = info.match(/tvg-id="([^"]*)"/);
 
       const title = titleMatch?.[1]?.trim() || 'Unknown';
       const group = groupMatch?.[1] || 'Uncategorized';
       const logo = logoMatch?.[1] || '';
+      const tvgId = tvgIdMatch?.[1] || undefined;
 
       const groupLower = group.toLowerCase();
       let category: ParsedItem['category'] = 'channel';
@@ -63,7 +66,7 @@ for (let j = 0; j < Math.min(lines.length, 5); j++) {
       else if (groupLower.includes('series') || groupLower.includes('show')) category = 'series';
       else if (groupLower.includes('vod')) category = 'vod';
 
-      items.push({ title, group, logo, url: streamUrl, category });
+      items.push({ title, group, logo, url: streamUrl, category, tvgId });
     } else {
       i++;
     }

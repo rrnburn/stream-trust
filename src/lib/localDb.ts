@@ -33,6 +33,7 @@ export async function initLocalDb() {
       url TEXT NOT NULL,
       username TEXT,
       password TEXT,
+      epg_url TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 

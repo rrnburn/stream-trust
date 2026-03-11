@@ -89,6 +89,7 @@ const LocalAppProvider = ({ children }: { children: ReactNode }) => {
         sourceId: r.source_id, streamUrl: r.stream_url || '',
         group: r.group_name || undefined,
       })));
+      setEpgPrograms(epg);
     } catch (e) {
       console.error('Local DB load error:', e);
     }

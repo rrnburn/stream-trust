@@ -62,6 +62,18 @@ export async function initLocalDb() {
       progress REAL DEFAULT 0,
       watched_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
+
+    CREATE TABLE IF NOT EXISTS epg_programs (
+      id TEXT PRIMARY KEY,
+      source_id TEXT NOT NULL,
+      channel_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      description TEXT DEFAULT '',
+      start_time TEXT NOT NULL,
+      end_time TEXT NOT NULL,
+      category TEXT DEFAULT '',
+      FOREIGN KEY (source_id) REFERENCES iptv_sources(id) ON DELETE CASCADE
+    );
   `);
 
   return db;

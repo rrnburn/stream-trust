@@ -1,10 +1,13 @@
+/* @jsxRuntime classic */
+/* @jsx React.createElement */
+/* eslint-disable react-refresh/only-export-components */
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { isNativePlatform } from '@/lib/platform';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './AuthContext';
 import { toast } from 'sonner';
 import { logger } from '@/lib/logger';
-import type { IPTVSource, MediaItem } from './AppContext.types';
+import type { IPTVSource, MediaItem, EpgProgram, SourceRow, MediaRow } from './AppContext.types';
 // Lazy imports for native-only modules (SQLite crashes on web at module load)
 const getLocalDb = () => import('@/lib/localDb');
 const getEpgParser = () => import('@/lib/epgParser');
@@ -25,7 +28,7 @@ interface AppState {
   parsedMedia: MediaItem[];
   parsePlaylist: (source: IPTVSource) => Promise<void>;
   parsingPlaylist: boolean;
-  epgPrograms: any[];
+  epgPrograms: EpgProgram[];
   parseEpg: (source: IPTVSource) => Promise<void>;
   parsingEpg: boolean;
 }
@@ -54,7 +57,7 @@ const LocalAppProvider = ({ children }: { children: ReactNode }) => {
   const [loadingSources, setLoadingSources] = useState(true);
   const [parsedMedia, setParsedMedia] = useState<MediaItem[]>([]);
   const [parsingPlaylist, setParsingPlaylist] = useState(false);
-  const [epgPrograms, setEpgPrograms] = useState<any[]>([]);
+  const [epgPrograms, setEpgPrograms] = useState<EpgProgram[]>([]);
   const [parsingEpg, setParsingEpg] = useState(false);
   const [autoEpgUrl, setAutoEpgUrl] = useState<string>('');
 
@@ -66,15 +69,15 @@ const LocalAppProvider = ({ children }: { children: ReactNode }) => {
       const [s, f, h, m, epg] = await Promise.all([
         db.getSources(), db.getFavorites(), db.getWatchHistory(), db.getParsedMedia(), db.getEpgPrograms(),
       ]);
-      setSources(s.map((r: any) => ({
-        id: r.id, name: r.name, type: r.type, url: r.url,
+      setSources(s.map((r: SourceRow) => ({
+        id: r.id, name: r.name, type: r.type as IPTVSource['type'], url: r.url,
         username: r.username || undefined, password: r.password || undefined,
         epg_url: r.epg_url || undefined,
         created_at: r.created_at,
       })));
       setFavorites(f);
       setWatchHistory(h);
-      setParsedMedia(m.map((r: any) => ({
+      setParsedMedia(m.map((r: MediaRow) => ({
         id: r.id, title: r.title, poster: r.poster || '',
         category: r.category as MediaItem['category'],
         genre: r.genre || 'Uncategorized', description: r.description || '',
@@ -139,10 +142,11 @@ const LocalAppProvider = ({ children }: { children: ReactNode }) => {
       } else {
         toast.info('No items found in playlist');
       }
-    } catch (e: any) {
-      logger.error('AppContext', `Failed to parse playlist: ${e.message || 'Unknown'}`, { source: source.name });
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'Unknown';
+      logger.error('AppContext', `Failed to parse playlist: ${message}`, { source: source.name });
       console.error('Failed to parse playlist:', e);
-      toast.error(`Failed to parse: ${e.message || 'Unknown error'}`);
+      toast.error(`Failed to parse: ${message}`);
     }
     setParsingPlaylist(false);
   };
@@ -159,15 +163,52 @@ const LocalAppProvider = ({ children }: { children: ReactNode }) => {
       const db = await getLocalDb();
       const { parseXmlTvLocal } = await getEpgParser();
       console.log('📥 Downloading EPG:', url);
-      const res = await fetch(url);
+      
+      // Download with timeout and size limit to prevent crashes
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+      
+      const res = await fetch(url, { 
+        signal: controller.signal,
+        headers: { 'Accept-Encoding': 'gzip' }
+      });
+      clearTimeout(timeoutId);
+      
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      
+      // Check file size before loading into memory
+      const contentLength = res.headers.get('content-length');
+      if (contentLength && parseInt(contentLength) > 100 * 1024 * 1024) {
+        throw new Error('EPG file too large (>100MB)');
+      }
+      
       const xml = await res.text();
       console.log('EPG size:', xml.length);
 
+      // Parse in chunks to avoid blocking UI
+      toast.info('Parsing EPG data...');
+      
+      // Use setTimeout to yield to UI thread
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
       const programs = parseXmlTvLocal(xml);
       console.log('Programs parsed:', programs.length);
 
       if (programs.length > 0) {
-        await db.insertEpgPrograms(source.id, programs);
+        toast.info(`Saving ${programs.length} programs...`);
+        
+        // Insert in batches to avoid overwhelming SQLite
+        const BATCH_SIZE = 1000;
+        for (let i = 0; i < programs.length; i += BATCH_SIZE) {
+          const batch = programs.slice(i, i + BATCH_SIZE);
+          await db.insertEpgPrograms(source.id, batch);
+          
+          // Yield to UI thread between batches
+          if (i + BATCH_SIZE < programs.length) {
+            await new Promise(resolve => setTimeout(resolve, 50));
+          }
+        }
+        
         const epg = await db.getEpgPrograms();
         setEpgPrograms(epg);
         const channels = new Set(programs.map(p => p.channel_id)).size;
@@ -175,11 +216,17 @@ const LocalAppProvider = ({ children }: { children: ReactNode }) => {
       } else {
         toast.info('No programs found in EPG data');
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error('EPG parse error:', e);
-      toast.error(`Failed to parse EPG: ${e.message || 'Unknown error'}`);
+      if (e instanceof Error && e.name === 'AbortError') {
+        toast.error('EPG download timeout - file too large or slow connection');
+      } else {
+        const message = e instanceof Error ? e.message : 'Unknown error';
+        toast.error(`Failed to parse EPG: ${message}`);
+      }
+    } finally {
+      setParsingEpg(false);
     }
-    setParsingEpg(false);
   };
 
   return (
@@ -206,7 +253,7 @@ const CloudAppProvider = ({ children }: { children: ReactNode }) => {
   const [loadingSources, setLoadingSources] = useState(false);
   const [parsedMedia, setParsedMedia] = useState<MediaItem[]>([]);
   const [parsingPlaylist, setParsingPlaylist] = useState(false);
-  const [epgPrograms, setEpgPrograms] = useState<any[]>([]);
+  const [epgPrograms, setEpgPrograms] = useState<EpgProgram[]>([]);
   const [parsingEpg, setParsingEpg] = useState(false);
 
   const loadSources = useCallback(async () => {
@@ -238,7 +285,7 @@ const CloudAppProvider = ({ children }: { children: ReactNode }) => {
 
   const loadParsedMedia = useCallback(async () => {
     if (!user) { setParsedMedia([]); return; }
-    let allData: any[] = [];
+    let allData: MediaRow[] = [];
     let from = 0;
     const pageSize = 1000;
     while (true) {
@@ -248,12 +295,12 @@ const CloudAppProvider = ({ children }: { children: ReactNode }) => {
         .order('title', { ascending: true })
         .range(from, from + pageSize - 1);
       if (!page || page.length === 0) break;
-      allData = allData.concat(page);
+      allData = allData.concat(page as MediaRow[]);
       if (page.length < pageSize) break;
       from += pageSize;
     }
     if (allData.length) {
-      setParsedMedia(allData.map((row: any) => ({
+      setParsedMedia(allData.map((row: MediaRow) => ({
         id: row.id, title: row.title, poster: row.poster || '',
         category: row.category as MediaItem['category'],
         genre: row.genre || 'Uncategorized', description: row.description || '',
@@ -327,9 +374,10 @@ const CloudAppProvider = ({ children }: { children: ReactNode }) => {
       } else {
         toast.info('No items found in playlist');
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error('Failed to parse playlist:', e);
-      toast.error(`Failed to parse: ${e.message || 'Unknown error'}`);
+      const message = e instanceof Error ? e.message : 'Unknown error';
+      toast.error(`Failed to parse: ${message}`);
     }
     setParsingPlaylist(false);
   };
@@ -360,9 +408,10 @@ const CloudAppProvider = ({ children }: { children: ReactNode }) => {
       if (data?.error) throw new Error(data.error);
       toast.success(`Loaded ${data?.total || 0} programs for ${data?.channels || 0} channels`);
       await loadEpgPrograms();
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error('Failed to parse EPG:', e);
-      toast.error(`Failed to load EPG: ${e.message || 'Unknown error'}`);
+      const message = e instanceof Error ? e.message : 'Unknown error';
+      toast.error(`Failed to load EPG: ${message}`);
     }
     setParsingEpg(false);
   };

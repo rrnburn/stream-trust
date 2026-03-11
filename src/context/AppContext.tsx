@@ -5,22 +5,10 @@ import { useAuth } from './AuthContext';
 import { toast } from 'sonner';
 import { logger } from '@/lib/logger';
 import type { IPTVSource, MediaItem } from './AppContext.types';
-import {
-  getSources,
-  addSourceLocal,
-  removeSourceLocal,
-  getParsedMedia,
-  insertParsedMedia,
-  getFavorites,
-  toggleFavoriteLocal,
-  getWatchHistory,
-  addToHistoryLocal,
-  getEpgPrograms,
-  insertEpgPrograms,
-  initLocalDb,
-} from '@/lib/localDb';
-import { parseXmlTvLocal } from '@/lib/epgParser';
-import { parsePlaylistLocally } from '@/lib/playlistParser';
+// Lazy imports for native-only modules (SQLite crashes on web at module load)
+const getLocalDb = () => import('@/lib/localDb');
+const getEpgParser = () => import('@/lib/epgParser');
+const getPlaylistParser = () => import('@/lib/playlistParser');
 
 export type { IPTVSource, MediaItem };
 
@@ -69,11 +57,15 @@ const LocalAppProvider = ({ children }: { children: ReactNode }) => {
   const [epgPrograms, setEpgPrograms] = useState<any[]>([]);
   const [parsingEpg, setParsingEpg] = useState(false);
   const [autoEpgUrl, setAutoEpgUrl] = useState<string>('');
+
   const reload = useCallback(async () => {
     setLoadingSources(true);
     try {
-      await initLocalDb();
-      const [s, f, h, m, epg] = await Promise.all([getSources(), getFavorites(), getWatchHistory(), getParsedMedia(), getEpgPrograms()]);
+      const db = await getLocalDb();
+      await db.initLocalDb();
+      const [s, f, h, m, epg] = await Promise.all([
+        db.getSources(), db.getFavorites(), db.getWatchHistory(), db.getParsedMedia(), db.getEpgPrograms(),
+      ]);
       setSources(s.map((r: any) => ({
         id: r.id, name: r.name, type: r.type, url: r.url,
         username: r.username || undefined, password: r.password || undefined,
@@ -99,35 +91,42 @@ const LocalAppProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => { reload(); }, [reload]);
 
   const addSource = async (source: Omit<IPTVSource, 'id' | 'created_at'>) => {
-    await addSourceLocal(source);  await reload();
+    const db = await getLocalDb();
+    await db.addSourceLocal(source);
+    await reload();
   };
 
   const removeSource = async (id: string) => {
-    await removeSourceLocal(id);
+    const db = await getLocalDb();
+    await db.removeSourceLocal(id);
     await reload();
   };
 
   const toggleFavorite = async (mediaId: string) => {
-    await toggleFavoriteLocal(mediaId);
-    const f = await getFavorites();
+    const db = await getLocalDb();
+    await db.toggleFavoriteLocal(mediaId);
+    const f = await db.getFavorites();
     setFavorites(f);
   };
 
   const isFavorite = (id: string) => favorites.includes(id);
 
   const addToHistory = async (mediaId: string, progress: number) => {
-    await addToHistoryLocal(mediaId, progress);
-    const h = await getWatchHistory();
+    const db = await getLocalDb();
+    await db.addToHistoryLocal(mediaId, progress);
+    const h = await db.getWatchHistory();
     setWatchHistory(h);
   };
 
   const parsePlaylist = async (source: IPTVSource) => {
     setParsingPlaylist(true);
     try {
+      const { parsePlaylistLocally } = await getPlaylistParser();
+      const db = await getLocalDb();
       const result = await parsePlaylistLocally(source.url, source.type as 'm3u' | 'xtream', source.username, source.password);
       if (result.items.length > 0) {
         setAutoEpgUrl(result.epgUrl);
-        await insertParsedMedia(source.id, result.items.map(i => ({
+        await db.insertParsedMedia(source.id, result.items.map(i => ({
           ...i, sourceName: source.name,
         })));
         const parts = [];
@@ -157,6 +156,8 @@ const LocalAppProvider = ({ children }: { children: ReactNode }) => {
 
     setParsingEpg(true);
     try {
+      const db = await getLocalDb();
+      const { parseXmlTvLocal } = await getEpgParser();
       console.log('📥 Downloading EPG:', url);
       const res = await fetch(url);
       const xml = await res.text();
@@ -166,8 +167,8 @@ const LocalAppProvider = ({ children }: { children: ReactNode }) => {
       console.log('Programs parsed:', programs.length);
 
       if (programs.length > 0) {
-        await insertEpgPrograms(source.id, programs);
-        const epg = await getEpgPrograms();
+        await db.insertEpgPrograms(source.id, programs);
+        const epg = await db.getEpgPrograms();
         setEpgPrograms(epg);
         const channels = new Set(programs.map(p => p.channel_id)).size;
         toast.success(`Loaded ${programs.length} programs for ${channels} channels`);

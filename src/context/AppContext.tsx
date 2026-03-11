@@ -5,22 +5,10 @@ import { useAuth } from './AuthContext';
 import { toast } from 'sonner';
 import { logger } from '@/lib/logger';
 import type { IPTVSource, MediaItem } from './AppContext.types';
-import {
-  getSources,
-  addSourceLocal,
-  removeSourceLocal,
-  getParsedMedia,
-  insertParsedMedia,
-  getFavorites,
-  toggleFavoriteLocal,
-  getWatchHistory,
-  addToHistoryLocal,
-  getEpgPrograms,
-  insertEpgPrograms,
-  initLocalDb,
-} from '@/lib/localDb';
-import { parseXmlTvLocal } from '@/lib/epgParser';
-import { parsePlaylistLocally } from '@/lib/playlistParser';
+// Lazy imports for native-only modules (SQLite crashes on web at module load)
+const getLocalDb = () => import('@/lib/localDb');
+const getEpgParser = () => import('@/lib/epgParser');
+const getPlaylistParser = () => import('@/lib/playlistParser');
 
 export type { IPTVSource, MediaItem };
 

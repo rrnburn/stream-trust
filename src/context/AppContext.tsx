@@ -126,7 +126,7 @@ const LocalAppProvider = ({ children }: { children: ReactNode }) => {
     try {
       const result = await parsePlaylistLocally(source.url, source.type as 'm3u' | 'xtream', source.username, source.password);
       if (result.items.length > 0) {
-        setEpgUrl(result.epgUrl);
+        setAutoEpgUrl(result.epgUrl);
         await insertParsedMedia(source.id, result.items.map(i => ({
           ...i, sourceName: source.name,
         })));

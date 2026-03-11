@@ -91,12 +91,12 @@ export async function getSources() {
   return res.values || [];
 }
 
-export async function addSourceLocal(source: { name: string; type: string; url: string; username?: string; password?: string }) {
+export async function addSourceLocal(source: { name: string; type: string; url: string; username?: string; password?: string; epg_url?: string }) {
   const d = await initLocalDb();
   const id = uuid();
   await d.run(
-    'INSERT INTO iptv_sources (id, name, type, url, username, password) VALUES (?, ?, ?, ?, ?, ?)',
-    [id, source.name, source.type, source.url, source.username || null, source.password || null],
+    'INSERT INTO iptv_sources (id, name, type, url, username, password, epg_url) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    [id, source.name, source.type, source.url, source.username || null, source.password || null, source.epg_url || null],
   );
   return id;
 }

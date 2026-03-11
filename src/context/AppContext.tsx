@@ -15,8 +15,11 @@ import {
   toggleFavoriteLocal,
   getWatchHistory,
   addToHistoryLocal,
+  getEpgPrograms,
+  insertEpgPrograms,
   initLocalDb,
 } from '@/lib/localDb';
+import { parseXmlTvLocal } from '@/lib/epgParser';
 import { parsePlaylistLocally } from '@/lib/playlistParser';
 
 export type { IPTVSource, MediaItem };

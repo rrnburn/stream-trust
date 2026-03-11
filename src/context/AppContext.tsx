@@ -15,8 +15,11 @@ import {
   toggleFavoriteLocal,
   getWatchHistory,
   addToHistoryLocal,
+  getEpgPrograms,
+  insertEpgPrograms,
   initLocalDb,
 } from '@/lib/localDb';
+import { parseXmlTvLocal } from '@/lib/epgParser';
 import { parsePlaylistLocally } from '@/lib/playlistParser';
 
 export type { IPTVSource, MediaItem };
@@ -65,12 +68,12 @@ const LocalAppProvider = ({ children }: { children: ReactNode }) => {
   const [parsingPlaylist, setParsingPlaylist] = useState(false);
   const [epgPrograms, setEpgPrograms] = useState<any[]>([]);
   const [parsingEpg, setParsingEpg] = useState(false);
-  const [epgUrl, setEpgUrl] = useState<string>("");
+  const [autoEpgUrl, setAutoEpgUrl] = useState<string>('');
   const reload = useCallback(async () => {
     setLoadingSources(true);
     try {
       await initLocalDb();
-      const [s, f, h, m] = await Promise.all([getSources(), getFavorites(), getWatchHistory(), getParsedMedia()]);
+      const [s, f, h, m, epg] = await Promise.all([getSources(), getFavorites(), getWatchHistory(), getParsedMedia(), getEpgPrograms()]);
       setSources(s.map((r: any) => ({
         id: r.id, name: r.name, type: r.type, url: r.url,
         username: r.username || undefined, password: r.password || undefined,
@@ -86,6 +89,7 @@ const LocalAppProvider = ({ children }: { children: ReactNode }) => {
         sourceId: r.source_id, streamUrl: r.stream_url || '',
         group: r.group_name || undefined,
       })));
+      setEpgPrograms(epg);
     } catch (e) {
       console.error('Local DB load error:', e);
     }
@@ -122,7 +126,7 @@ const LocalAppProvider = ({ children }: { children: ReactNode }) => {
     try {
       const result = await parsePlaylistLocally(source.url, source.type as 'm3u' | 'xtream', source.username, source.password);
       if (result.items.length > 0) {
-        setEpgUrl(result.epgUrl);
+        setAutoEpgUrl(result.epgUrl);
         await insertParsedMedia(source.id, result.items.map(i => ({
           ...i, sourceName: source.name,
         })));
@@ -144,32 +148,38 @@ const LocalAppProvider = ({ children }: { children: ReactNode }) => {
     setParsingPlaylist(false);
   };
 
-  const parseEpg = async (_source: IPTVSource) => {
-  if (!epgUrl) return;
+  const parseEpg = async (source: IPTVSource) => {
+    const url = source.epg_url || autoEpgUrl;
+    if (!url) {
+      toast.error('No EPG URL available for this source');
+      return;
+    }
 
-  setParsingEpg(true);
+    setParsingEpg(true);
+    try {
+      console.log('📥 Downloading EPG:', url);
+      const res = await fetch(url);
+      const xml = await res.text();
+      console.log('EPG size:', xml.length);
 
-  try {
-    console.log("📥 Downloading EPG:", epgUrl);
+      const programs = parseXmlTvLocal(xml);
+      console.log('Programs parsed:', programs.length);
 
-    const res = await fetch(epg_url);
-    const xml = await res.text();
-
-    console.log("EPG size:", xml.length);
-
-    const programmes = xml.match(/<programme/g) || [];
-
-    console.log("Programs found:", programmes.length);
-
-    toast.success(`Loaded ${programmes.length} programs`);
-
-  } catch (e) {
-    console.error("EPG parse error:", e);
-    toast.error("Failed to parse EPG");
-  }
-
-  setParsingEpg(false);
-};
+      if (programs.length > 0) {
+        await insertEpgPrograms(source.id, programs);
+        const epg = await getEpgPrograms();
+        setEpgPrograms(epg);
+        const channels = new Set(programs.map(p => p.channel_id)).size;
+        toast.success(`Loaded ${programs.length} programs for ${channels} channels`);
+      } else {
+        toast.info('No programs found in EPG data');
+      }
+    } catch (e: any) {
+      console.error('EPG parse error:', e);
+      toast.error(`Failed to parse EPG: ${e.message || 'Unknown error'}`);
+    }
+    setParsingEpg(false);
+  };
 
   return (
     <AppContext.Provider value={{

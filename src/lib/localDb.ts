@@ -33,6 +33,7 @@ export async function initLocalDb() {
       url TEXT NOT NULL,
       username TEXT,
       password TEXT,
+      epg_url TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
@@ -61,6 +62,18 @@ export async function initLocalDb() {
       progress REAL DEFAULT 0,
       watched_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
+
+    CREATE TABLE IF NOT EXISTS epg_programs (
+      id TEXT PRIMARY KEY,
+      source_id TEXT NOT NULL,
+      channel_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      description TEXT DEFAULT '',
+      start_time TEXT NOT NULL,
+      end_time TEXT NOT NULL,
+      category TEXT DEFAULT '',
+      FOREIGN KEY (source_id) REFERENCES iptv_sources(id) ON DELETE CASCADE
+    );
   `);
 
   return db;
@@ -78,12 +91,12 @@ export async function getSources() {
   return res.values || [];
 }
 
-export async function addSourceLocal(source: { name: string; type: string; url: string; username?: string; password?: string }) {
+export async function addSourceLocal(source: { name: string; type: string; url: string; username?: string; password?: string; epg_url?: string }) {
   const d = await initLocalDb();
   const id = uuid();
   await d.run(
-    'INSERT INTO iptv_sources (id, name, type, url, username, password) VALUES (?, ?, ?, ?, ?, ?)',
-    [id, source.name, source.type, source.url, source.username || null, source.password || null],
+    'INSERT INTO iptv_sources (id, name, type, url, username, password, epg_url) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    [id, source.name, source.type, source.url, source.username || null, source.password || null, source.epg_url || null],
   );
   return id;
 }
@@ -154,4 +167,35 @@ export async function addToHistoryLocal(mediaId: string, progress: number) {
     'INSERT INTO watch_history (id, media_id, progress) VALUES (?, ?, ?)',
     [uuid(), mediaId, progress],
   );
+}
+
+// ── EPG Programs ───────────────────────────────────────────
+
+export async function getEpgPrograms() {
+  const d = await initLocalDb();
+  const now = new Date().toISOString();
+  const cutoff = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+  const res = await d.query(
+    'SELECT * FROM epg_programs WHERE end_time > ? AND start_time < ? ORDER BY start_time ASC',
+    [now, cutoff],
+  );
+  return res.values || [];
+}
+
+export async function insertEpgPrograms(
+  sourceId: string,
+  programs: Array<{ channel_id: string; title: string; description: string; start_time: string; end_time: string; category: string }>,
+) {
+  const d = await initLocalDb();
+  await d.run('DELETE FROM epg_programs WHERE source_id = ?', [sourceId]);
+
+  const BATCH_SIZE = 500;
+  for (let i = 0; i < programs.length; i += BATCH_SIZE) {
+    const batch = programs.slice(i, i + BATCH_SIZE);
+    const statements = batch.map(p => ({
+      statement: 'INSERT INTO epg_programs (id, source_id, channel_id, title, description, start_time, end_time, category) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      values: [uuid(), sourceId, p.channel_id, p.title, p.description, p.start_time, p.end_time, p.category],
+    }));
+    await d.executeSet(statements);
+  }
 }

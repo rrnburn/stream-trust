@@ -558,17 +558,24 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
         {poster && (
           <img src={poster} alt={title || ''} className="absolute inset-0 w-full h-full object-cover opacity-60" />
         )}
-        <div className="relative z-10 flex flex-col items-center gap-5 px-4">
+        <div className="relative z-10 flex flex-col items-center gap-5 px-4 w-full">
           {title && <p className="text-white font-semibold text-sm text-center">{title}</p>}
           <p className="text-white/70 text-xs">Choose a player</p>
           <button
-            onClick={handleVlcPlay}
+            onClick={() => setNativeActive(false)}
             className="w-full max-w-xs flex items-center justify-center gap-3 px-6 py-4 rounded-xl bg-primary text-primary-foreground font-semibold text-base hover:bg-primary/90 transition-colors"
           >
-            <ExternalLink className="w-5 h-5" />
-            Open in VLC
+            <Play className="w-5 h-5 fill-current" />
+            Play In App
           </button>
           <div className="flex gap-3 w-full max-w-xs">
+            <button
+              onClick={handleVlcPlay}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-secondary text-secondary-foreground text-sm font-medium hover:bg-secondary/80 transition-colors"
+            >
+              <ExternalLink className="w-4 h-4" />
+              VLC
+            </button>
             <button
               onClick={() => playInMxPlayer(primarySrc, title)}
               className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-secondary text-secondary-foreground text-sm font-medium hover:bg-secondary/80 transition-colors"
@@ -580,16 +587,10 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
               onClick={() => playInSystemChooser(primarySrc)}
               className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-secondary text-secondary-foreground text-sm font-medium hover:bg-secondary/80 transition-colors"
             >
-              <Play className="w-4 h-4" />
+              <ExternalLink className="w-4 h-4" />
               Other
             </button>
           </div>
-          <button
-            onClick={() => setNativeActive(false)}
-            className="text-muted-foreground text-xs underline underline-offset-2 hover:text-foreground transition-colors mt-1"
-          >
-            Use web player instead
-          </button>
         </div>
       </div>
     );

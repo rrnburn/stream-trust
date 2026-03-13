@@ -3,7 +3,6 @@ import { useMedia, useAppContext } from '@/context/AppContext';
 import { useSearchParams } from 'react-router-dom';
 import AppLayout from '@/components/AppLayout';
 import VideoPlayer from '@/components/VideoPlayer';
-import TVGuide from '@/components/TVGuide';
 import { Radio, ChevronDown, ChevronRight, Search, Calendar } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
@@ -47,24 +46,26 @@ const LiveTV = () => {
   const toggleGroup = (g: string) => {
     setOpenGroups(prev => {
       const next = new Set(prev);
-      if (next.has(g)) {
-        next.delete(g);
-      } else {
-        next.add(g);
-      }
+      if (next.has(g)) next.delete(g);
+      else next.add(g);
       return next;
     });
   };
 
-  // Filter EPG programs for the active channel
+  // Match EPG programs for the active channel using multiple identifiers
   const channelPrograms = useMemo(() => {
-    if (!activeChannel) return [];
-    // Match by tvgId first (the standard EPG identifier), then fall back to ID or title
+    if (!activeChannel || epgPrograms.length === 0) return [];
+    
+    const matchIds = new Set<string>();
+    if (activeChannel.tvgId) matchIds.add(activeChannel.tvgId.toLowerCase());
+    if (activeChannel.id) matchIds.add(activeChannel.id.toLowerCase());
+    if (activeChannel.title) matchIds.add(activeChannel.title.toLowerCase());
+
     return epgPrograms
-      .filter(p => 
-        p.channel_id === (activeChannel.tvgId || activeChannel.id) || 
-        p.channel_id === activeChannel.title
-      )
+      .filter(p => {
+        const chId = (p.channel_id || '').toLowerCase();
+        return matchIds.has(chId);
+      })
       .sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
   }, [activeChannel, epgPrograms]);
 
@@ -107,124 +108,110 @@ const LiveTV = () => {
           )}
         </div>
 
-        {/* Channel List and EPG Grid */}
-        <div className="flex flex-col lg:flex-row flex-1 min-h-0">
-          {/* Channel list */}
-          <div className="w-full lg:w-80 xl:w-96 border-b lg:border-b-0 lg:border-r border-border bg-card/50 flex flex-col max-h-[50vh] lg:max-h-full">
-            <div className="p-3 border-b border-border space-y-2">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search channels..."
-                  value={search}
-                  onChange={e => setSearch(e.target.value)}
-                  className="pl-9 bg-background"
-                />
-              </div>
-              <p className="text-xs text-muted-foreground">{filtered.length} channels</p>
-            </div>
+        {/* EPG Program Guide - Between player and channel list */}
+        {activeChannel && (
+          <div className="border-b border-border bg-card/50 p-4">
+            {channelPrograms.length > 0 ? (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 mb-3">
+                  <Calendar className="w-4 h-4 text-muted-foreground" />
+                  <h3 className="text-sm font-semibold text-foreground">Program Guide</h3>
+                  <span className="text-xs text-muted-foreground">({channelPrograms.length} programs)</span>
+                </div>
+                <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin">
+                  {channelPrograms.map((program) => {
+                    const startTime = new Date(program.start_time);
+                    const endTime = new Date(program.end_time);
+                    const now = new Date();
+                    const isNow = now >= startTime && now < endTime;
+                    const isPast = now > endTime;
 
-            <div className="flex-1 overflow-y-auto">
-              {grouped.map(([group, items]) => (
-                <Collapsible key={group} open={openGroups.has(group)} onOpenChange={() => toggleGroup(group)}>
-                  <CollapsibleTrigger className="flex items-center gap-2 w-full px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors">
-                    {openGroups.has(group) ? <ChevronDown className="w-4 h-4 shrink-0" /> : <ChevronRight className="w-4 h-4 shrink-0" />}
-                    <span className="truncate">{group}</span>
-                    <span className="ml-auto text-xs text-muted-foreground/60">{items.length}</span>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent>
-                    {items.map(ch => (
-                      <button
-                        key={ch.id}
-                        onClick={() => setActiveChannel(ch)}
-                        className={`flex items-center gap-3 w-full px-4 py-2 text-sm transition-colors ${
-                          activeChannel?.id === ch.id
-                            ? 'bg-primary/15 text-primary'
-                            : 'text-foreground hover:bg-secondary/50'
+                    return (
+                      <div
+                        key={program.id || `${program.channel_id}-${program.start_time}`}
+                        className={`shrink-0 w-56 p-3 rounded-lg border transition-colors ${
+                          isNow
+                            ? 'bg-primary/10 border-primary/40'
+                            : isPast
+                            ? 'bg-muted/30 border-muted-foreground/20 opacity-60'
+                            : 'bg-card border-border'
                         }`}
                       >
-                        {ch.poster ? (
-                          <img src={ch.poster} alt="" className="w-8 h-8 rounded object-cover bg-muted shrink-0" />
-                        ) : (
-                          <div className="w-8 h-8 rounded bg-muted flex items-center justify-center shrink-0">
-                            <Radio className="w-4 h-4 text-muted-foreground" />
-                          </div>
+                        <h4 className={`font-semibold text-xs mb-1 truncate ${isNow ? 'text-primary' : 'text-foreground'}`}>
+                          {program.title}
+                          {isNow && (
+                            <span className="ml-1.5 text-[10px] font-normal bg-primary/20 text-primary px-1.5 py-0.5 rounded">
+                              Live
+                            </span>
+                          )}
+                        </h4>
+                        <p className="text-[10px] text-muted-foreground font-mono">
+                          {format(startTime, 'HH:mm')} - {format(endTime, 'HH:mm')}
+                        </p>
+                        {program.description && (
+                          <p className="text-[10px] text-muted-foreground mt-1 line-clamp-2">{program.description}</p>
                         )}
-                        <span className="truncate">{ch.title}</span>
-                      </button>
-                    ))}
-                  </CollapsibleContent>
-                </Collapsible>
-              ))}
-            </div>
-          </div>
-
-          {/* EPG for selected channel */}
-          <div className="flex-1 overflow-auto p-4 bg-background">
-            {activeChannel ? (
-              channelPrograms.length > 0 ? (
-                <div className="space-y-4">
-                  <div className="flex items-center gap-2 mb-4">
-                    <Calendar className="w-5 h-5 text-muted-foreground" />
-                    <h3 className="text-lg font-semibold text-foreground">Program Guide</h3>
-                  </div>
-                  <div className="space-y-2">
-                    {channelPrograms.map((program) => {
-                      const startTime = new Date(program.start_time);
-                      const endTime = new Date(program.end_time);
-                      const now = new Date();
-                      const isNow = now >= startTime && now < endTime;
-                      const isPast = now > endTime;
-
-                      return (
-                        <div
-                          key={program.id}
-                          className={`p-4 rounded-lg border transition-colors ${
-                            isNow
-                              ? 'bg-primary/10 border-primary/40'
-                              : isPast
-                              ? 'bg-muted/30 border-muted-foreground/20 opacity-60'
-                              : 'bg-card border-border hover:bg-secondary/50'
-                          }`}
-                        >
-                          <div className="flex items-start justify-between gap-4">
-                            <div className="flex-1 min-w-0">
-                              <h4 className={`font-semibold text-sm mb-1 ${isNow ? 'text-primary' : 'text-foreground'}`}>
-                                {program.title}
-                                {isNow && (
-                                  <span className="ml-2 text-xs font-normal bg-primary/20 text-primary px-2 py-0.5 rounded">
-                                    On Now
-                                  </span>
-                                )}
-                              </h4>
-                              <p className="text-xs text-muted-foreground mb-2 font-mono">
-                                {format(startTime, 'HH:mm')} - {format(endTime, 'HH:mm')}
-                                <span className="mx-2">•</span>
-                                {format(startTime, 'MMM d, yyyy')}
-                              </p>
-                              {program.description && (
-                                <p className="text-sm text-muted-foreground line-clamp-2">{program.description}</p>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+                      </div>
+                    );
+                  })}
                 </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center py-16 text-center">
-                  <Calendar className="w-12 h-12 text-muted-foreground/30 mb-3" />
-                  <p className="text-muted-foreground">No EPG data available for this channel</p>
-                  <p className="text-xs text-muted-foreground/60 mt-1">Program guide will appear here when available</p>
-                </div>
-              )
+              </div>
             ) : (
-              <div className="flex flex-col items-center justify-center py-16 text-center">
-                <Calendar className="w-12 h-12 text-muted-foreground/30 mb-3" />
-                <p className="text-muted-foreground">Select a channel to view its program guide</p>
+              <div className="flex items-center gap-2 py-2 text-center">
+                <Calendar className="w-4 h-4 text-muted-foreground/40" />
+                <p className="text-xs text-muted-foreground">No EPG data for this channel</p>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Channel List */}
+        <div className="flex-1 min-h-0 bg-card/50 flex flex-col">
+          <div className="p-3 border-b border-border space-y-2">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                placeholder="Search channels..."
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                className="pl-9 bg-background"
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">{filtered.length} channels</p>
+          </div>
+
+          <div className="flex-1 overflow-y-auto">
+            {grouped.map(([group, items]) => (
+              <Collapsible key={group} open={openGroups.has(group)} onOpenChange={() => toggleGroup(group)}>
+                <CollapsibleTrigger className="flex items-center gap-2 w-full px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors">
+                  {openGroups.has(group) ? <ChevronDown className="w-4 h-4 shrink-0" /> : <ChevronRight className="w-4 h-4 shrink-0" />}
+                  <span className="truncate">{group}</span>
+                  <span className="ml-auto text-xs text-muted-foreground/60">{items.length}</span>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  {items.map(ch => (
+                    <button
+                      key={ch.id}
+                      onClick={() => setActiveChannel(ch)}
+                      className={`flex items-center gap-3 w-full px-4 py-2 text-sm transition-colors ${
+                        activeChannel?.id === ch.id
+                          ? 'bg-primary/15 text-primary'
+                          : 'text-foreground hover:bg-secondary/50'
+                      }`}
+                    >
+                      {ch.poster ? (
+                        <img src={ch.poster} alt="" className="w-8 h-8 rounded object-cover bg-muted shrink-0" />
+                      ) : (
+                        <div className="w-8 h-8 rounded bg-muted flex items-center justify-center shrink-0">
+                          <Radio className="w-4 h-4 text-muted-foreground" />
+                        </div>
+                      )}
+                      <span className="truncate">{ch.title}</span>
+                    </button>
+                  ))}
+                </CollapsibleContent>
+              </Collapsible>
+            ))}
           </div>
         </div>
       </div>

@@ -20,6 +20,7 @@ interface AppState {
   favorites: string[];
   watchHistory: { id: string; progress: number; timestamp: string }[];
   addSource: (source: Omit<IPTVSource, 'id' | 'created_at'>) => Promise<void>;
+  updateSource: (id: string, fields: Partial<Omit<IPTVSource, 'id' | 'created_at'>>) => Promise<void>;
   removeSource: (id: string) => Promise<void>;
   toggleFavorite: (id: string) => Promise<void>;
   isFavorite: (id: string) => boolean;
@@ -97,6 +98,12 @@ const LocalAppProvider = ({ children }: { children: ReactNode }) => {
   const addSource = async (source: Omit<IPTVSource, 'id' | 'created_at'>) => {
     const db = await getLocalDb();
     await db.addSourceLocal(source);
+    await reload();
+  };
+
+  const updateSource = async (id: string, fields: Partial<Omit<IPTVSource, 'id' | 'created_at'>>) => {
+    const db = await getLocalDb();
+    await db.updateSourceLocal(id, fields);
     await reload();
   };
 
@@ -233,7 +240,7 @@ const LocalAppProvider = ({ children }: { children: ReactNode }) => {
   return (
     <AppContext.Provider value={{
       sources, favorites, watchHistory,
-      addSource, removeSource, toggleFavorite, isFavorite, addToHistory,
+      addSource, updateSource, removeSource, toggleFavorite, isFavorite, addToHistory,
       loadingSources, parsedMedia, parsePlaylist, parsingPlaylist,
       epgPrograms, parseEpg, parsingEpg,
     }}>
@@ -329,6 +336,18 @@ const CloudAppProvider = ({ children }: { children: ReactNode }) => {
     await loadSources();
   };
 
+  const updateSource = async (id: string, fields: Partial<Omit<IPTVSource, 'id' | 'created_at'>>) => {
+    if (!user) return;
+    await supabase.from('iptv_sources').update({
+      ...(fields.name !== undefined && { name: fields.name }),
+      ...(fields.url !== undefined && { url: fields.url }),
+      ...(fields.username !== undefined && { username: fields.username || null }),
+      ...(fields.password !== undefined && { password: fields.password || null }),
+      ...(fields.epg_url !== undefined && { epg_url: fields.epg_url || null }),
+    }).eq('id', id);
+    await loadSources();
+  };
+
   const removeSource = async (id: string) => {
     await supabase.from('iptv_sources').delete().eq('id', id);
     await loadSources();
@@ -421,7 +440,7 @@ const CloudAppProvider = ({ children }: { children: ReactNode }) => {
   return (
     <AppContext.Provider value={{
       sources, favorites, watchHistory,
-      addSource, removeSource, toggleFavorite, isFavorite, addToHistory,
+      addSource, updateSource, removeSource, toggleFavorite, isFavorite, addToHistory,
       loadingSources, parsedMedia, parsePlaylist, parsingPlaylist,
       epgPrograms, parseEpg, parsingEpg,
     }}>

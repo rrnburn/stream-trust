@@ -683,6 +683,27 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
       )}
 
       {/* Controls overlay */}
+      {/* Center play button — always absolutely centered, independent of controls */}
+      <AnimatePresence>
+        {!playing && !buffering && !preBuffering && !error && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.8 }}
+            transition={{ duration: 0.2 }}
+            className="absolute inset-0 z-20 flex items-center justify-center pointer-events-none"
+          >
+            <button
+              onClick={togglePlay}
+              className="w-16 h-16 rounded-full bg-primary/90 flex items-center justify-center hover:bg-primary transition-colors pointer-events-auto active:scale-95"
+            >
+              <Play className="w-7 h-7 text-primary-foreground fill-primary-foreground ml-1" />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Controls overlay — title bar + bottom bar */}
       <AnimatePresence>
         {showControls && !error && (
           <motion.div
@@ -690,26 +711,15 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="absolute inset-0 flex flex-col justify-between"
+            className="absolute inset-0 z-10 flex flex-col justify-between pointer-events-none"
           >
             {title && (
-              <div className="bg-gradient-to-b from-black/70 to-transparent p-4">
+              <div className="bg-gradient-to-b from-black/70 to-transparent p-3 pointer-events-auto">
                 <p className="text-white font-semibold text-sm truncate">{title}</p>
               </div>
             )}
 
-            {!playing && !buffering && !preBuffering && (
-              <div className="flex-1 flex items-center justify-center">
-                <button
-                  onClick={togglePlay}
-                  className="w-16 h-16 rounded-full bg-primary/90 flex items-center justify-center hover:bg-primary transition-colors"
-                >
-                  <Play className="w-7 h-7 text-primary-foreground fill-primary-foreground ml-1" />
-                </button>
-              </div>
-            )}
-
-            <div className="bg-gradient-to-t from-black/80 to-transparent p-4 pb-[env(safe-area-inset-bottom,16px)] pt-10 space-y-2">
+            <div className="bg-gradient-to-t from-black/80 to-transparent p-3 pb-[env(safe-area-inset-bottom,8px)] pt-8 space-y-1.5 pointer-events-auto">
               {duration > 0 && isFinite(duration) && (
                 <div className="w-full h-1.5 bg-white/20 rounded-full cursor-pointer group/bar" onClick={seekTo}>
                   <div
@@ -721,8 +731,8 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
                 </div>
               )}
 
-              <div className="flex items-center justify-between text-white mb-2">
-                <div className="flex items-center gap-3">
+              <div className="flex items-center justify-between text-white">
+                <div className="flex items-center gap-2">
                   <button onClick={togglePlay} className="hover:text-primary transition-colors p-1">
                     {playing ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 fill-current" />}
                   </button>
@@ -735,7 +745,7 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
                   <button onClick={toggleMute} className="hover:text-primary transition-colors p-1">
                     {muted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
                   </button>
-                  <span className="text-xs text-white/70 ml-1">
+                  <span className="text-xs text-white/70">
                     {formatTime(currentTime)} / {formatTime(duration)}
                   </span>
                 </div>

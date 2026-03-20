@@ -101,6 +101,12 @@ const LocalAppProvider = ({ children }: { children: ReactNode }) => {
     await reload();
   };
 
+  const updateSource = async (id: string, fields: Partial<Omit<IPTVSource, 'id' | 'created_at'>>) => {
+    const db = await getLocalDb();
+    await db.updateSourceLocal(id, fields);
+    await reload();
+  };
+
   const removeSource = async (id: string) => {
     const db = await getLocalDb();
     await db.removeSourceLocal(id);

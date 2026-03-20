@@ -554,40 +554,47 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
     };
 
     return (
-      <div className="relative w-full aspect-video bg-black rounded-xl overflow-hidden flex items-center justify-center">
-        {poster && (
-          <img src={poster} alt={title || ''} className="absolute inset-0 w-full h-full object-cover opacity-60" />
-        )}
-        <div className="relative z-10 flex flex-col items-center gap-5 px-4 w-full">
-          {title && <p className="text-white font-semibold text-sm text-center">{title}</p>}
-          <p className="text-white/70 text-xs">Choose a player</p>
+      <div>
+        {/* Video area placeholder */}
+        <div className="relative w-full aspect-video bg-black rounded-t-xl overflow-hidden flex items-center justify-center">
+          {poster && (
+            <img src={poster} alt={title || ''} className="absolute inset-0 w-full h-full object-cover opacity-60" />
+          )}
+          <div className="relative z-10 flex flex-col items-center gap-2 px-4">
+            <Play className="w-12 h-12 text-white/40" />
+            {title && <p className="text-white font-semibold text-sm text-center">{title}</p>}
+          </div>
+        </div>
+        {/* Player choice buttons below */}
+        <div className="flex flex-col items-center gap-3 p-4 bg-card rounded-b-xl border-t border-border">
+          <p className="text-xs text-muted-foreground">Choose a player</p>
           <button
             onClick={() => setNativeActive(false)}
-            className="w-full max-w-xs flex items-center justify-center gap-3 px-6 py-4 rounded-xl bg-primary text-primary-foreground font-semibold text-base hover:bg-primary/90 transition-colors"
+            className="w-full max-w-xs flex items-center justify-center gap-3 px-6 py-3 rounded-xl bg-primary text-primary-foreground font-semibold text-sm hover:bg-primary/90 transition-colors active:scale-[0.97]"
           >
             <Play className="w-5 h-5 fill-current" />
             Play In App
           </button>
-          <div className="flex gap-3 w-full max-w-xs">
+          <div className="flex gap-2 w-full max-w-xs">
             <button
               onClick={handleVlcPlay}
-              className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-secondary text-secondary-foreground text-sm font-medium hover:bg-secondary/80 transition-colors"
+              className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg bg-secondary text-secondary-foreground text-xs font-medium hover:bg-secondary/80 transition-colors active:scale-[0.97]"
             >
-              <ExternalLink className="w-4 h-4" />
+              <ExternalLink className="w-3.5 h-3.5" />
               VLC
             </button>
             <button
               onClick={() => playInMxPlayer(primarySrc, title)}
-              className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-secondary text-secondary-foreground text-sm font-medium hover:bg-secondary/80 transition-colors"
+              className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg bg-secondary text-secondary-foreground text-xs font-medium hover:bg-secondary/80 transition-colors active:scale-[0.97]"
             >
-              <ExternalLink className="w-4 h-4" />
+              <ExternalLink className="w-3.5 h-3.5" />
               MX Player
             </button>
             <button
               onClick={() => playInSystemChooser(primarySrc)}
-              className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-secondary text-secondary-foreground text-sm font-medium hover:bg-secondary/80 transition-colors"
+              className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg bg-secondary text-secondary-foreground text-xs font-medium hover:bg-secondary/80 transition-colors active:scale-[0.97]"
             >
-              <ExternalLink className="w-4 h-4" />
+              <ExternalLink className="w-3.5 h-3.5" />
               Other
             </button>
           </div>

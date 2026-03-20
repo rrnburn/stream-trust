@@ -440,7 +440,7 @@ const CloudAppProvider = ({ children }: { children: ReactNode }) => {
   return (
     <AppContext.Provider value={{
       sources, favorites, watchHistory,
-      addSource, removeSource, toggleFavorite, isFavorite, addToHistory,
+      addSource, updateSource, removeSource, toggleFavorite, isFavorite, addToHistory,
       loadingSources, parsedMedia, parsePlaylist, parsingPlaylist,
       epgPrograms, parseEpg, parsingEpg,
     }}>

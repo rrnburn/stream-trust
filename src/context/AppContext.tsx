@@ -336,6 +336,18 @@ const CloudAppProvider = ({ children }: { children: ReactNode }) => {
     await loadSources();
   };
 
+  const updateSource = async (id: string, fields: Partial<Omit<IPTVSource, 'id' | 'created_at'>>) => {
+    if (!user) return;
+    await supabase.from('iptv_sources').update({
+      ...(fields.name !== undefined && { name: fields.name }),
+      ...(fields.url !== undefined && { url: fields.url }),
+      ...(fields.username !== undefined && { username: fields.username || null }),
+      ...(fields.password !== undefined && { password: fields.password || null }),
+      ...(fields.epg_url !== undefined && { epg_url: fields.epg_url || null }),
+    }).eq('id', id);
+    await loadSources();
+  };
+
   const removeSource = async (id: string) => {
     await supabase.from('iptv_sources').delete().eq('id', id);
     await loadSources();

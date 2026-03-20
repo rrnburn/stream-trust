@@ -20,6 +20,7 @@ interface AppState {
   favorites: string[];
   watchHistory: { id: string; progress: number; timestamp: string }[];
   addSource: (source: Omit<IPTVSource, 'id' | 'created_at'>) => Promise<void>;
+  updateSource: (id: string, fields: Partial<Omit<IPTVSource, 'id' | 'created_at'>>) => Promise<void>;
   removeSource: (id: string) => Promise<void>;
   toggleFavorite: (id: string) => Promise<void>;
   isFavorite: (id: string) => boolean;

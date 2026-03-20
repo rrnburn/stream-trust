@@ -110,6 +110,20 @@ export async function addSourceLocal(source: { name: string; type: string; url: 
   return id;
 }
 
+export async function updateSourceLocal(id: string, fields: { name?: string; url?: string; username?: string; password?: string; epg_url?: string }) {
+  const d = await initLocalDb();
+  const sets: string[] = [];
+  const vals: unknown[] = [];
+  if (fields.name !== undefined) { sets.push('name = ?'); vals.push(fields.name); }
+  if (fields.url !== undefined) { sets.push('url = ?'); vals.push(fields.url); }
+  if (fields.username !== undefined) { sets.push('username = ?'); vals.push(fields.username || null); }
+  if (fields.password !== undefined) { sets.push('password = ?'); vals.push(fields.password || null); }
+  if (fields.epg_url !== undefined) { sets.push('epg_url = ?'); vals.push(fields.epg_url || null); }
+  if (sets.length === 0) return;
+  vals.push(id);
+  await d.run(`UPDATE iptv_sources SET ${sets.join(', ')} WHERE id = ?`, vals);
+}
+
 export async function removeSourceLocal(id: string) {
   const d = await initLocalDb();
   await d.run('DELETE FROM parsed_media WHERE source_id = ?', [id]);

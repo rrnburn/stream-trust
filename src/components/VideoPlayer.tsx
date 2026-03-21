@@ -1,12 +1,14 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import Hls from 'hls.js';
 import mpegts from 'mpegts.js';
-import { Play, Pause, Maximize, Minimize, Volume2, VolumeX, SkipBack, SkipForward, Loader2, ExternalLink } from 'lucide-react';
+import { Play, Pause, Maximize, Minimize, Volume2, VolumeX, SkipBack, SkipForward, Loader2, ExternalLink, Cast, Share2, Copy, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '@/integrations/supabase/client';
 import { isNativePlatform } from '@/lib/platform';
 import { logger } from '@/lib/logger';
 import { playInVlc, playInMxPlayer, playInSystemChooser, stopNative } from '@/lib/nativePlayer';
+import { loadCastSDK, startCasting, isCasting, stopCasting } from '@/lib/castSender';
+import { toast } from 'sonner';
 
 interface VideoPlayerProps {
   src: string;
@@ -65,6 +67,8 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
   const [retrying, setRetrying] = useState(false);
   const [autoplayMuted, setAutoplayMuted] = useState(false);
   const [hlsFallback, setHlsFallback] = useState(false);
+  const [casting, setCasting] = useState(false);
+  const [copied, setCopied] = useState(false);
   
   const MAX_RETRIES = 3;
   const isNative = isNativePlatform();
@@ -526,6 +530,38 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
     return `${m}:${sec.toString().padStart(2, '0')}`;
   };
 
+  // Load Cast SDK on mount
+  useEffect(() => { loadCastSDK(); }, []);
+
+  const handleCast = async () => {
+    if (casting) {
+      stopCasting();
+      setCasting(false);
+      toast.success('Cast stopped');
+      return;
+    }
+    const proxiedUrl = getProxiedUrl(normalizeStreamUrl(src));
+    const ok = await startCasting(proxiedUrl, title, poster);
+    if (ok) {
+      setCasting(true);
+      toast.success('Now casting');
+    } else {
+      toast.error('Could not start casting. Make sure a cast device is available.');
+    }
+  };
+
+  const handleCopyStreamUrl = async () => {
+    const proxiedUrl = getProxiedUrl(normalizeStreamUrl(src));
+    try {
+      await navigator.clipboard.writeText(proxiedUrl);
+      setCopied(true);
+      toast.success('Stream URL copied to clipboard');
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast.error('Failed to copy URL');
+    }
+  };
+
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === ' ' || e.key === 'k') { e.preventDefault(); togglePlay(); }
@@ -596,6 +632,22 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
             >
               <ExternalLink className="w-3.5 h-3.5" />
               Other
+            </button>
+          </div>
+          <div className="flex gap-2 w-full max-w-xs">
+            <button
+              onClick={handleCopyStreamUrl}
+              className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg bg-secondary text-secondary-foreground text-xs font-medium hover:bg-secondary/80 transition-colors active:scale-[0.97]"
+            >
+              {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+              {copied ? 'Copied' : 'Copy URL'}
+            </button>
+            <button
+              onClick={handleCast}
+              className={`flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg text-xs font-medium transition-colors active:scale-[0.97] ${casting ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'}`}
+            >
+              <Cast className="w-3.5 h-3.5" />
+              {casting ? 'Stop Cast' : 'Cast'}
             </button>
           </div>
         </div>
@@ -756,9 +808,17 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
                     {formatTime(currentTime)} / {formatTime(duration)}
                   </span>
                 </div>
-                <button onClick={toggleFullscreen} className="hover:text-primary transition-colors p-1">
-                  {fullscreen ? <Minimize className="w-5 h-5" /> : <Maximize className="w-5 h-5" />}
-                </button>
+                <div className="flex items-center gap-1">
+                  <button onClick={handleCopyStreamUrl} className="hover:text-primary transition-colors p-1" title="Copy stream URL">
+                    {copied ? <Check className="w-4 h-4 text-primary" /> : <Copy className="w-4 h-4" />}
+                  </button>
+                  <button onClick={handleCast} className={`hover:text-primary transition-colors p-1 ${casting ? 'text-primary' : ''}`} title={casting ? 'Stop casting' : 'Cast to device'}>
+                    <Cast className="w-5 h-5" />
+                  </button>
+                  <button onClick={toggleFullscreen} className="hover:text-primary transition-colors p-1">
+                    {fullscreen ? <Minimize className="w-5 h-5" /> : <Maximize className="w-5 h-5" />}
+                  </button>
+                </div>
               </div>
             </div>
           </motion.div>

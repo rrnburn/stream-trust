@@ -634,6 +634,22 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
               Other
             </button>
           </div>
+          <div className="flex gap-2 w-full max-w-xs">
+            <button
+              onClick={handleCopyStreamUrl}
+              className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg bg-secondary text-secondary-foreground text-xs font-medium hover:bg-secondary/80 transition-colors active:scale-[0.97]"
+            >
+              {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+              {copied ? 'Copied' : 'Copy URL'}
+            </button>
+            <button
+              onClick={handleCast}
+              className={`flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg text-xs font-medium transition-colors active:scale-[0.97] ${casting ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'}`}
+            >
+              <Cast className="w-3.5 h-3.5" />
+              {casting ? 'Stop Cast' : 'Cast'}
+            </button>
+          </div>
         </div>
       </div>
     );

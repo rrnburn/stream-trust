@@ -530,6 +530,38 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
     return `${m}:${sec.toString().padStart(2, '0')}`;
   };
 
+  // Load Cast SDK on mount
+  useEffect(() => { loadCastSDK(); }, []);
+
+  const handleCast = async () => {
+    if (casting) {
+      stopCasting();
+      setCasting(false);
+      toast.success('Cast stopped');
+      return;
+    }
+    const proxiedUrl = getProxiedUrl(normalizeStreamUrl(src));
+    const ok = await startCasting(proxiedUrl, title, poster);
+    if (ok) {
+      setCasting(true);
+      toast.success('Now casting');
+    } else {
+      toast.error('Could not start casting. Make sure a cast device is available.');
+    }
+  };
+
+  const handleCopyStreamUrl = async () => {
+    const proxiedUrl = getProxiedUrl(normalizeStreamUrl(src));
+    try {
+      await navigator.clipboard.writeText(proxiedUrl);
+      setCopied(true);
+      toast.success('Stream URL copied to clipboard');
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast.error('Failed to copy URL');
+    }
+  };
+
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === ' ' || e.key === 'k') { e.preventDefault(); togglePlay(); }

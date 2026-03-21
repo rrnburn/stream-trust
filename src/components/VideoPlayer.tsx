@@ -810,7 +810,7 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
                 </div>
                 <div className="flex items-center gap-1">
                   <button onClick={handleCopyStreamUrl} className="hover:text-primary transition-colors p-1" title="Copy stream URL">
-                    {copied ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
+                    {copied ? <Check className="w-4 h-4 text-primary" /> : <Copy className="w-4 h-4" />}
                   </button>
                   <button onClick={handleCast} className={`hover:text-primary transition-colors p-1 ${casting ? 'text-primary' : ''}`} title={casting ? 'Stop casting' : 'Cast to device'}>
                     <Cast className="w-5 h-5" />

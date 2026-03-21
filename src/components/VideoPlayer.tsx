@@ -792,9 +792,17 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
                     {formatTime(currentTime)} / {formatTime(duration)}
                   </span>
                 </div>
-                <button onClick={toggleFullscreen} className="hover:text-primary transition-colors p-1">
-                  {fullscreen ? <Minimize className="w-5 h-5" /> : <Maximize className="w-5 h-5" />}
-                </button>
+                <div className="flex items-center gap-1">
+                  <button onClick={handleCopyStreamUrl} className="hover:text-primary transition-colors p-1" title="Copy stream URL">
+                    {copied ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
+                  </button>
+                  <button onClick={handleCast} className={`hover:text-primary transition-colors p-1 ${casting ? 'text-primary' : ''}`} title={casting ? 'Stop casting' : 'Cast to device'}>
+                    <Cast className="w-5 h-5" />
+                  </button>
+                  <button onClick={toggleFullscreen} className="hover:text-primary transition-colors p-1">
+                    {fullscreen ? <Minimize className="w-5 h-5" /> : <Maximize className="w-5 h-5" />}
+                  </button>
+                </div>
               </div>
             </div>
           </motion.div>

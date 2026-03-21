@@ -7,6 +7,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { isNativePlatform } from '@/lib/platform';
 import { logger } from '@/lib/logger';
 import { playInVlc, playInMxPlayer, playInSystemChooser, stopNative } from '@/lib/nativePlayer';
+import { loadCastSDK, startCasting, isCasting, stopCasting } from '@/lib/castSender';
+import { toast } from 'sonner';
 
 interface VideoPlayerProps {
   src: string;

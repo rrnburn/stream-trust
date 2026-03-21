@@ -7,30 +7,28 @@
  */
 import { logger } from '@/lib/logger';
 
-let castInitialized = false;
-let castSession: chrome.cast.Session | null = null;
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
-// Augment window for the Cast SDK callback
-declare global {
-  interface Window {
-    __onGCastApiAvailable?: (isAvailable: boolean) => void;
-  }
-}
+let castInitialized = false;
+
+// Access Cast SDK globals that are injected by the script tag
+const getChrome = (): any => (window as any).chrome;
+const getCast = (): any => (window as any).cast;
 
 /** Load the Google Cast SDK script (idempotent). */
 export function loadCastSDK(): Promise<void> {
   return new Promise((resolve) => {
     if (castInitialized) { resolve(); return; }
-    if (document.getElementById('cast-sdk')) {
-      // Script tag exists but SDK might still be loading
-      if (typeof chrome !== 'undefined' && chrome.cast) {
-        castInitialized = true;
-        resolve();
-        return;
-      }
+
+    const chr = getChrome();
+    if (chr?.cast) {
+      initCast();
+      castInitialized = true;
+      resolve();
+      return;
     }
 
-    window.__onGCastApiAvailable = (isAvailable: boolean) => {
+    (window as any).__onGCastApiAvailable = (isAvailable: boolean) => {
       if (isAvailable) {
         initCast();
         castInitialized = true;
@@ -50,10 +48,13 @@ export function loadCastSDK(): Promise<void> {
 
 function initCast() {
   try {
-    const context = cast.framework.CastContext.getInstance();
+    const c = getCast();
+    const chr = getChrome();
+    if (!c?.framework || !chr?.cast) return;
+    const context = c.framework.CastContext.getInstance();
     context.setOptions({
-      receiverApplicationId: chrome.cast.media.DEFAULT_MEDIA_RECEIVER_APP_ID,
-      autoJoinPolicy: chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED,
+      receiverApplicationId: chr.cast.media.DEFAULT_MEDIA_RECEIVER_APP_ID,
+      autoJoinPolicy: chr.cast.AutoJoinPolicy.ORIGIN_SCOPED,
     });
     logger.info('Cast', 'Cast SDK initialized');
   } catch (e: any) {
@@ -64,25 +65,23 @@ function initCast() {
 /** Returns true when the Cast SDK is loaded and a cast-capable device is found. */
 export function isCastAvailable(): boolean {
   try {
-    if (typeof cast === 'undefined' || !cast.framework) return false;
-    const ctx = cast.framework.CastContext.getInstance();
+    const c = getCast();
+    if (!c?.framework) return false;
+    const ctx = c.framework.CastContext.getInstance();
     const state = ctx.getCastState();
-    return state !== cast.framework.CastState.NO_DEVICES_AVAILABLE;
+    return state !== c.framework.CastState.NO_DEVICES_AVAILABLE;
   } catch {
     return false;
   }
 }
 
-/** Returns the current cast session (if connected). */
-export function getCastSession(): chrome.cast.Session | null {
-  return castSession;
-}
-
 /** Returns true if currently casting. */
 export function isCasting(): boolean {
   try {
-    const ctx = cast.framework.CastContext.getInstance();
-    return ctx.getCastState() === cast.framework.CastState.CONNECTED;
+    const c = getCast();
+    if (!c?.framework) return false;
+    const ctx = c.framework.CastContext.getInstance();
+    return ctx.getCastState() === c.framework.CastState.CONNECTED;
   } catch {
     return false;
   }
@@ -96,7 +95,14 @@ export async function startCasting(
 ): Promise<boolean> {
   try {
     await loadCastSDK();
-    const ctx = cast.framework.CastContext.getInstance();
+    const c = getCast();
+    const chr = getChrome();
+    if (!c?.framework || !chr?.cast) {
+      logger.warn('Cast', 'Cast SDK not available');
+      return false;
+    }
+
+    const ctx = c.framework.CastContext.getInstance();
     await ctx.requestSession();
 
     const session = ctx.getCurrentSession();
@@ -105,14 +111,14 @@ export async function startCasting(
       return false;
     }
 
-    const mediaInfo = new chrome.cast.media.MediaInfo(streamUrl, 'video/*');
-    mediaInfo.metadata = new chrome.cast.media.GenericMediaMetadata();
+    const mediaInfo = new chr.cast.media.MediaInfo(streamUrl, 'video/*');
+    mediaInfo.metadata = new chr.cast.media.GenericMediaMetadata();
     mediaInfo.metadata.title = title || 'Video';
     if (poster) {
-      mediaInfo.metadata.images = [new chrome.cast.Image(poster)];
+      mediaInfo.metadata.images = [new chr.cast.Image(poster)];
     }
 
-    const request = new chrome.cast.media.LoadRequest(mediaInfo);
+    const request = new chr.cast.media.LoadRequest(mediaInfo);
     request.autoplay = true;
 
     await session.loadMedia(request);
@@ -127,7 +133,9 @@ export async function startCasting(
 /** Stop the current cast session. */
 export function stopCasting(): void {
   try {
-    const ctx = cast.framework.CastContext.getInstance();
+    const c = getCast();
+    if (!c?.framework) return;
+    const ctx = c.framework.CastContext.getInstance();
     ctx.endCurrentSession(true);
     logger.info('Cast', 'Cast session ended');
   } catch (e: any) {

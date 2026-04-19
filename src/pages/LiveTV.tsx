@@ -217,7 +217,67 @@ const LiveTV = () => {
                 className="pl-9 bg-background"
               />
             </div>
-            <p className="text-xs text-muted-foreground">{filtered.length} channels</p>
+            <div className="flex items-center gap-2 flex-wrap">
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-8 gap-1.5">
+                    <Filter className="w-3.5 h-3.5" />
+                    <span className="text-xs">
+                      {selectedGroups.size === 0
+                        ? 'All groups'
+                        : `${selectedGroups.size} group${selectedGroups.size === 1 ? '' : 's'}`}
+                    </span>
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent align="start" className="w-72 p-0">
+                  <div className="p-2 border-b border-border space-y-2">
+                    <div className="relative">
+                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                      <Input
+                        placeholder="Filter groups..."
+                        value={filterSearch}
+                        onChange={e => setFilterSearch(e.target.value)}
+                        className="pl-8 h-8 text-xs"
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <Button variant="ghost" size="sm" className="h-7 text-xs flex-1" onClick={selectAllGroups}>
+                        Select all
+                      </Button>
+                      <Button variant="ghost" size="sm" className="h-7 text-xs flex-1" onClick={clearSelectedGroups}>
+                        Clear
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="max-h-64 overflow-y-auto p-1">
+                    {visibleFilterGroups.length === 0 ? (
+                      <p className="text-xs text-muted-foreground text-center py-4">No groups match</p>
+                    ) : (
+                      visibleFilterGroups.map(g => {
+                        const checked = selectedGroups.has(g);
+                        return (
+                          <button
+                            key={g}
+                            onClick={() => toggleSelectedGroup(g)}
+                            className="flex items-center gap-2 w-full px-2 py-1.5 rounded text-left text-xs hover:bg-secondary/60 transition-colors"
+                          >
+                            <Checkbox checked={checked} className="pointer-events-none" />
+                            <span className="truncate flex-1">{g}</span>
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+                </PopoverContent>
+              </Popover>
+              {selectedGroups.size > 0 && (
+                <Button variant="ghost" size="sm" className="h-8 px-2 gap-1" onClick={clearSelectedGroups}>
+                  <X className="w-3.5 h-3.5" />
+                  <span className="text-xs">Reset</span>
+                </Button>
+              )}
+              <p className="text-xs text-muted-foreground ml-auto">{filtered.length} channels</p>
+            </div>
           </div>
 
           <div className="flex-1 overflow-y-auto">

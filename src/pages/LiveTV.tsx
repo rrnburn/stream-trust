@@ -1,10 +1,13 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useMedia, useAppContext } from '@/context/AppContext';
 import { useSearchParams } from 'react-router-dom';
 import AppLayout from '@/components/AppLayout';
 import VideoPlayer from '@/components/VideoPlayer';
-import { Radio, ChevronDown, ChevronRight, Search, Calendar } from 'lucide-react';
+import { Radio, ChevronDown, ChevronRight, Search, Calendar, Filter, X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
 import { format } from 'date-fns';
 
@@ -16,22 +19,59 @@ const LiveTV = () => {
   const [activeChannel, setActiveChannel] = useState<typeof channels[0] | null>(null);
   const [search, setSearch] = useState('');
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
-  const selectedGroup = searchParams.get('group') || 'all';
-  const setSelectedGroup = (g: string) => {
-    if (g === 'all') { setSearchParams({}); } else { setSearchParams({ group: g }); }
+  const [filterSearch, setFilterSearch] = useState('');
+
+  // All available groups (sorted)
+  const allGroups = useMemo(() => {
+    return [...new Set(channels.map(c => c.group || 'Uncategorized'))].sort();
+  }, [channels]);
+
+  // Multi-select groups: empty Set = show all
+  const [selectedGroups, setSelectedGroups] = useState<Set<string>>(() => {
+    const initial = searchParams.get('group');
+    return initial ? new Set([initial]) : new Set();
+  });
+
+  // Keep URL in sync (single value when one selected, none otherwise)
+  useEffect(() => {
+    if (selectedGroups.size === 1) {
+      const only = [...selectedGroups][0];
+      setSearchParams({ group: only }, { replace: true });
+    } else {
+      setSearchParams({}, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedGroups]);
+
+  const toggleSelectedGroup = (g: string) => {
+    setSelectedGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(g)) next.delete(g);
+      else next.add(g);
+      return next;
+    });
   };
+
+  const clearSelectedGroups = () => setSelectedGroups(new Set());
+  const selectAllGroups = () => setSelectedGroups(new Set(allGroups));
 
   const filtered = useMemo(() => {
     let items = channels;
-    if (selectedGroup !== 'all') {
-      items = items.filter(c => (c.group || 'Uncategorized') === selectedGroup);
+    if (selectedGroups.size > 0) {
+      items = items.filter(c => selectedGroups.has(c.group || 'Uncategorized'));
     }
     if (search) {
       const q = search.toLowerCase();
       items = items.filter(c => c.title.toLowerCase().includes(q));
     }
     return items;
-  }, [channels, search, selectedGroup]);
+  }, [channels, search, selectedGroups]);
+
+  const visibleFilterGroups = useMemo(() => {
+    if (!filterSearch) return allGroups;
+    const q = filterSearch.toLowerCase();
+    return allGroups.filter(g => g.toLowerCase().includes(q));
+  }, [allGroups, filterSearch]);
 
   const grouped = useMemo(() => {
     const map = new Map<string, typeof channels>();
@@ -177,7 +217,67 @@ const LiveTV = () => {
                 className="pl-9 bg-background"
               />
             </div>
-            <p className="text-xs text-muted-foreground">{filtered.length} channels</p>
+            <div className="flex items-center gap-2 flex-wrap">
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-8 gap-1.5">
+                    <Filter className="w-3.5 h-3.5" />
+                    <span className="text-xs">
+                      {selectedGroups.size === 0
+                        ? 'All groups'
+                        : `${selectedGroups.size} group${selectedGroups.size === 1 ? '' : 's'}`}
+                    </span>
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent align="start" className="w-72 p-0">
+                  <div className="p-2 border-b border-border space-y-2">
+                    <div className="relative">
+                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                      <Input
+                        placeholder="Filter groups..."
+                        value={filterSearch}
+                        onChange={e => setFilterSearch(e.target.value)}
+                        className="pl-8 h-8 text-xs"
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <Button variant="ghost" size="sm" className="h-7 text-xs flex-1" onClick={selectAllGroups}>
+                        Select all
+                      </Button>
+                      <Button variant="ghost" size="sm" className="h-7 text-xs flex-1" onClick={clearSelectedGroups}>
+                        Clear
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="max-h-64 overflow-y-auto p-1">
+                    {visibleFilterGroups.length === 0 ? (
+                      <p className="text-xs text-muted-foreground text-center py-4">No groups match</p>
+                    ) : (
+                      visibleFilterGroups.map(g => {
+                        const checked = selectedGroups.has(g);
+                        return (
+                          <button
+                            key={g}
+                            onClick={() => toggleSelectedGroup(g)}
+                            className="flex items-center gap-2 w-full px-2 py-1.5 rounded text-left text-xs hover:bg-secondary/60 transition-colors"
+                          >
+                            <Checkbox checked={checked} className="pointer-events-none" />
+                            <span className="truncate flex-1">{g}</span>
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+                </PopoverContent>
+              </Popover>
+              {selectedGroups.size > 0 && (
+                <Button variant="ghost" size="sm" className="h-8 px-2 gap-1" onClick={clearSelectedGroups}>
+                  <X className="w-3.5 h-3.5" />
+                  <span className="text-xs">Reset</span>
+                </Button>
+              )}
+              <p className="text-xs text-muted-foreground ml-auto">{filtered.length} channels</p>
+            </div>
           </div>
 
           <div className="flex-1 overflow-y-auto">

@@ -17,6 +17,7 @@ import LiveTV from "./pages/LiveTV";
 import VOD from "./pages/VOD";
 import NotFound from "./pages/NotFound";
 import DebugLogs from "./pages/DebugLogs";
+import Downloads from "./pages/Downloads";
 
 const queryClient = new QueryClient();
 
@@ -47,6 +48,7 @@ const AppRoutes = () => (
     <Route path="/sources" element={<ProtectedRoute><Sources /></ProtectedRoute>} />
     <Route path="/media/:id" element={<ProtectedRoute><MediaDetail /></ProtectedRoute>} />
     <Route path="/debug" element={<ProtectedRoute><DebugLogs /></ProtectedRoute>} />
+    <Route path="/downloads" element={<ProtectedRoute><Downloads /></ProtectedRoute>} />
     <Route path="*" element={<NotFound />} />
   </Routes>
 );

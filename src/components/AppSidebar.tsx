@@ -1,5 +1,5 @@
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
-import { Home, Film, Tv, Search, Heart, Settings, Play, Radio, LogOut, Terminal, ChevronDown, ChevronRight } from 'lucide-react';
+import { Home, Film, Tv, Search, Heart, Settings, Play, Radio, LogOut, Terminal, ChevronDown, ChevronRight, Download } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useMedia } from '@/context/AppContext';
 import { useEffect, useMemo, useState } from 'react';
@@ -19,6 +19,7 @@ const navItems: NavItem[] = [
   { to: '/series', icon: Tv, label: 'Series', category: 'series' },
   { to: '/search', icon: Search, label: 'Search' },
   { to: '/favorites', icon: Heart, label: 'Favorites' },
+  { to: '/downloads', icon: Download, label: 'Downloads' },
   { to: '/sources', icon: Settings, label: 'Sources' },
   { to: '/debug', icon: Terminal, label: 'Logs' },
 ];

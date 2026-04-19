@@ -6,6 +6,7 @@ import AppLayout from '@/components/AppLayout';
 import MediaGrid from '@/components/MediaGrid';
 import VideoPlayer from '@/components/VideoPlayer';
 import EpisodeModal from '@/components/EpisodeModal';
+import DownloadButton from '@/components/DownloadButton';
 import { Button } from '@/components/ui/button';
 import { motion } from 'framer-motion';
 
@@ -132,6 +133,16 @@ const MediaDetail = () => {
                 <Heart className={`w-4 h-4 ${fav ? 'fill-primary' : ''}`} />
                 {fav ? 'Favorited' : 'Favorite'}
               </Button>
+              {!isSeries && (
+                <DownloadButton
+                  mediaId={item.id}
+                  title={item.title}
+                  poster={item.poster}
+                  category={item.category}
+                  streamUrl={item.streamUrl || ''}
+                  sourceId={item.sourceId}
+                />
+              )}
             </div>
           </div>
         </motion.div>

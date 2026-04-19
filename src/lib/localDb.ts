@@ -75,6 +75,19 @@ export async function initLocalDb() {
       category TEXT DEFAULT '',
       FOREIGN KEY (source_id) REFERENCES iptv_sources(id) ON DELETE CASCADE
     );
+
+    CREATE TABLE IF NOT EXISTS downloads (
+      media_id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      poster TEXT DEFAULT '',
+      category TEXT DEFAULT 'movie',
+      file_path TEXT NOT NULL,
+      file_uri TEXT NOT NULL,
+      size INTEGER DEFAULT 0,
+      mime TEXT DEFAULT '',
+      source_id TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
   `);
 
   // Migrations for existing databases
@@ -221,4 +234,47 @@ export async function insertEpgPrograms(
     }));
     await d.executeSet(statements);
   }
+}
+
+// ── Downloads ───────────────────────────────────────────────
+
+export interface DownloadRow {
+  media_id: string;
+  title: string;
+  poster: string;
+  category: string;
+  file_path: string;
+  file_uri: string;
+  size: number;
+  mime: string;
+  source_id: string | null;
+  created_at: string;
+}
+
+export async function getDownloads(): Promise<DownloadRow[]> {
+  const d = await initLocalDb();
+  const res = await d.query('SELECT * FROM downloads ORDER BY created_at DESC');
+  return (res.values || []) as DownloadRow[];
+}
+
+export async function getDownload(mediaId: string): Promise<DownloadRow | null> {
+  const d = await initLocalDb();
+  const res = await d.query('SELECT * FROM downloads WHERE media_id = ?', [mediaId]);
+  const rows = (res.values || []) as DownloadRow[];
+  return rows[0] || null;
+}
+
+export async function saveDownload(row: Omit<DownloadRow, 'created_at'>) {
+  const d = await initLocalDb();
+  await d.run(
+    `INSERT OR REPLACE INTO downloads
+     (media_id, title, poster, category, file_path, file_uri, size, mime, source_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [row.media_id, row.title, row.poster, row.category, row.file_path, row.file_uri, row.size, row.mime, row.source_id],
+  );
+}
+
+export async function removeDownload(mediaId: string) {
+  const d = await initLocalDb();
+  await d.run('DELETE FROM downloads WHERE media_id = ?', [mediaId]);
 }

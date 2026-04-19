@@ -78,7 +78,14 @@ const AppSidebar = () => {
   const currentGroup = searchParams.get('group');
 
   return (
-    <aside className="fixed left-0 top-0 h-full w-20 lg:w-64 bg-sidebar border-r border-sidebar-border flex flex-col z-50">
+    <aside
+      className="fixed left-0 top-0 h-full w-20 lg:w-64 bg-sidebar border-r border-sidebar-border flex flex-col z-50"
+      style={{
+        paddingTop: 'env(safe-area-inset-top)',
+        paddingBottom: 'env(safe-area-inset-bottom)',
+        paddingLeft: 'env(safe-area-inset-left)',
+      }}
+    >
       <div className="flex items-center gap-3 px-4 py-4 lg:px-6 shrink-0">
         <div className="w-10 h-10 rounded-lg bg-primary/20 flex items-center justify-center">
           <Play className="w-5 h-5 text-primary fill-primary" />

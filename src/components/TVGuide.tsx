@@ -47,14 +47,17 @@ const TVGuide = ({ channels, programs, loading, onChannelSelect }: TVGuideProps)
     return slots;
   }, [timelineStart]);
 
-  // Group programs by channel_id
+  // Normalize channel ids (alphanumerics-only lowercase) so EPG ids like
+  // "BBC.One.uk", "bbc1", and channel titles like "BBC One" all match.
+  const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
   const programsByChannel = useMemo(() => {
     const map: Record<string, EpgProgram[]> = {};
     for (const p of programs) {
-      if (!map[p.channel_id]) map[p.channel_id] = [];
-      map[p.channel_id].push(p);
+      const key = normalize(p.channel_id || '');
+      if (!key) continue;
+      if (!map[key]) map[key] = [];
+      map[key].push(p);
     }
-    // Sort each channel's programs by start time
     for (const key of Object.keys(map)) {
       map[key].sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
     }

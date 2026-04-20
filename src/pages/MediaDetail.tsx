@@ -144,6 +144,11 @@ const MediaDetail = () => {
                 />
               )}
             </div>
+            {isSeries && (
+              <p className="mt-3 text-xs text-muted-foreground">
+                Tap <span className="text-foreground font-medium">Browse Episodes</span> to play or download individual episodes offline.
+              </p>
+            )}
           </div>
         </motion.div>
 

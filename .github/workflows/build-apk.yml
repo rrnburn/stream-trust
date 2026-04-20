@@ -27,7 +27,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.bun/install/cache
-          key: bun-${{ hashFiles('bun.lock') }}
+          key: bun-${{ hashFiles('bun.lockb') }}
           restore-keys: bun-
 
       - name: Install dependencies
@@ -48,6 +48,8 @@ jobs:
         env:
           VITE_APP_BUILD_VERSION: ${{ steps.version.outputs.version }}
           VITE_APP_BUILD_DATE: ${{ steps.version.outputs.date }}
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
 
       - name: Add Android platform
         run: npx cap add android || true

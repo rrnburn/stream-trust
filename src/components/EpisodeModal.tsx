@@ -5,6 +5,7 @@ import { Play, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import DownloadButton from '@/components/DownloadButton';
+import { isNativePlatform } from '@/lib/platform';
 
 interface Episode {
   id: string;
@@ -64,21 +65,28 @@ const EpisodeModal = ({
       setLoading(true);
       setError(null);
 
-      // Extract series_id from URL pattern: .../series/user/pass/ID
-      const parts = streamUrl.split('/');
-      const seriesId = parts[parts.length - 1];
-
       try {
-        const { data, error: fnError } = await supabase.functions.invoke('get-series-info', {
-          body: { baseUrl: sourceUrl, username: sourceUsername, password: sourcePassword, seriesId },
-        });
+        if (isNativePlatform()) {
+          // On native: call the Xtream API directly, no Supabase round-trip
+          const { getSeriesInfoLocally } = await import('@/lib/playlistParser');
+          const data = await getSeriesInfoLocally(sourceUrl, sourceUsername, sourcePassword, streamUrl);
+          setSeriesInfo(data);
+          if (data.seasons?.length > 0) setSelectedSeason(data.seasons[0]);
+        } else {
+          // On web: use the Supabase edge function
+          // Extract series_id from URL pattern: .../series/user/pass/ID
+          const parts = streamUrl.split('/');
+          const seriesId = parts[parts.length - 1];
 
-        if (fnError) throw fnError;
-        if (data?.error) throw new Error(data.error);
+          const { data, error: fnError } = await supabase.functions.invoke('get-series-info', {
+            body: { baseUrl: sourceUrl, username: sourceUsername, password: sourcePassword, seriesId },
+          });
 
-        setSeriesInfo(data);
-        if (data.seasons?.length > 0) {
-          setSelectedSeason(data.seasons[0]);
+          if (fnError) throw fnError;
+          if (data?.error) throw new Error(data.error);
+
+          setSeriesInfo(data);
+          if (data.seasons?.length > 0) setSelectedSeason(data.seasons[0]);
         }
       } catch (e: any) {
         setError(e.message || 'Failed to load series info');

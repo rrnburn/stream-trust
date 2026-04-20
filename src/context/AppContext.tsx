@@ -228,7 +228,7 @@ const LocalAppProvider = ({ children }: { children: ReactNode }) => {
       toast.info('Parsing EPG data...');
 
       // Use setTimeout to yield to UI thread multiple times during parsing
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      await new Promise((resolve) => setTimeout(resolve, 600));
 
       const programs = parseXmlTvLocal(xml);
       logger.info('EPG', `Parsed ${programs.length} programs from XML`);
@@ -241,7 +241,7 @@ const LocalAppProvider = ({ children }: { children: ReactNode }) => {
         toast.info(`Saving ${programs.length} programs...`);
 
         // Yield to UI thread before heavy database operation
-        await new Promise((resolve) => setTimeout(resolve, 50));
+        await new Promise((resolve) => setTimeout(resolve, 500));
 
         await db.replaceEpgPrograms(source.id, programs);
 

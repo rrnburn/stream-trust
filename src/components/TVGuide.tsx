@@ -1,16 +1,9 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { format, differenceInMinutes, addHours, startOfHour } from 'date-fns';
 import { Radio, Clock, Loader2 } from 'lucide-react';
+import type { EpgProgram } from '@/context/AppContext.types';
 
-export interface EpgProgram {
-  id: string;
-  channel_id: string;
-  title: string;
-  description: string;
-  start_time: string;
-  end_time: string;
-  category: string;
-}
+export type { EpgProgram };
 
 interface Channel {
   id: string;

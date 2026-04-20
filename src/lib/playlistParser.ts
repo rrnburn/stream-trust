@@ -211,3 +211,86 @@ export async function parsePlaylistLocally(
     epgUrl,
   };
 }
+
+// ── Series info (native/local) ──────────────────────────────
+
+export interface LocalEpisode {
+  id: string;
+  episodeNum: string;
+  title: string;
+  containerId: string;
+  duration: string | null;
+  plot: string | null;
+  rating: string | null;
+  image: string | null;
+  streamUrl: string;
+}
+
+export interface LocalSeriesInfo {
+  name: string;
+  cover: string;
+  plot: string;
+  seasons: string[];
+  episodes: Record<string, LocalEpisode[]>;
+}
+
+/**
+ * Fetches series episode info directly from the Xtream API.
+ * Used on native builds to avoid the Supabase edge function round-trip.
+ */
+export async function getSeriesInfoLocally(
+  sourceUrl: string,
+  username: string,
+  password: string,
+  streamUrl: string, // e.g. https://host/series/user/pass/12345
+): Promise<LocalSeriesInfo> {
+  // Extract series_id from the stream URL
+  const parts = streamUrl.split('/');
+  const seriesId = parts[parts.length - 1];
+
+  let base = sourceUrl.replace(/\/$/, '');
+  base = base.replace(/^https?:\/\//i, '');
+  base = 'http://' + base;
+  base = base.replace(/\/player_api\.php.*$/i, '');
+  base = base.replace(/\/get\.php.*$/i, '');
+  base = base.replace(/\/$/, '');
+
+  const streamBase = base.replace(/^http:\/\//i, 'https://');
+  const apiUrl = `${base}/player_api.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}&action=get_series_info&series_id=${seriesId}`;
+
+  const res = await fetch(apiUrl, {
+    headers: { 'User-Agent': 'okhttp/4.9.2', Accept: '*/*' },
+  });
+
+  if (!res.ok) throw new Error(`Provider returned ${res.status}`);
+
+  const data = await res.json();
+  const info = data.info || {};
+  const episodes: Record<string, LocalEpisode[]> = {};
+
+  if (data.episodes) {
+    for (const [seasonNum, eps] of Object.entries(data.episodes)) {
+      if (Array.isArray(eps)) {
+        episodes[seasonNum] = (eps as any[]).map((ep: any) => ({
+          id: ep.id,
+          episodeNum: ep.episode_num,
+          title: ep.title || `Episode ${ep.episode_num}`,
+          containerId: ep.container_extension || 'mp4',
+          duration: ep.info?.duration || null,
+          plot: ep.info?.plot || null,
+          rating: ep.info?.rating || null,
+          image: ep.info?.movie_image || null,
+          streamUrl: `${streamBase}/series/${username}/${password}/${ep.id}.${ep.container_extension || 'mp4'}`,
+        }));
+      }
+    }
+  }
+
+  return {
+    name: info.name || '',
+    cover: info.cover || '',
+    plot: info.plot || '',
+    seasons: Object.keys(episodes).sort((a, b) => Number(a) - Number(b)),
+    episodes,
+  };
+}

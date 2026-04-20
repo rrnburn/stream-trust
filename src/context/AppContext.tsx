@@ -251,13 +251,32 @@ const LocalAppProvider = ({ children }: { children: ReactNode }) => {
 
         // Debug: Log first 10 unique EPG channel IDs for matching verification
         const uniqueChannelIds = [...new Set(programs.map((p) => p.channel_id))].slice(0, 10);
+        logger.info('EPG', `📺 Parsed ${programs.length} programs from ${channels} unique channel IDs`);
         logger.info('EPG', '📺 EPG Channel IDs (first 10)', { channelIds: uniqueChannelIds });
+        
+        // Debug: Sample a few programs to see their structure
+        const samplePrograms = programs.slice(0, 3).map((p) => ({
+          channel_id: p.channel_id,
+          title: p.title,
+          start: p.start_time,
+        }));
+        logger.info('EPG', '📺 Sample programs', { samples: samplePrograms });
 
         // Debug: Log parsed media tvg_ids for comparison
         const media = await db.getParsedMedia();
+        logger.info('EPG', `📺 Total parsed media items: ${media.length}`);
         const channelMedia = (media as MediaRow[]).filter((m) => m.category === 'channel');
+        logger.info('EPG', `📺 Channel media items: ${channelMedia.length}`);
         const tvgIds = [...new Set(channelMedia.map((m) => m.tvg_id).filter(Boolean))].slice(0, 10);
         logger.info('EPG', '📺 Playlist TVG-IDs (first 10)', { tvgIds });
+        
+        // Debug: Sample a few channel media to see their structure
+        const sampleChannels = channelMedia.slice(0, 3).map((m) => ({
+          id: m.id,
+          title: m.title,
+          tvg_id: m.tvg_id,
+        }));
+        logger.info('EPG', '📺 Sample channels', { samples: sampleChannels });
 
         toast.success(`Loaded ${programs.length} programs for ${channels} channels`);
       } else {

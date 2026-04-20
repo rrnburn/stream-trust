@@ -36,19 +36,6 @@ const inferExtension = (url: string, contentType?: string | null): string => {
   return 'mp4';
 };
 
-const arrayBufferToBase64 = (buffer: ArrayBuffer): string => {
-  let binary = '';
-  const bytes = new Uint8Array(buffer);
-  const chunkSize = 0x8000;
-  for (let i = 0; i < bytes.length; i += chunkSize) {
-    binary += String.fromCharCode.apply(
-      null,
-      bytes.subarray(i, i + chunkSize) as unknown as number[],
-    );
-  }
-  return btoa(binary);
-};
-
 export interface DownloadResult {
   filePath: string;       // absolute path or relative ref usable with Filesystem
   uri: string;            // file:// URI for native playback
@@ -81,12 +68,15 @@ export async function downloadStream(
   try {
     logger.info('Downloads', `Starting download: ${title}`, { mediaId, url: url.substring(0, 120) });
 
-    const res = await fetch(url, { signal: controller.signal });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    if (!res.body) throw new Error('Response has no body');
+    const probe = await fetch(url, {
+      signal: controller.signal,
+      method: 'GET',
+      headers: { Range: 'bytes=0-0' },
+    });
+    if (!probe.ok) throw new Error(`HTTP ${probe.status}`);
 
-    const total = parseInt(res.headers.get('content-length') || '0', 10);
-    const contentType = res.headers.get('content-type');
+    const total = parseInt(probe.headers.get('content-length') || '0', 10);
+    const contentType = probe.headers.get('content-type');
     const ext = inferExtension(url, contentType);
     const fileName = `${sanitize(title)}_${mediaId.slice(0, 8)}.${ext}`;
     const relPath = `downloads/${fileName}`;
@@ -120,44 +110,28 @@ export async function downloadStream(
       // readdir failed (dir missing despite mkdir, or permissions) — ignore
     }
 
-    const reader = res.body.getReader();
     let loaded = 0;
-    let firstChunk = true;
-    let lastReport = 0;
+    const progressListener = await Filesystem.addListener('progress', (status) => {
+      if (status.url !== url) return;
+      loaded = status.bytes;
+      const totalBytes = status.contentLength || total;
+      const percent = totalBytes > 0 ? Math.round((status.bytes / totalBytes) * 100) : 0;
+      onProgress?.({ loaded: status.bytes, total: totalBytes, percent });
+    });
 
-    while (true) {
-      if (handle.cancelled) throw new Error('Download cancelled');
-      const { done, value } = await reader.read();
-      if (done) break;
-      if (!value || value.byteLength === 0) continue;
-
-      const b64 = arrayBufferToBase64(
-        value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength) as ArrayBuffer,
-      );
-
-      if (firstChunk) {
-        await Filesystem.writeFile({
-          path: relPath,
-          data: b64,
-          directory: Directory.Data,
-        });
-        firstChunk = false;
-      } else {
-        await Filesystem.appendFile({
-          path: relPath,
-          data: b64,
-          directory: Directory.Data,
-        });
-      }
-
-      loaded += value.byteLength;
-      const now = Date.now();
-      if (onProgress && now - lastReport > 250) {
-        lastReport = now;
-        const percent = total > 0 ? Math.round((loaded / total) * 100) : 0;
-        onProgress({ loaded, total, percent });
-      }
+    try {
+      await Filesystem.downloadFile({
+        url,
+        path: relPath,
+        directory: Directory.Data,
+        recursive: true,
+        progress: true,
+      });
+    } finally {
+      await progressListener.remove();
     }
+
+    if (handle.cancelled) throw new Error('Download cancelled');
 
     // Final progress
     if (onProgress) {

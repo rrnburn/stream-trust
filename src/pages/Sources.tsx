@@ -9,6 +9,82 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import type { IPTVSource } from '@/context/AppContext.types';
 
+// Shared form fields component - defined outside to prevent re-creation on every render
+interface SourceFormProps {
+  isEdit: boolean;
+  name: string;
+  url: string;
+  username: string;
+  password: string;
+  epgUrl: string;
+  type: 'm3u' | 'xtream';
+  onNameChange: (v: string) => void;
+  onUrlChange: (v: string) => void;
+  onUsernameChange: (v: string) => void;
+  onPasswordChange: (v: string) => void;
+  onEpgUrlChange: (v: string) => void;
+  onTypeChange?: (t: 'm3u' | 'xtream') => void;
+  onSubmit: () => void;
+}
+
+const SourceForm = ({
+  isEdit,
+  name,
+  url,
+  username,
+  password,
+  epgUrl,
+  type,
+  onNameChange,
+  onUrlChange,
+  onUsernameChange,
+  onPasswordChange,
+  onEpgUrlChange,
+  onTypeChange,
+  onSubmit,
+}: SourceFormProps) => {
+  return (
+    <div className="space-y-4 pt-2">
+      {!isEdit && onTypeChange && (
+        <div className="flex gap-2">
+          <button
+            onClick={() => onTypeChange('m3u')}
+            className={`flex-1 flex items-center gap-2 px-4 py-3 rounded-lg border text-sm font-medium transition-colors ${
+              type === 'm3u' ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <Link className="w-4 h-4" /> M3U Playlist
+          </button>
+          <button
+            onClick={() => onTypeChange('xtream')}
+            className={`flex-1 flex items-center gap-2 px-4 py-3 rounded-lg border text-sm font-medium transition-colors ${
+              type === 'xtream' ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <Server className="w-4 h-4" /> Xtream API
+          </button>
+        </div>
+      )}
+
+      <Input placeholder="Source name" value={name} onChange={(e) => onNameChange(e.target.value)} className="bg-secondary border-border text-foreground" />
+      <Input placeholder={type === 'xtream' ? 'Server URL' : 'M3U / M3U8 URL'} value={url} onChange={(e) => onUrlChange(e.target.value)} className="bg-secondary border-border text-foreground" />
+
+      {type === 'xtream' && (
+        <>
+          <Input placeholder="Username" value={username} onChange={(e) => onUsernameChange(e.target.value)} className="bg-secondary border-border text-foreground" />
+          <Input type="password" placeholder="Password" value={password} onChange={(e) => onPasswordChange(e.target.value)} className="bg-secondary border-border text-foreground" />
+        </>
+      )}
+
+      <Input placeholder="EPG URL (optional, XMLTV)" value={epgUrl} onChange={(e) => onEpgUrlChange(e.target.value)} className="bg-secondary border-border text-foreground" />
+
+      <Button onClick={onSubmit} className="w-full bg-primary text-primary-foreground hover:bg-primary/90">
+        {isEdit ? 'Save Changes' : 'Add Source'}
+      </Button>
+    </div>
+  );
+};
+
 const Sources = () => {
   const { sources, addSource, updateSource, removeSource, parsePlaylist, parsingPlaylist, parseEpg, parsingEpg } = useAppContext();
   const [open, setOpen] = useState(false);
@@ -59,62 +135,6 @@ const Sources = () => {
     setEditSource(null);
   };
 
-  // Shared form fields component
-  const SourceForm = ({ isEdit }: { isEdit: boolean }) => {
-    const n = isEdit ? editName : name;
-    const u = isEdit ? editUrl : url;
-    const un = isEdit ? editUsername : username;
-    const pw = isEdit ? editPassword : password;
-    const ep = isEdit ? editEpgUrl : epgUrl;
-    const sn = isEdit ? (v: string) => setEditName(v) : (v: string) => setName(v);
-    const su = isEdit ? (v: string) => setEditUrl(v) : (v: string) => setUrl(v);
-    const sun = isEdit ? (v: string) => setEditUsername(v) : (v: string) => setUsername(v);
-    const spw = isEdit ? (v: string) => setEditPassword(v) : (v: string) => setPassword(v);
-    const sep = isEdit ? (v: string) => setEditEpgUrl(v) : (v: string) => setEpgUrl(v);
-    const t = isEdit ? editSource?.type : type;
-
-    return (
-      <div className="space-y-4 pt-2">
-        {!isEdit && (
-          <div className="flex gap-2">
-            <button
-              onClick={() => setType('m3u')}
-              className={`flex-1 flex items-center gap-2 px-4 py-3 rounded-lg border text-sm font-medium transition-colors ${
-                type === 'm3u' ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              <Link className="w-4 h-4" /> M3U Playlist
-            </button>
-            <button
-              onClick={() => setType('xtream')}
-              className={`flex-1 flex items-center gap-2 px-4 py-3 rounded-lg border text-sm font-medium transition-colors ${
-                type === 'xtream' ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              <Server className="w-4 h-4" /> Xtream API
-            </button>
-          </div>
-        )}
-
-        <Input placeholder="Source name" value={n} onChange={(e) => sn(e.target.value)} className="bg-secondary border-border text-foreground" />
-        <Input placeholder={t === 'xtream' ? 'Server URL' : 'M3U / M3U8 URL'} value={u} onChange={(e) => su(e.target.value)} className="bg-secondary border-border text-foreground" />
-
-        {t === 'xtream' && (
-          <>
-            <Input placeholder="Username" value={un} onChange={(e) => sun(e.target.value)} className="bg-secondary border-border text-foreground" />
-            <Input type="password" placeholder="Password" value={pw} onChange={(e) => spw(e.target.value)} className="bg-secondary border-border text-foreground" />
-          </>
-        )}
-
-        <Input placeholder="EPG URL (optional, XMLTV)" value={ep} onChange={(e) => sep(e.target.value)} className="bg-secondary border-border text-foreground" />
-
-        <Button onClick={isEdit ? handleEdit : handleAdd} className="w-full bg-primary text-primary-foreground hover:bg-primary/90">
-          {isEdit ? 'Save Changes' : 'Add Source'}
-        </Button>
-      </div>
-    );
-  };
-
   return (
     <AppLayout>
       <div className="p-4 lg:p-8 max-w-3xl">
@@ -130,7 +150,22 @@ const Sources = () => {
               <DialogHeader>
                 <DialogTitle className="font-display text-foreground">Add IPTV Source</DialogTitle>
               </DialogHeader>
-              <SourceForm isEdit={false} />
+              <SourceForm
+                isEdit={false}
+                name={name}
+                url={url}
+                username={username}
+                password={password}
+                epgUrl={epgUrl}
+                type={type}
+                onNameChange={setName}
+                onUrlChange={setUrl}
+                onUsernameChange={setUsername}
+                onPasswordChange={setPassword}
+                onEpgUrlChange={setEpgUrl}
+                onTypeChange={setType}
+                onSubmit={handleAdd}
+              />
             </DialogContent>
           </Dialog>
         </div>
@@ -141,7 +176,21 @@ const Sources = () => {
             <DialogHeader>
               <DialogTitle className="font-display text-foreground">Edit Source</DialogTitle>
             </DialogHeader>
-            <SourceForm isEdit={true} />
+            <SourceForm
+              isEdit={true}
+              name={editName}
+              url={editUrl}
+              username={editUsername}
+              password={editPassword}
+              epgUrl={editEpgUrl}
+              type={editSource?.type || 'm3u'}
+              onNameChange={setEditName}
+              onUrlChange={setEditUrl}
+              onUsernameChange={setEditUsername}
+              onPasswordChange={setEditPassword}
+              onEpgUrlChange={setEditEpgUrl}
+              onSubmit={handleEdit}
+            />
           </DialogContent>
         </Dialog>
 
@@ -185,8 +234,9 @@ const Sources = () => {
                       onClick={() => parseEpg(source)}
                       className="text-muted-foreground hover:text-primary"
                       title={source.epg_url ? "Download EPG" : "No EPG configured"}
+                      disabled={parsingEpg}
                     >
-                      <BookOpen className="w-4 h-4" />
+                      <BookOpen className={`w-4 h-4 ${parsingEpg ? 'animate-spin' : ''}`} />
                     </Button>
                     <Button variant="ghost" size="icon" onClick={() => removeSource(source.id)} className="text-muted-foreground hover:text-destructive">
                       <Trash2 className="w-4 h-4" />

@@ -234,6 +234,7 @@ const LocalAppProvider = ({ children }: { children: ReactNode }) => {
       logger.info('EPG', `Parsed ${programs.length} programs from XML`);
 
       // Clear XML from memory immediately after parsing
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       xml = null as any;
 
       if (programs.length > 0) {

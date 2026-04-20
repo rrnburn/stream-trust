@@ -26,14 +26,26 @@ const LiveTV = () => {
     return [...new Set(channels.map(c => c.group || 'Uncategorized'))].sort();
   }, [channels]);
 
-  // Multi-select groups: empty Set = show all
+  // Multi-select groups: empty Set = show all.
+  // Persisted to localStorage so the user's selection survives navigation/reload.
+  const STORAGE_KEY = 'livetv:selectedGroups';
   const [selectedGroups, setSelectedGroups] = useState<Set<string>>(() => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        const arr = JSON.parse(stored);
+        if (Array.isArray(arr)) return new Set(arr);
+      }
+    } catch { /* ignore */ }
     const initial = searchParams.get('group');
     return initial ? new Set([initial]) : new Set();
   });
 
-  // Keep URL in sync (single value when one selected, none otherwise)
+  // Persist selection to localStorage and keep URL in sync
   useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify([...selectedGroups]));
+    } catch { /* ignore quota errors */ }
     if (selectedGroups.size === 1) {
       const only = [...selectedGroups][0];
       setSearchParams({ group: only }, { replace: true });

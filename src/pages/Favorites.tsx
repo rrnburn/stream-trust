@@ -6,7 +6,7 @@ import { Heart } from 'lucide-react';
 const Favorites = () => {
   const media = useMedia();
   const { favorites } = useAppContext();
-  const favMedia = media.filter(m => favorites.includes(m.id));
+  const favMedia = media.filter((m) => favorites.includes(m.id));
 
   return (
     <AppLayout>

@@ -15,7 +15,7 @@ const MediaDetail = () => {
   const navigate = useNavigate();
   const media = useMedia();
   const { toggleFavorite, isFavorite, addToHistory, sources } = useAppContext();
-  const item = media.find(m => m.id === id);
+  const item = media.find((m) => m.id === id);
   const [showPlayer, setShowPlayer] = useState(false);
   const [showEpisodeModal, setShowEpisodeModal] = useState(false);
   const [playingUrl, setPlayingUrl] = useState('');
@@ -30,12 +30,12 @@ const MediaDetail = () => {
   }
 
   const fav = isFavorite(item.id);
-  const similar = media.filter(m => m.genre === item.genre && m.id !== item.id).slice(0, 6);
+  const similar = media.filter((m) => m.genre === item.genre && m.id !== item.id).slice(0, 6);
   const hasStream = !!item.streamUrl;
   const isSeries = item.category === 'series';
 
   // Find the source for this item to get credentials
-  const source = sources.find(s => s.id === item.sourceId);
+  const source = sources.find((s) => s.id === item.sourceId);
 
   const handlePlay = () => {
     if (!hasStream) return;
@@ -59,7 +59,10 @@ const MediaDetail = () => {
   return (
     <AppLayout>
       <div className="p-4 lg:p-8">
-        <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors mb-6">
+        <button
+          onClick={() => navigate(-1)}
+          className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors mb-6"
+        >
           <ArrowLeft className="w-4 h-4" /> Back
         </button>
 
@@ -101,10 +104,20 @@ const MediaDetail = () => {
                   <Star className="w-4 h-4 fill-primary" /> {item.rating}
                 </span>
               )}
-              {item.year && <span className="flex items-center gap-1"><Calendar className="w-4 h-4" /> {item.year}</span>}
-              {item.duration && <span className="flex items-center gap-1"><Clock className="w-4 h-4" /> {item.duration}</span>}
+              {item.year && (
+                <span className="flex items-center gap-1">
+                  <Calendar className="w-4 h-4" /> {item.year}
+                </span>
+              )}
+              {item.duration && (
+                <span className="flex items-center gap-1">
+                  <Clock className="w-4 h-4" /> {item.duration}
+                </span>
+              )}
               <span className="px-2 py-0.5 rounded-md bg-secondary text-xs font-medium uppercase">{item.category}</span>
-              <span className="px-2 py-0.5 rounded-md bg-primary/15 text-primary text-xs font-medium">{item.genre}</span>
+              <span className="px-2 py-0.5 rounded-md bg-primary/15 text-primary text-xs font-medium">
+                {item.genre}
+              </span>
             </div>
 
             <p className="text-muted-foreground leading-relaxed mb-8 max-w-2xl">{item.description}</p>
@@ -121,7 +134,8 @@ const MediaDetail = () => {
                   </>
                 ) : (
                   <>
-                    <Play className="w-4 h-4 fill-current" /> {showPlayer ? 'Playing' : hasStream ? 'Play' : 'No Stream'}
+                    <Play className="w-4 h-4 fill-current" />{' '}
+                    {showPlayer ? 'Playing' : hasStream ? 'Play' : 'No Stream'}
                   </>
                 )}
               </Button>
@@ -146,7 +160,8 @@ const MediaDetail = () => {
             </div>
             {isSeries && (
               <p className="mt-3 text-xs text-muted-foreground">
-                Tap <span className="text-foreground font-medium">Browse Episodes</span> to play or download individual episodes offline.
+                Tap <span className="text-foreground font-medium">Browse Episodes</span> to play or download individual
+                episodes offline.
               </p>
             )}
           </div>

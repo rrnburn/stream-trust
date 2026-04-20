@@ -21,10 +21,10 @@ const MediaGrid = ({ items, title }: { items: MediaItem[]; title?: string }) => 
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
-          setVisibleCount(prev => Math.min(prev + PAGE_SIZE, items.length));
+          setVisibleCount((prev) => Math.min(prev + PAGE_SIZE, items.length));
         }
       },
-      { rootMargin: '400px' }
+      { rootMargin: '400px' },
     );
 
     observer.observe(sentinel);

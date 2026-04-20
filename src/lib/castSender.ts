@@ -18,7 +18,10 @@ const getCast = (): any => (window as any).cast;
 /** Load the Google Cast SDK script (idempotent). */
 export function loadCastSDK(): Promise<void> {
   return new Promise((resolve) => {
-    if (castInitialized) { resolve(); return; }
+    if (castInitialized) {
+      resolve();
+      return;
+    }
 
     const chr = getChrome();
     if (chr?.cast) {
@@ -88,11 +91,7 @@ export function isCasting(): boolean {
 }
 
 /** Request the user to pick a cast device and start casting the given URL. */
-export async function startCasting(
-  streamUrl: string,
-  title?: string,
-  poster?: string,
-): Promise<boolean> {
+export async function startCasting(streamUrl: string, title?: string, poster?: string): Promise<boolean> {
   try {
     await loadCastSDK();
     const c = getCast();

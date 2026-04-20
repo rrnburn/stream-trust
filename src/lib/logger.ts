@@ -25,7 +25,7 @@ const addEntry = (level: LogLevel, component: string, message: string, meta?: Re
   };
   entries.push(entry);
   if (entries.length > MAX_ENTRIES) entries.shift();
-  listeners.forEach(fn => fn());
+  listeners.forEach((fn) => fn());
 };
 
 export const logger = {
@@ -34,8 +34,16 @@ export const logger = {
   warn: (component: string, msg: string, meta?: Record<string, unknown>) => addEntry('warn', component, msg, meta),
   error: (component: string, msg: string, meta?: Record<string, unknown>) => addEntry('error', component, msg, meta),
   getEntries: () => [...entries],
-  clear: () => { entries.length = 0; listeners.forEach(fn => fn()); },
-  subscribe: (fn: () => void) => { listeners.add(fn); return () => { listeners.delete(fn); }; },
+  clear: () => {
+    entries.length = 0;
+    listeners.forEach((fn) => fn());
+  },
+  subscribe: (fn: () => void) => {
+    listeners.add(fn);
+    return () => {
+      listeners.delete(fn);
+    };
+  },
 };
 
 // Intercept console methods
@@ -45,13 +53,13 @@ const origError = console.error;
 
 console.log = (...args: any[]) => {
   origLog.apply(console, args);
-  addEntry('info', 'console', args.map(a => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' '));
+  addEntry('info', 'console', args.map((a) => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' '));
 };
 console.warn = (...args: any[]) => {
   origWarn.apply(console, args);
-  addEntry('warn', 'console', args.map(a => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' '));
+  addEntry('warn', 'console', args.map((a) => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' '));
 };
 console.error = (...args: any[]) => {
   origError.apply(console, args);
-  addEntry('error', 'console', args.map(a => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' '));
+  addEntry('error', 'console', args.map((a) => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' '));
 };

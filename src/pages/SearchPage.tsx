@@ -10,8 +10,11 @@ const SearchPage = () => {
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState<string>('all');
 
-  const filtered = media.filter(m => {
-    const matchesQuery = !query || m.title.toLowerCase().includes(query.toLowerCase()) || m.genre.toLowerCase().includes(query.toLowerCase());
+  const filtered = media.filter((m) => {
+    const matchesQuery =
+      !query ||
+      m.title.toLowerCase().includes(query.toLowerCase()) ||
+      m.genre.toLowerCase().includes(query.toLowerCase());
     const matchesCategory = category === 'all' || m.category === category;
     return matchesQuery && matchesCategory;
   });
@@ -40,7 +43,7 @@ const SearchPage = () => {
             />
           </div>
           <div className="flex gap-2">
-            {categories.map(c => (
+            {categories.map((c) => (
               <button
                 key={c.value}
                 onClick={() => setCategory(c.value)}

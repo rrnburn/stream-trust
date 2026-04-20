@@ -15,15 +15,15 @@ const LiveTV = () => {
   const media = useMedia();
   const { epgPrograms } = useAppContext();
   const [searchParams, setSearchParams] = useSearchParams();
-  const channels = media.filter(m => m.category === 'channel');
-  const [activeChannel, setActiveChannel] = useState<typeof channels[0] | null>(null);
+  const channels = media.filter((m) => m.category === 'channel');
+  const [activeChannel, setActiveChannel] = useState<(typeof channels)[0] | null>(null);
   const [search, setSearch] = useState('');
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
   const [filterSearch, setFilterSearch] = useState('');
 
   // All available groups (sorted)
   const allGroups = useMemo(() => {
-    return [...new Set(channels.map(c => c.group || 'Uncategorized'))].sort();
+    return [...new Set(channels.map((c) => c.group || 'Uncategorized'))].sort();
   }, [channels]);
 
   // Multi-select groups: empty Set = show all.
@@ -36,7 +36,9 @@ const LiveTV = () => {
         const arr = JSON.parse(stored);
         if (Array.isArray(arr)) return new Set(arr);
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     const initial = searchParams.get('group');
     return initial ? new Set([initial]) : new Set();
   });
@@ -45,7 +47,9 @@ const LiveTV = () => {
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify([...selectedGroups]));
-    } catch { /* ignore quota errors */ }
+    } catch {
+      /* ignore quota errors */
+    }
     if (selectedGroups.size === 1) {
       const only = [...selectedGroups][0];
       setSearchParams({ group: only }, { replace: true });
@@ -56,7 +60,7 @@ const LiveTV = () => {
   }, [selectedGroups]);
 
   const toggleSelectedGroup = (g: string) => {
-    setSelectedGroups(prev => {
+    setSelectedGroups((prev) => {
       const next = new Set(prev);
       if (next.has(g)) next.delete(g);
       else next.add(g);
@@ -70,11 +74,11 @@ const LiveTV = () => {
   const filtered = useMemo(() => {
     let items = channels;
     if (selectedGroups.size > 0) {
-      items = items.filter(c => selectedGroups.has(c.group || 'Uncategorized'));
+      items = items.filter((c) => selectedGroups.has(c.group || 'Uncategorized'));
     }
     if (search) {
       const q = search.toLowerCase();
-      items = items.filter(c => c.title.toLowerCase().includes(q));
+      items = items.filter((c) => c.title.toLowerCase().includes(q));
     }
     return items;
   }, [channels, search, selectedGroups]);
@@ -82,12 +86,12 @@ const LiveTV = () => {
   const visibleFilterGroups = useMemo(() => {
     if (!filterSearch) return allGroups;
     const q = filterSearch.toLowerCase();
-    return allGroups.filter(g => g.toLowerCase().includes(q));
+    return allGroups.filter((g) => g.toLowerCase().includes(q));
   }, [allGroups, filterSearch]);
 
   const grouped = useMemo(() => {
     const map = new Map<string, typeof channels>();
-    filtered.forEach(c => {
+    filtered.forEach((c) => {
       const g = c.group || 'Uncategorized';
       if (!map.has(g)) map.set(g, []);
       map.get(g)!.push(c);
@@ -96,7 +100,7 @@ const LiveTV = () => {
   }, [filtered]);
 
   const toggleGroup = (g: string) => {
-    setOpenGroups(prev => {
+    setOpenGroups((prev) => {
       const next = new Set(prev);
       if (next.has(g)) next.delete(g);
       else next.add(g);
@@ -118,7 +122,7 @@ const LiveTV = () => {
     matchIds.delete('');
 
     return epgPrograms
-      .filter(p => matchIds.has(normalize(p.channel_id || '')))
+      .filter((p) => matchIds.has(normalize(p.channel_id || '')))
       .sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
   }, [activeChannel, epgPrograms]);
 
@@ -186,11 +190,13 @@ const LiveTV = () => {
                           isNow
                             ? 'bg-primary/10 border-primary/40'
                             : isPast
-                            ? 'bg-muted/30 border-muted-foreground/20 opacity-60'
-                            : 'bg-card border-border'
+                              ? 'bg-muted/30 border-muted-foreground/20 opacity-60'
+                              : 'bg-card border-border'
                         }`}
                       >
-                        <h4 className={`font-semibold text-xs mb-1 truncate ${isNow ? 'text-primary' : 'text-foreground'}`}>
+                        <h4
+                          className={`font-semibold text-xs mb-1 truncate ${isNow ? 'text-primary' : 'text-foreground'}`}
+                        >
                           {program.title}
                           {isNow && (
                             <span className="ml-1.5 text-[10px] font-normal bg-primary/20 text-primary px-1.5 py-0.5 rounded">
@@ -226,7 +232,7 @@ const LiveTV = () => {
               <Input
                 placeholder="Search channels..."
                 value={search}
-                onChange={e => setSearch(e.target.value)}
+                onChange={(e) => setSearch(e.target.value)}
                 className="pl-9 bg-background"
               />
             </div>
@@ -249,7 +255,7 @@ const LiveTV = () => {
                       <Input
                         placeholder="Filter groups..."
                         value={filterSearch}
-                        onChange={e => setFilterSearch(e.target.value)}
+                        onChange={(e) => setFilterSearch(e.target.value)}
                         className="pl-8 h-8 text-xs"
                       />
                     </div>
@@ -266,7 +272,7 @@ const LiveTV = () => {
                     {visibleFilterGroups.length === 0 ? (
                       <p className="text-xs text-muted-foreground text-center py-4">No groups match</p>
                     ) : (
-                      visibleFilterGroups.map(g => {
+                      visibleFilterGroups.map((g) => {
                         const checked = selectedGroups.has(g);
                         return (
                           <button
@@ -297,12 +303,16 @@ const LiveTV = () => {
             {grouped.map(([group, items]) => (
               <Collapsible key={group} open={openGroups.has(group)} onOpenChange={() => toggleGroup(group)}>
                 <CollapsibleTrigger className="flex items-center gap-2 w-full px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors">
-                  {openGroups.has(group) ? <ChevronDown className="w-4 h-4 shrink-0" /> : <ChevronRight className="w-4 h-4 shrink-0" />}
+                  {openGroups.has(group) ? (
+                    <ChevronDown className="w-4 h-4 shrink-0" />
+                  ) : (
+                    <ChevronRight className="w-4 h-4 shrink-0" />
+                  )}
                   <span className="truncate">{group}</span>
                   <span className="ml-auto text-xs text-muted-foreground/60">{items.length}</span>
                 </CollapsibleTrigger>
                 <CollapsibleContent>
-                  {items.map(ch => (
+                  {items.map((ch) => (
                     <button
                       key={ch.id}
                       onClick={() => setActiveChannel(ch)}

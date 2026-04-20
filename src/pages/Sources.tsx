@@ -50,7 +50,9 @@ const SourceForm = ({
           <button
             onClick={() => onTypeChange('m3u')}
             className={`flex-1 flex items-center gap-2 px-4 py-3 rounded-lg border text-sm font-medium transition-colors ${
-              type === 'm3u' ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:text-foreground'
+              type === 'm3u'
+                ? 'border-primary bg-primary/10 text-primary'
+                : 'border-border text-muted-foreground hover:text-foreground'
             }`}
           >
             <Link className="w-4 h-4" /> M3U Playlist
@@ -58,7 +60,9 @@ const SourceForm = ({
           <button
             onClick={() => onTypeChange('xtream')}
             className={`flex-1 flex items-center gap-2 px-4 py-3 rounded-lg border text-sm font-medium transition-colors ${
-              type === 'xtream' ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:text-foreground'
+              type === 'xtream'
+                ? 'border-primary bg-primary/10 text-primary'
+                : 'border-border text-muted-foreground hover:text-foreground'
             }`}
           >
             <Server className="w-4 h-4" /> Xtream API
@@ -66,17 +70,43 @@ const SourceForm = ({
         </div>
       )}
 
-      <Input placeholder="Source name" value={name} onChange={(e) => onNameChange(e.target.value)} className="bg-secondary border-border text-foreground" />
-      <Input placeholder={type === 'xtream' ? 'Server URL' : 'M3U / M3U8 URL'} value={url} onChange={(e) => onUrlChange(e.target.value)} className="bg-secondary border-border text-foreground" />
+      <Input
+        placeholder="Source name"
+        value={name}
+        onChange={(e) => onNameChange(e.target.value)}
+        className="bg-secondary border-border text-foreground"
+      />
+      <Input
+        placeholder={type === 'xtream' ? 'Server URL' : 'M3U / M3U8 URL'}
+        value={url}
+        onChange={(e) => onUrlChange(e.target.value)}
+        className="bg-secondary border-border text-foreground"
+      />
 
       {type === 'xtream' && (
         <>
-          <Input placeholder="Username" value={username} onChange={(e) => onUsernameChange(e.target.value)} className="bg-secondary border-border text-foreground" />
-          <Input type="password" placeholder="Password" value={password} onChange={(e) => onPasswordChange(e.target.value)} className="bg-secondary border-border text-foreground" />
+          <Input
+            placeholder="Username"
+            value={username}
+            onChange={(e) => onUsernameChange(e.target.value)}
+            className="bg-secondary border-border text-foreground"
+          />
+          <Input
+            type="password"
+            placeholder="Password"
+            value={password}
+            onChange={(e) => onPasswordChange(e.target.value)}
+            className="bg-secondary border-border text-foreground"
+          />
         </>
       )}
 
-      <Input placeholder="EPG URL (optional, XMLTV)" value={epgUrl} onChange={(e) => onEpgUrlChange(e.target.value)} className="bg-secondary border-border text-foreground" />
+      <Input
+        placeholder="EPG URL (optional, XMLTV)"
+        value={epgUrl}
+        onChange={(e) => onEpgUrlChange(e.target.value)}
+        className="bg-secondary border-border text-foreground"
+      />
 
       <Button onClick={onSubmit} className="w-full bg-primary text-primary-foreground hover:bg-primary/90">
         {isEdit ? 'Save Changes' : 'Add Source'}
@@ -86,7 +116,8 @@ const SourceForm = ({
 };
 
 const Sources = () => {
-  const { sources, addSource, updateSource, removeSource, parsePlaylist, parsingPlaylist, parseEpg, parsingEpg } = useAppContext();
+  const { sources, addSource, updateSource, removeSource, parsePlaylist, parsingPlaylist, parseEpg, parsingEpg } =
+    useAppContext();
   const [open, setOpen] = useState(false);
   const [type, setType] = useState<'m3u' | 'xtream'>('m3u');
   const [name, setName] = useState('');
@@ -106,8 +137,19 @@ const Sources = () => {
 
   const handleAdd = () => {
     if (!name || !url) return;
-    addSource({ name, type, url, username: type === 'xtream' ? username : undefined, password: type === 'xtream' ? password : undefined, epg_url: epgUrl || undefined });
-    setName(''); setUrl(''); setUsername(''); setPassword(''); setEpgUrl('');
+    addSource({
+      name,
+      type,
+      url,
+      username: type === 'xtream' ? username : undefined,
+      password: type === 'xtream' ? password : undefined,
+      epg_url: epgUrl || undefined,
+    });
+    setName('');
+    setUrl('');
+    setUsername('');
+    setPassword('');
+    setEpgUrl('');
     setOpen(false);
   };
 
@@ -214,18 +256,37 @@ const Sources = () => {
                 >
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-lg bg-primary/15 flex items-center justify-center">
-                      {source.type === 'm3u' ? <Link className="w-5 h-5 text-primary" /> : <Server className="w-5 h-5 text-primary" />}
+                      {source.type === 'm3u' ? (
+                        <Link className="w-5 h-5 text-primary" />
+                      ) : (
+                        <Server className="w-5 h-5 text-primary" />
+                      )}
                     </div>
                     <div>
                       <p className="font-medium text-foreground">{source.name}</p>
-                      <p className="text-xs text-muted-foreground">{source.type.toUpperCase()} · Added {new Date(source.created_at).toLocaleDateString()}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {source.type.toUpperCase()} · Added {new Date(source.created_at).toLocaleDateString()}
+                      </p>
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
-                    <Button variant="ghost" size="icon" onClick={() => openEdit(source)} className="text-muted-foreground hover:text-primary" title="Edit source">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => openEdit(source)}
+                      className="text-muted-foreground hover:text-primary"
+                      title="Edit source"
+                    >
                       <Pencil className="w-4 h-4" />
                     </Button>
-                    <Button variant="ghost" size="icon" onClick={() => parsePlaylist(source)} disabled={parsingPlaylist} className="text-muted-foreground hover:text-primary" title="Refresh playlist">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => parsePlaylist(source)}
+                      disabled={parsingPlaylist}
+                      className="text-muted-foreground hover:text-primary"
+                      title="Refresh playlist"
+                    >
                       <RefreshCw className={`w-4 h-4 ${parsingPlaylist ? 'animate-spin' : ''}`} />
                     </Button>
                     <Button
@@ -233,12 +294,17 @@ const Sources = () => {
                       size="icon"
                       onClick={() => parseEpg(source)}
                       className="text-muted-foreground hover:text-primary"
-                      title={source.epg_url ? "Download EPG" : "No EPG configured"}
+                      title={source.epg_url ? 'Download EPG' : 'No EPG configured'}
                       disabled={parsingEpg}
                     >
                       <BookOpen className={`w-4 h-4 ${parsingEpg ? 'animate-spin' : ''}`} />
                     </Button>
-                    <Button variant="ghost" size="icon" onClick={() => removeSource(source.id)} className="text-muted-foreground hover:text-destructive">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => removeSource(source.id)}
+                      className="text-muted-foreground hover:text-destructive"
+                    >
                       <Trash2 className="w-4 h-4" />
                     </Button>
                   </div>
@@ -247,7 +313,6 @@ const Sources = () => {
             </div>
           )}
         </AnimatePresence>
-
       </div>
     </AppLayout>
   );

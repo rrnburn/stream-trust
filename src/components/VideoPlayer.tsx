@@ -1,7 +1,22 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import Hls from 'hls.js';
 import mpegts from 'mpegts.js';
-import { Play, Pause, Maximize, Minimize, Volume2, VolumeX, SkipBack, SkipForward, Loader2, ExternalLink, Cast, Share2, Copy, Check } from 'lucide-react';
+import {
+  Play,
+  Pause,
+  Maximize,
+  Minimize,
+  Volume2,
+  VolumeX,
+  SkipBack,
+  SkipForward,
+  Loader2,
+  ExternalLink,
+  Cast,
+  Share2,
+  Copy,
+  Check,
+} from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '@/integrations/supabase/client';
 import { isNativePlatform } from '@/lib/platform';
@@ -69,7 +84,7 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
   const [hlsFallback, setHlsFallback] = useState(false);
   const [casting, setCasting] = useState(false);
   const [copied, setCopied] = useState(false);
-  
+
   const MAX_RETRIES = 3;
   const isNative = isNativePlatform();
 
@@ -81,29 +96,35 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
     return `${supabaseUrl}/functions/v1/stream-proxy?url=${encodeURIComponent(streamUrl)}`;
   }, []);
 
-  const getPlaybackUrl = useCallback((streamUrl: string, proxy: boolean) => {
-    // On native, never proxy
-    if (isNativePlatform()) return streamUrl;
-    return proxy ? getProxiedUrl(streamUrl) : streamUrl;
-  }, [getProxiedUrl]);
+  const getPlaybackUrl = useCallback(
+    (streamUrl: string, proxy: boolean) => {
+      // On native, never proxy
+      if (isNativePlatform()) return streamUrl;
+      return proxy ? getProxiedUrl(streamUrl) : streamUrl;
+    },
+    [getProxiedUrl],
+  );
 
   // Normalize stream URLs: convert .ts to .m3u8 for live streams.
   // For movies, try .mp4 first; if hlsFallback is set, convert to .m3u8.
-  const normalizeStreamUrl = useCallback((url: string): string => {
-    // Live TV: .ts → .m3u8
-    if (url.includes('/live/') && url.endsWith('.ts')) {
-      const hlsUrl = url.replace(/\.ts$/, '.m3u8');
-      log('INFO', `Converted live .ts → .m3u8: ${hlsUrl.substring(0, 80)}...`);
-      return hlsUrl;
-    }
-    // Movie HLS fallback: .mp4 → .m3u8 when direct MP4 failed
-    if (hlsFallback && url.includes('/movie/') && url.endsWith('.mp4')) {
-      const hlsUrl = url.replace(/\.mp4$/, '.m3u8');
-      log('INFO', `HLS fallback: movie .mp4 → .m3u8: ${hlsUrl.substring(0, 80)}...`);
-      return hlsUrl;
-    }
-    return url;
-  }, [hlsFallback]);
+  const normalizeStreamUrl = useCallback(
+    (url: string): string => {
+      // Live TV: .ts → .m3u8
+      if (url.includes('/live/') && url.endsWith('.ts')) {
+        const hlsUrl = url.replace(/\.ts$/, '.m3u8');
+        log('INFO', `Converted live .ts → .m3u8: ${hlsUrl.substring(0, 80)}...`);
+        return hlsUrl;
+      }
+      // Movie HLS fallback: .mp4 → .m3u8 when direct MP4 failed
+      if (hlsFallback && url.includes('/movie/') && url.endsWith('.mp4')) {
+        const hlsUrl = url.replace(/\.mp4$/, '.m3u8');
+        log('INFO', `HLS fallback: movie .mp4 → .m3u8: ${hlsUrl.substring(0, 80)}...`);
+        return hlsUrl;
+      }
+      return url;
+    },
+    [hlsFallback],
+  );
 
   const getStreamType = (url: string): 'hls' | 'mpegts' | 'direct' => {
     const cleanUrl = url.split('?')[0];
@@ -137,48 +158,53 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
     }
   }, []);
 
-  const initHlsJs = useCallback((video: HTMLVideoElement, url: string, isLive: boolean, onReady: () => void, onFatal: (reason: string) => void) => {
-    if (Hls.isSupported()) {
-      log('INFO', 'Initializing hls.js player');
-      const hls = new Hls({
-        enableWorker: true,
-        lowLatencyMode: isLive,
-        fragLoadingTimeOut: 20000,
-        manifestLoadingTimeOut: 15000,
-        levelLoadingTimeOut: 15000,
-        fragLoadingMaxRetry: 6,
-        manifestLoadingMaxRetry: 4,
-        levelLoadingMaxRetry: 4,
-        xhrSetup: (xhr) => { xhr.withCredentials = false; },
-      });
-      hlsRef.current = hls;
-      hls.loadSource(url);
-      hls.attachMedia(video);
-      hls.on(Hls.Events.MANIFEST_PARSED, (_, data) => {
-        log('INFO', `HLS manifest parsed: ${data.levels.length} quality levels`);
-        setBuffering(false);
-        onReady();
-      });
-      hls.on(Hls.Events.ERROR, (_, data) => {
-        if (data.fatal) {
-          log('ERROR', `HLS fatal error: type=${data.type} details=${data.details}`, { status: data.response?.code });
-          if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
-            log('INFO', 'Attempting HLS media error recovery');
-            hls.recoverMediaError();
+  const initHlsJs = useCallback(
+    (video: HTMLVideoElement, url: string, isLive: boolean, onReady: () => void, onFatal: (reason: string) => void) => {
+      if (Hls.isSupported()) {
+        log('INFO', 'Initializing hls.js player');
+        const hls = new Hls({
+          enableWorker: true,
+          lowLatencyMode: isLive,
+          fragLoadingTimeOut: 20000,
+          manifestLoadingTimeOut: 15000,
+          levelLoadingTimeOut: 15000,
+          fragLoadingMaxRetry: 6,
+          manifestLoadingMaxRetry: 4,
+          levelLoadingMaxRetry: 4,
+          xhrSetup: (xhr) => {
+            xhr.withCredentials = false;
+          },
+        });
+        hlsRef.current = hls;
+        hls.loadSource(url);
+        hls.attachMedia(video);
+        hls.on(Hls.Events.MANIFEST_PARSED, (_, data) => {
+          log('INFO', `HLS manifest parsed: ${data.levels.length} quality levels`);
+          setBuffering(false);
+          onReady();
+        });
+        hls.on(Hls.Events.ERROR, (_, data) => {
+          if (data.fatal) {
+            log('ERROR', `HLS fatal error: type=${data.type} details=${data.details}`, { status: data.response?.code });
+            if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+              log('INFO', 'Attempting HLS media error recovery');
+              hls.recoverMediaError();
+            } else {
+              hls.destroy();
+              onFatal(`HLS ${data.type}: ${data.details}`);
+            }
           } else {
-            hls.destroy();
-            onFatal(`HLS ${data.type}: ${data.details}`);
+            log('WARN', `HLS non-fatal: ${data.type} ${data.details}`);
           }
-        } else {
-          log('WARN', `HLS non-fatal: ${data.type} ${data.details}`);
-        }
-      });
-    } else {
-      log('ERROR', 'HLS not supported in this browser');
-      onFatal('HLS playback not supported');
-      setBuffering(false);
-    }
-  }, []);
+        });
+      } else {
+        log('ERROR', 'HLS not supported in this browser');
+        onFatal('HLS playback not supported');
+        setBuffering(false);
+      }
+    },
+    [],
+  );
 
   // Track whether native player chooser is active
   const [nativeActive, setNativeActive] = useState(isNative);
@@ -216,7 +242,10 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
         return;
       }
       if (!useProxy && !isNativePlatform()) {
-        log('WARN', `Direct playback failed (${reason}), retrying via proxy...`, { title, src: normalizedSrc.substring(0, 80) });
+        log('WARN', `Direct playback failed (${reason}), retrying via proxy...`, {
+          title,
+          src: normalizedSrc.substring(0, 80),
+        });
         cleanup();
         setUseProxy(true);
       } else {
@@ -229,17 +258,20 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
     // Helper: try to play with sound, fall back to muted if autoplay blocked
     const tryPlay = (video: HTMLVideoElement) => {
       video.muted = false;
-      video.play().then(() => {
-        log('INFO', 'Playback started with sound');
-        setAutoplayMuted(false);
-        setMuted(false);
-      }).catch(() => {
-        log('WARN', 'Autoplay blocked, retrying muted');
-        video.muted = true;
-        setMuted(true);
-        setAutoplayMuted(true);
-        video.play().catch((e) => log('ERROR', 'Even muted autoplay failed', { msg: e?.message }));
-      });
+      video
+        .play()
+        .then(() => {
+          log('INFO', 'Playback started with sound');
+          setAutoplayMuted(false);
+          setMuted(false);
+        })
+        .catch(() => {
+          log('WARN', 'Autoplay blocked, retrying muted');
+          video.muted = true;
+          setMuted(true);
+          setAutoplayMuted(true);
+          video.play().catch((e) => log('ERROR', 'Even muted autoplay failed', { msg: e?.message }));
+        });
     };
 
     // Pre-buffer for live streams
@@ -268,17 +300,17 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
 
     if (streamType === 'hls') {
       log('INFO', 'Initializing HLS playback');
-      
+
       // Strategy 1: Try native video.src (bypasses CORS — works on Safari, some mobile browsers)
-      // Strategy 2: Try hls.js (uses XHR, subject to CORS)  
+      // Strategy 2: Try hls.js (uses XHR, subject to CORS)
       // Strategy 3: Fall back to proxy
-      
+
       const tryNativeFirst = !useProxy;
-      
+
       if (tryNativeFirst) {
         log('INFO', 'Trying native video.src for HLS (CORS bypass)');
         video.src = playbackUrl;
-        
+
         let nativeWorked = false;
         const nativeTimeout = setTimeout(() => {
           if (!nativeWorked) {
@@ -288,7 +320,7 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
             initHlsJs(video, playbackUrl, isLive, startWithPreBuffer, handleFatalError);
           }
         }, 8000);
-        
+
         const onNativeCanPlay = () => {
           nativeWorked = true;
           clearTimeout(nativeTimeout);
@@ -296,7 +328,7 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
           setBuffering(false);
           startWithPreBuffer();
         };
-        
+
         const onNativeError = () => {
           if (nativeWorked) return;
           clearTimeout(nativeTimeout);
@@ -305,28 +337,35 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
           video.load();
           initHlsJs(video, playbackUrl, isLive, startWithPreBuffer, handleFatalError);
         };
-        
+
         video.addEventListener('canplay', onNativeCanPlay, { once: true });
         video.addEventListener('error', onNativeError, { once: true });
-        video.addEventListener('loadedmetadata', () => {
-          log('INFO', 'Native HLS metadata loaded');
-        }, { once: true });
+        video.addEventListener(
+          'loadedmetadata',
+          () => {
+            log('INFO', 'Native HLS metadata loaded');
+          },
+          { once: true },
+        );
       } else {
         // Using proxy URL — go straight to hls.js
         initHlsJs(video, playbackUrl, isLive, startWithPreBuffer, handleFatalError);
       }
     } else if (streamType === 'mpegts' && mpegts.isSupported()) {
       log('INFO', 'Initializing mpegts.js player');
-      const player = mpegts.createPlayer({
-        type: 'mpegts',
-        isLive: true,
-        url: playbackUrl,
-      }, {
-        enableWorker: true,
-        liveBufferLatencyChasing: true,
-        liveBufferLatencyMaxLatency: 5,
-        liveBufferLatencyMinRemain: 1,
-      });
+      const player = mpegts.createPlayer(
+        {
+          type: 'mpegts',
+          isLive: true,
+          url: playbackUrl,
+        },
+        {
+          enableWorker: true,
+          liveBufferLatencyChasing: true,
+          liveBufferLatencyMaxLatency: 5,
+          liveBufferLatencyMinRemain: 1,
+        },
+      );
       mpegtsRef.current = player;
       player.attachMediaElement(video);
       player.load();
@@ -408,7 +447,19 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
     }
 
     return cleanup;
-  }, [src, useProxy, hlsFallback, retryCount, getPlaybackUrl, cleanup, isLiveStream, normalizeStreamUrl, title, isNative, nativeActive]);
+  }, [
+    src,
+    useProxy,
+    hlsFallback,
+    retryCount,
+    getPlaybackUrl,
+    cleanup,
+    isLiveStream,
+    normalizeStreamUrl,
+    title,
+    isNative,
+    nativeActive,
+  ]);
 
   // Reset proxy and retry state when src changes
   useEffect(() => {
@@ -447,10 +498,17 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
       }
     };
     const onDurationChange = () => setDuration(video.duration || 0);
-    const onPlay = () => { setPlaying(true); setBuffering(false); log('DEBUG', 'Playback started'); };
+    const onPlay = () => {
+      setPlaying(true);
+      setBuffering(false);
+      log('DEBUG', 'Playback started');
+    };
     const onPause = () => setPlaying(false);
     const onWaiting = () => setBuffering(true);
-    const onPlaying = () => { setBuffering(false); setPreBuffering(false); };
+    const onPlaying = () => {
+      setBuffering(false);
+      setPreBuffering(false);
+    };
     const onCanPlay = () => setBuffering(false);
     const onError = () => {
       log('ERROR', `Video element error: code=${video.error?.code} msg=${video.error?.message}`);
@@ -531,7 +589,9 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
   };
 
   // Load Cast SDK on mount
-  useEffect(() => { loadCastSDK(); }, []);
+  useEffect(() => {
+    loadCastSDK();
+  }, []);
 
   const handleCast = async () => {
     if (casting) {
@@ -564,8 +624,10 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
-      if (e.key === ' ' || e.key === 'k') { e.preventDefault(); togglePlay(); }
-      else if (e.key === 'f') toggleFullscreen();
+      if (e.key === ' ' || e.key === 'k') {
+        e.preventDefault();
+        togglePlay();
+      } else if (e.key === 'f') toggleFullscreen();
       else if (e.key === 'm') toggleMute();
       else if (e.key === 'ArrowLeft') seek(-10);
       else if (e.key === 'ArrowRight') seek(10);
@@ -660,14 +722,11 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
       ref={containerRef}
       className="relative w-full aspect-video bg-black rounded-xl overflow-hidden group"
       onMouseMove={showControlsTemporarily}
-      onMouseLeave={() => { if (playing) setShowControls(false); }}
+      onMouseLeave={() => {
+        if (playing) setShowControls(false);
+      }}
     >
-      <video
-        ref={videoRef}
-        className="w-full h-full object-contain"
-        playsInline
-        onClick={togglePlay}
-      />
+      <video ref={videoRef} className="w-full h-full object-contain" playsInline onClick={togglePlay} />
 
       {/* Tap to unmute banner */}
       {autoplayMuted && playing && !error && (
@@ -695,9 +754,7 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
             className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 pointer-events-none"
           >
             <Loader2 className="w-12 h-12 text-primary animate-spin" />
-            {preBuffering && (
-              <p className="text-white/70 text-sm mt-3">Buffering stream...</p>
-            )}
+            {preBuffering && <p className="text-white/70 text-sm mt-3">Buffering stream...</p>}
           </motion.div>
         )}
       </AnimatePresence>
@@ -706,9 +763,7 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
       {error && (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 text-center p-4 gap-3">
           <p className="text-destructive font-medium text-lg">⚠️ Playback failed</p>
-          <p className="text-muted-foreground text-sm max-w-xs">
-            {error}. Please check your connection or try again.
-          </p>
+          <p className="text-muted-foreground text-sm max-w-xs">{error}. Please check your connection or try again.</p>
           <div className="flex gap-3 mt-2">
             {retryCount < MAX_RETRIES && (
               <button
@@ -726,9 +781,7 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
                 )}
               </button>
             )}
-            {retryCount >= MAX_RETRIES && (
-              <p className="text-muted-foreground text-xs">Max retries reached.</p>
-            )}
+            {retryCount >= MAX_RETRIES && <p className="text-muted-foreground text-xs">Max retries reached.</p>}
             {onClose && (
               <button
                 onClick={onClose}
@@ -809,10 +862,18 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
                   </span>
                 </div>
                 <div className="flex items-center gap-1">
-                  <button onClick={handleCopyStreamUrl} className="hover:text-primary transition-colors p-1" title="Copy stream URL">
+                  <button
+                    onClick={handleCopyStreamUrl}
+                    className="hover:text-primary transition-colors p-1"
+                    title="Copy stream URL"
+                  >
                     {copied ? <Check className="w-4 h-4 text-primary" /> : <Copy className="w-4 h-4" />}
                   </button>
-                  <button onClick={handleCast} className={`hover:text-primary transition-colors p-1 ${casting ? 'text-primary' : ''}`} title={casting ? 'Stop casting' : 'Cast to device'}>
+                  <button
+                    onClick={handleCast}
+                    className={`hover:text-primary transition-colors p-1 ${casting ? 'text-primary' : ''}`}
+                    title={casting ? 'Stop casting' : 'Cast to device'}
+                  >
                     <Cast className="w-5 h-5" />
                   </button>
                   <button onClick={toggleFullscreen} className="hover:text-primary transition-colors p-1">

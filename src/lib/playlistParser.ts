@@ -25,25 +25,28 @@ export interface ParseResult {
 // ── M3U parser ──────────────────────────────────────────────
 
 function parseM3U(content: string): { items: ParsedItem[]; epgUrl?: string } {
-  const lines = content.split('\n').map(l => l.trim()).filter(Boolean);
+  const lines = content
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean);
   const items: ParsedItem[] = [];
   let i = 0;
   let epgUrl: string | undefined;
 
   // Detect EPG URL from header
-for (let j = 0; j < Math.min(lines.length, 5); j++) {
-  if (lines[j].startsWith('#EXTM3U')) {
-    const match =
-      lines[j].match(/url-tvg="([^"]+)"/i) ||
-      lines[j].match(/x-tvg-url="([^"]+)"/i) ||
-      lines[j].match(/tvg-url="([^"]+)"/i);
+  for (let j = 0; j < Math.min(lines.length, 5); j++) {
+    if (lines[j].startsWith('#EXTM3U')) {
+      const match =
+        lines[j].match(/url-tvg="([^"]+)"/i) ||
+        lines[j].match(/x-tvg-url="([^"]+)"/i) ||
+        lines[j].match(/tvg-url="([^"]+)"/i);
 
-    if (match?.[1]) {
-      epgUrl = match[1].split(',')[0].trim(); // take first if multiple
-      break;
+      if (match?.[1]) {
+        epgUrl = match[1].split(',')[0].trim(); // take first if multiple
+        break;
+      }
     }
   }
-}
   while (i < lines.length) {
     if (lines[i].startsWith('#EXTINF:')) {
       const info = lines[i];
@@ -77,11 +80,7 @@ for (let j = 0; j < Math.min(lines.length, 5); j++) {
 
 // ── Xtream parser ───────────────────────────────────────────
 
-async function parseXtream(
-  baseUrl: string,
-  username: string,
-  password: string,
-): Promise<ParsedItem[]> {
+async function parseXtream(baseUrl: string, username: string, password: string): Promise<ParsedItem[]> {
   let base = baseUrl.replace(/\/$/, '');
   // Preserve original protocol from user's source URL
   const originalProtocol = /^https:\/\//i.test(base) ? 'https://' : 'http://';
@@ -109,31 +108,28 @@ async function parseXtream(
     }
   };
 
-  const [liveRes, vodRes, seriesRes, liveCatRes, vodCatRes, seriesCatRes] =
-    await Promise.all([
-      fetch(`${apiBase}&action=get_live_streams`, fetchOpts),
-      fetch(`${apiBase}&action=get_vod_streams`, fetchOpts),
-      fetch(`${apiBase}&action=get_series`, fetchOpts),
-      fetch(`${apiBase}&action=get_live_categories`, fetchOpts),
-      fetch(`${apiBase}&action=get_vod_categories`, fetchOpts),
-      fetch(`${apiBase}&action=get_series_categories`, fetchOpts),
-    ]);
+  const [liveRes, vodRes, seriesRes, liveCatRes, vodCatRes, seriesCatRes] = await Promise.all([
+    fetch(`${apiBase}&action=get_live_streams`, fetchOpts),
+    fetch(`${apiBase}&action=get_vod_streams`, fetchOpts),
+    fetch(`${apiBase}&action=get_series`, fetchOpts),
+    fetch(`${apiBase}&action=get_live_categories`, fetchOpts),
+    fetch(`${apiBase}&action=get_vod_categories`, fetchOpts),
+    fetch(`${apiBase}&action=get_series_categories`, fetchOpts),
+  ]);
 
-  const [liveStreams, vodStreams, seriesStreams, liveCats, vodCats, seriesCats] =
-    await Promise.all([
-      parseSafe(liveRes),
-      parseSafe(vodRes),
-      parseSafe(seriesRes),
-      parseSafe(liveCatRes),
-      parseSafe(vodCatRes),
-      parseSafe(seriesCatRes),
-    ]);
+  const [liveStreams, vodStreams, seriesStreams, liveCats, vodCats, seriesCats] = await Promise.all([
+    parseSafe(liveRes),
+    parseSafe(vodRes),
+    parseSafe(seriesRes),
+    parseSafe(liveCatRes),
+    parseSafe(vodCatRes),
+    parseSafe(seriesCatRes),
+  ]);
 
   const buildCatMap = (cats: any[]) => {
     const map: Record<string, string> = {};
     for (const c of cats) {
-      if (c.category_id && c.category_name)
-        map[String(c.category_id)] = c.category_name;
+      if (c.category_id && c.category_name) map[String(c.category_id)] = c.category_name;
     }
     return map;
   };
@@ -180,18 +176,18 @@ export async function parsePlaylistLocally(
   let epgUrl: string | undefined;
 
   if (type === 'xtream' && username && password) {
-  items = await parseXtream(url, username, password);
+    items = await parseXtream(url, username, password);
 
-  // Auto-build Xtream EPG URL
-  let base = url.replace(/\/$/, '');
-  base = base.replace(/^https?:\/\//i, '');
-  base = base.replace(/\/player_api\.php.*$/i, '');
-  base = base.replace(/\/get\.php.*$/i, '');
+    // Auto-build Xtream EPG URL
+    let base = url.replace(/\/$/, '');
+    base = base.replace(/^https?:\/\//i, '');
+    base = base.replace(/\/player_api\.php.*$/i, '');
+    base = base.replace(/\/get\.php.*$/i, '');
 
-  epgUrl = `http://${base}/xmltv.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`;
+    epgUrl = `http://${base}/xmltv.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`;
 
-  console.log("📺 Xtream EPG URL generated:", epgUrl);
-} else {
+    console.log('📺 Xtream EPG URL generated:', epgUrl);
+  } else {
     const response = await fetch(url, {
       headers: { 'User-Agent': 'okhttp/4.9.2', Accept: '*/*' },
     });
@@ -199,15 +195,15 @@ export async function parsePlaylistLocally(
     const result = parseM3U(await response.text());
     items = result.items;
     epgUrl = result.epgUrl;
-    console.log("📺 Xtream EPG URL generated:", epgUrl);
+    console.log('📺 Xtream EPG URL generated:', epgUrl);
   }
 
   return {
     items,
     total: items.length,
-    channels: items.filter(i => i.category === 'channel').length,
-    movies: items.filter(i => i.category === 'movie').length,
-    series: items.filter(i => i.category === 'series').length,
+    channels: items.filter((i) => i.category === 'channel').length,
+    movies: items.filter((i) => i.category === 'movie').length,
+    series: items.filter((i) => i.category === 'series').length,
     epgUrl,
   };
 }

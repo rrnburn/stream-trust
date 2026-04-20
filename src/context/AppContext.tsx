@@ -68,24 +68,40 @@ const LocalAppProvider = ({ children }: { children: ReactNode }) => {
       const db = await getLocalDb();
       await db.initLocalDb();
       const [s, f, h, m, epg] = await Promise.all([
-        db.getSources(), db.getFavorites(), db.getWatchHistory(), db.getParsedMedia(), db.getEpgPrograms(),
+        db.getSources(),
+        db.getFavorites(),
+        db.getWatchHistory(),
+        db.getParsedMedia(),
+        db.getEpgPrograms(),
       ]);
-      setSources(s.map((r: SourceRow) => ({
-        id: r.id, name: r.name, type: r.type as IPTVSource['type'], url: r.url,
-        username: r.username || undefined, password: r.password || undefined,
-        epg_url: r.epg_url || undefined,
-        created_at: r.created_at,
-      })));
+      setSources(
+        s.map((r: SourceRow) => ({
+          id: r.id,
+          name: r.name,
+          type: r.type as IPTVSource['type'],
+          url: r.url,
+          username: r.username || undefined,
+          password: r.password || undefined,
+          epg_url: r.epg_url || undefined,
+          created_at: r.created_at,
+        })),
+      );
       setFavorites(f);
       setWatchHistory(h);
-      setParsedMedia(m.map((r: MediaRow) => ({
-        id: r.id, title: r.title, poster: r.poster || '',
-        category: r.category as MediaItem['category'],
-        genre: r.genre || 'Uncategorized', description: r.description || '',
-        sourceId: r.source_id, streamUrl: r.stream_url || '',
-        group: r.group_name || undefined,
-        tvgId: r.tvg_id || undefined,
-      })));
+      setParsedMedia(
+        m.map((r: MediaRow) => ({
+          id: r.id,
+          title: r.title,
+          poster: r.poster || '',
+          category: r.category as MediaItem['category'],
+          genre: r.genre || 'Uncategorized',
+          description: r.description || '',
+          sourceId: r.source_id,
+          streamUrl: r.stream_url || '',
+          group: r.group_name || undefined,
+          tvgId: r.tvg_id || undefined,
+        })),
+      );
       setEpgPrograms(epg);
     } catch (e) {
       console.error('Local DB load error:', e);
@@ -93,7 +109,9 @@ const LocalAppProvider = ({ children }: { children: ReactNode }) => {
     setLoadingSources(false);
   }, []);
 
-  useEffect(() => { reload(); }, [reload]);
+  useEffect(() => {
+    reload();
+  }, [reload]);
 
   const addSource = async (source: Omit<IPTVSource, 'id' | 'created_at'>) => {
     const db = await getLocalDb();
@@ -134,18 +152,31 @@ const LocalAppProvider = ({ children }: { children: ReactNode }) => {
     try {
       const { parsePlaylistLocally } = await getPlaylistParser();
       const db = await getLocalDb();
-      const result = await parsePlaylistLocally(source.url, source.type as 'm3u' | 'xtream', source.username, source.password);
+      const result = await parsePlaylistLocally(
+        source.url,
+        source.type as 'm3u' | 'xtream',
+        source.username,
+        source.password,
+      );
       if (result.items.length > 0) {
         setAutoEpgUrl(result.epgUrl);
-        await db.insertParsedMedia(source.id, result.items.map(i => ({
-          ...i, sourceName: source.name,
-        })));
+        await db.insertParsedMedia(
+          source.id,
+          result.items.map((i) => ({
+            ...i,
+            sourceName: source.name,
+          })),
+        );
         const parts = [];
         if (result.channels) parts.push(`${result.channels} channels`);
         if (result.movies) parts.push(`${result.movies} movies`);
         if (result.series) parts.push(`${result.series} series`);
         toast.success(`Parsed ${result.total} items (${parts.join(', ')}) from ${source.name}`);
-        logger.info('AppContext', `Parsed ${result.total} items from ${source.name}`, { channels: result.channels, movies: result.movies, series: result.series });
+        logger.info('AppContext', `Parsed ${result.total} items from ${source.name}`, {
+          channels: result.channels,
+          movies: result.movies,
+          series: result.series,
+        });
         await reload();
       } else {
         toast.info('No items found in playlist');
@@ -171,56 +202,56 @@ const LocalAppProvider = ({ children }: { children: ReactNode }) => {
       const db = await getLocalDb();
       const { parseXmlTvLocal } = await getEpgParser();
       console.log('📥 Downloading EPG:', url);
-      
+
       // Download with timeout and size limit to prevent crashes
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
-      
-      const res = await fetch(url, { 
+
+      const res = await fetch(url, {
         signal: controller.signal,
-        headers: { 'Accept-Encoding': 'gzip' }
+        headers: { 'Accept-Encoding': 'gzip' },
       });
       clearTimeout(timeoutId);
-      
+
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      
+
       // Check file size before loading into memory
       const contentLength = res.headers.get('content-length');
       if (contentLength && parseInt(contentLength) > 100 * 1024 * 1024) {
         throw new Error('EPG file too large (>100MB)');
       }
-      
+
       const xml = await res.text();
       console.log('EPG size:', xml.length);
 
       // Parse in chunks to avoid blocking UI
       toast.info('Parsing EPG data...');
-      
+
       // Use setTimeout to yield to UI thread
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
       const programs = parseXmlTvLocal(xml);
       console.log('Programs parsed:', programs.length);
 
       if (programs.length > 0) {
         toast.info(`Saving ${programs.length} programs...`);
-        
+
         await db.replaceEpgPrograms(source.id, programs);
-        
+
         const epg = await db.getEpgPrograms();
         setEpgPrograms(epg);
-        const channels = new Set(programs.map(p => p.channel_id)).size;
-        
+        const channels = new Set(programs.map((p) => p.channel_id)).size;
+
         // Debug: Log first 10 unique EPG channel IDs for matching verification
-        const uniqueChannelIds = [...new Set(programs.map(p => p.channel_id))].slice(0, 10);
+        const uniqueChannelIds = [...new Set(programs.map((p) => p.channel_id))].slice(0, 10);
         console.log('📺 EPG Channel IDs (first 10):', uniqueChannelIds);
-        
+
         // Debug: Log parsed media tvg_ids for comparison
         const media = await db.getParsedMedia();
         const channelMedia = (media as MediaRow[]).filter((m) => m.category === 'channel');
         const tvgIds = [...new Set(channelMedia.map((m) => m.tvg_id).filter(Boolean))].slice(0, 10);
         console.log('📺 Playlist TVG-IDs (first 10):', tvgIds);
-        
+
         toast.success(`Loaded ${programs.length} programs for ${channels} channels`);
       } else {
         toast.info('No programs found in EPG data');
@@ -239,12 +270,26 @@ const LocalAppProvider = ({ children }: { children: ReactNode }) => {
   };
 
   return (
-    <AppContext.Provider value={{
-      sources, favorites, watchHistory,
-      addSource, updateSource, removeSource, toggleFavorite, isFavorite, addToHistory,
-      loadingSources, parsedMedia, parsePlaylist, parsingPlaylist,
-      epgPrograms, parseEpg, parsingEpg,
-    }}>
+    <AppContext.Provider
+      value={{
+        sources,
+        favorites,
+        watchHistory,
+        addSource,
+        updateSource,
+        removeSource,
+        toggleFavorite,
+        isFavorite,
+        addToHistory,
+        loadingSources,
+        parsedMedia,
+        parsePlaylist,
+        parsingPlaylist,
+        epgPrograms,
+        parseEpg,
+        parsingEpg,
+      }}
+    >
       {children}
     </AppContext.Provider>
   );
@@ -266,34 +311,43 @@ const CloudAppProvider = ({ children }: { children: ReactNode }) => {
   const [parsingEpg, setParsingEpg] = useState(false);
 
   const loadSources = useCallback(async () => {
-    if (!user) { setSources([]); return; }
+    if (!user) {
+      setSources([]);
+      return;
+    }
     setLoadingSources(true);
-    const { data } = await supabase
-      .from('iptv_sources')
-      .select('*')
-      .order('created_at', { ascending: false });
+    const { data } = await supabase.from('iptv_sources').select('*').order('created_at', { ascending: false });
     setSources((data as IPTVSource[]) || []);
     setLoadingSources(false);
   }, [user]);
 
   const loadFavorites = useCallback(async () => {
-    if (!user) { setFavorites([]); return; }
+    if (!user) {
+      setFavorites([]);
+      return;
+    }
     const { data } = await supabase.from('favorites').select('media_id');
-    setFavorites(data?.map(f => f.media_id) || []);
+    setFavorites(data?.map((f) => f.media_id) || []);
   }, [user]);
 
   const loadHistory = useCallback(async () => {
-    if (!user) { setWatchHistory([]); return; }
+    if (!user) {
+      setWatchHistory([]);
+      return;
+    }
     const { data } = await supabase
       .from('watch_history')
       .select('media_id, progress, watched_at')
       .order('watched_at', { ascending: false })
       .limit(50);
-    setWatchHistory(data?.map(h => ({ id: h.media_id, progress: h.progress, timestamp: h.watched_at })) || []);
+    setWatchHistory(data?.map((h) => ({ id: h.media_id, progress: h.progress, timestamp: h.watched_at })) || []);
   }, [user]);
 
   const loadParsedMedia = useCallback(async () => {
-    if (!user) { setParsedMedia([]); return; }
+    if (!user) {
+      setParsedMedia([]);
+      return;
+    }
     let allData: MediaRow[] = [];
     let from = 0;
     const pageSize = 1000;
@@ -309,14 +363,20 @@ const CloudAppProvider = ({ children }: { children: ReactNode }) => {
       from += pageSize;
     }
     if (allData.length) {
-      setParsedMedia(allData.map((row: MediaRow) => ({
-        id: row.id, title: row.title, poster: row.poster || '',
-        category: row.category as MediaItem['category'],
-        genre: row.genre || 'Uncategorized', description: row.description || '',
-        sourceId: row.source_id, streamUrl: row.stream_url || '',
-        group: row.group_name || undefined,
-        tvgId: row.tvg_id || undefined,
-      })));
+      setParsedMedia(
+        allData.map((row: MediaRow) => ({
+          id: row.id,
+          title: row.title,
+          poster: row.poster || '',
+          category: row.category as MediaItem['category'],
+          genre: row.genre || 'Uncategorized',
+          description: row.description || '',
+          sourceId: row.source_id,
+          streamUrl: row.stream_url || '',
+          group: row.group_name || undefined,
+          tvgId: row.tvg_id || undefined,
+        })),
+      );
     }
   }, [user]);
 
@@ -330,8 +390,12 @@ const CloudAppProvider = ({ children }: { children: ReactNode }) => {
   const addSource = async (source: Omit<IPTVSource, 'id' | 'created_at'>) => {
     if (!user) return;
     await supabase.from('iptv_sources').insert({
-      user_id: user.id, name: source.name, type: source.type,
-      url: source.url, username: source.username || null, password: source.password || null,
+      user_id: user.id,
+      name: source.name,
+      type: source.type,
+      url: source.url,
+      username: source.username || null,
+      password: source.password || null,
       epg_url: source.epg_url || null,
     });
     await loadSources();
@@ -339,13 +403,16 @@ const CloudAppProvider = ({ children }: { children: ReactNode }) => {
 
   const updateSource = async (id: string, fields: Partial<Omit<IPTVSource, 'id' | 'created_at'>>) => {
     if (!user) return;
-    await supabase.from('iptv_sources').update({
-      ...(fields.name !== undefined && { name: fields.name }),
-      ...(fields.url !== undefined && { url: fields.url }),
-      ...(fields.username !== undefined && { username: fields.username || null }),
-      ...(fields.password !== undefined && { password: fields.password || null }),
-      ...(fields.epg_url !== undefined && { epg_url: fields.epg_url || null }),
-    }).eq('id', id);
+    await supabase
+      .from('iptv_sources')
+      .update({
+        ...(fields.name !== undefined && { name: fields.name }),
+        ...(fields.url !== undefined && { url: fields.url }),
+        ...(fields.username !== undefined && { username: fields.username || null }),
+        ...(fields.password !== undefined && { password: fields.password || null }),
+        ...(fields.epg_url !== undefined && { epg_url: fields.epg_url || null }),
+      })
+      .eq('id', id);
     await loadSources();
   };
 
@@ -379,8 +446,13 @@ const CloudAppProvider = ({ children }: { children: ReactNode }) => {
     try {
       const { data, error } = await supabase.functions.invoke('parse-playlist', {
         body: {
-          url: source.url, type: source.type, username: source.username,
-          password: source.password, sourceId: source.id, userId: user.id, sourceName: source.name,
+          url: source.url,
+          type: source.type,
+          username: source.username,
+          password: source.password,
+          sourceId: source.id,
+          userId: user.id,
+          sourceName: source.name,
         },
       });
       if (error) throw error;
@@ -405,7 +477,10 @@ const CloudAppProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const loadEpgPrograms = useCallback(async () => {
-    if (!user) { setEpgPrograms([]); return; }
+    if (!user) {
+      setEpgPrograms([]);
+      return;
+    }
     const { data } = await supabase
       .from('epg_programs')
       .select('*')
@@ -439,12 +514,26 @@ const CloudAppProvider = ({ children }: { children: ReactNode }) => {
   };
 
   return (
-    <AppContext.Provider value={{
-      sources, favorites, watchHistory,
-      addSource, updateSource, removeSource, toggleFavorite, isFavorite, addToHistory,
-      loadingSources, parsedMedia, parsePlaylist, parsingPlaylist,
-      epgPrograms, parseEpg, parsingEpg,
-    }}>
+    <AppContext.Provider
+      value={{
+        sources,
+        favorites,
+        watchHistory,
+        addSource,
+        updateSource,
+        removeSource,
+        toggleFavorite,
+        isFavorite,
+        addToHistory,
+        loadingSources,
+        parsedMedia,
+        parsePlaylist,
+        parsingPlaylist,
+        epgPrograms,
+        parseEpg,
+        parsingEpg,
+      }}
+    >
       {children}
     </AppContext.Provider>
   );

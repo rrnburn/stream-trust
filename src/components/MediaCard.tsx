@@ -10,10 +10,7 @@ const MediaCard = memo(({ item }: { item: MediaItem }) => {
   const fav = isFavorite(item.id);
 
   return (
-    <div
-      className="group relative cursor-pointer"
-      onClick={() => navigate(`/media/${item.id}`)}
-    >
+    <div className="group relative cursor-pointer" onClick={() => navigate(`/media/${item.id}`)}>
       <div className="relative aspect-[2/3] rounded-lg overflow-hidden bg-secondary card-hover">
         <div className="absolute inset-0 bg-gradient-to-t from-background via-background/20 to-transparent z-10" />
         {item.poster ? (
@@ -25,19 +22,20 @@ const MediaCard = memo(({ item }: { item: MediaItem }) => {
           />
         ) : (
           <div className="absolute inset-0 flex items-center justify-center bg-secondary">
-            <div className="text-6xl font-display font-bold text-muted-foreground/20">
-              {item.title.charAt(0)}
-            </div>
+            <div className="text-6xl font-display font-bold text-muted-foreground/20">{item.title.charAt(0)}</div>
           </div>
         )}
-        
+
         <div className="absolute inset-0 z-20 flex flex-col justify-end p-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
           <div className="flex gap-2 mb-2">
             <button className="w-9 h-9 rounded-full bg-primary flex items-center justify-center hover:bg-primary/80 transition-colors">
               <Play className="w-4 h-4 text-primary-foreground fill-primary-foreground" />
             </button>
             <button
-              onClick={(e) => { e.stopPropagation(); toggleFavorite(item.id); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleFavorite(item.id);
+              }}
               className={`w-9 h-9 rounded-full border border-border flex items-center justify-center transition-colors ${
                 fav ? 'bg-primary/20 border-primary' : 'bg-background/60 hover:bg-background/80'
               }`}

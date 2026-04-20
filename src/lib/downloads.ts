@@ -11,9 +11,9 @@ import { isNativePlatform } from '@/lib/platform';
 import { logger } from '@/lib/logger';
 
 export interface DownloadProgress {
-  loaded: number;      // bytes downloaded so far
-  total: number;       // total bytes (0 if unknown)
-  percent: number;     // 0–100
+  loaded: number; // bytes downloaded so far
+  total: number; // total bytes (0 if unknown)
+  percent: number; // 0–100
 }
 
 export interface ActiveDownload {
@@ -37,9 +37,9 @@ const inferExtension = (url: string, contentType?: string | null): string => {
 };
 
 export interface DownloadResult {
-  filePath: string;       // absolute path or relative ref usable with Filesystem
-  uri: string;            // file:// URI for native playback
-  size: number;           // total bytes written
+  filePath: string; // absolute path or relative ref usable with Filesystem
+  uri: string; // file:// URI for native playback
+  size: number; // total bytes written
   mime: string;
 }
 
@@ -102,9 +102,7 @@ export async function downloadStream(
     // when the file is absent) instead of stat, which spams the native console.
     try {
       const list = await Filesystem.readdir({ path: 'downloads', directory: Directory.Data });
-      const exists = list.files.some(
-        (f) => (typeof f === 'string' ? f : f.name) === fileName,
-      );
+      const exists = list.files.some((f) => (typeof f === 'string' ? f : f.name) === fileName);
       if (exists) {
         await Filesystem.deleteFile({ path: relPath, directory: Directory.Data });
       }

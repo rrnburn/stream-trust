@@ -147,10 +147,7 @@ const TVGuide = ({ channels, programs, loading, onChannelSelect }: TVGuideProps)
         </div>
 
         {/* Program grid */}
-        <div
-          className="flex-1 overflow-x-auto"
-          ref={scrollRef}
-        >
+        <div className="flex-1 overflow-x-auto" ref={scrollRef}>
           <div className="relative" style={{ width: totalWidth }}>
             {channels.map((ch) => {
               const chPrograms =
@@ -159,11 +156,7 @@ const TVGuide = ({ channels, programs, loading, onChannelSelect }: TVGuideProps)
                 programsByChannel[normalize(ch.title || '')] ||
                 [];
               return (
-                <div
-                  key={ch.id}
-                  className="relative border-b border-border"
-                  style={{ height: ROW_HEIGHT }}
-                >
+                <div key={ch.id} className="relative border-b border-border" style={{ height: ROW_HEIGHT }}>
                   {chPrograms.map((prog) => {
                     const pStart = new Date(prog.start_time);
                     const pEnd = new Date(prog.end_time);

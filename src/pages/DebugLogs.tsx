@@ -34,7 +34,7 @@ const DebugLogs = () => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [entries]);
 
-  const filtered = filter === 'all' ? entries : entries.filter(e => e.level === filter);
+  const filtered = filter === 'all' ? entries : entries.filter((e) => e.level === filter);
 
   return (
     <AppLayout>
@@ -42,7 +42,7 @@ const DebugLogs = () => {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
           <h1 className="text-xl font-bold text-foreground">Debug Logs</h1>
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
-            {(['all', 'error', 'warn', 'info', 'debug'] as const).map(lvl => (
+            {(['all', 'error', 'warn', 'info', 'debug'] as const).map((lvl) => (
               <Button
                 key={lvl}
                 size="sm"
@@ -53,10 +53,24 @@ const DebugLogs = () => {
                 {lvl}
               </Button>
             ))}
-            <Button size="sm" variant="outline" onClick={() => {
-              const text = filtered.map(e => `[${new Date(e.timestamp).toLocaleTimeString()}] [${e.level.toUpperCase()}] [${e.component}] ${e.message}`).join('\n');
-              navigator.clipboard.writeText(text).then(() => toast({ title: 'Copied', description: `${filtered.length} log entries copied to clipboard` }));
-            }} className="shrink-0 h-7 px-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                const text = filtered
+                  .map(
+                    (e) =>
+                      `[${new Date(e.timestamp).toLocaleTimeString()}] [${e.level.toUpperCase()}] [${e.component}] ${e.message}`,
+                  )
+                  .join('\n');
+                navigator.clipboard
+                  .writeText(text)
+                  .then(() =>
+                    toast({ title: 'Copied', description: `${filtered.length} log entries copied to clipboard` }),
+                  );
+              }}
+              className="shrink-0 h-7 px-2"
+            >
               <Copy className="w-3 h-3 mr-1" /> Copy
             </Button>
             <Button size="sm" variant="destructive" onClick={() => logger.clear()} className="shrink-0 h-7 px-2">
@@ -66,10 +80,8 @@ const DebugLogs = () => {
         </div>
 
         <ScrollArea className="flex-1 rounded-lg border border-border bg-card p-2 font-mono text-xs">
-          {filtered.length === 0 && (
-            <p className="text-muted-foreground text-center py-8">No logs yet</p>
-          )}
-          {filtered.map(entry => (
+          {filtered.length === 0 && <p className="text-muted-foreground text-center py-8">No logs yet</p>}
+          {filtered.map((entry) => (
             <div key={entry.id} className="py-1.5 border-b border-border/30 last:border-0">
               <div className="flex items-center gap-1.5 flex-wrap">
                 <span className="text-muted-foreground text-[10px] shrink-0">

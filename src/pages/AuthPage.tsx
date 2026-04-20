@@ -30,9 +30,7 @@ const AuthPage = () => {
     setSuccess('');
     setLoading(true);
 
-    const { error: authError } = isSignUp
-      ? await signUp(email, password)
-      : await signIn(email, password);
+    const { error: authError } = isSignUp ? await signUp(email, password) : await signIn(email, password);
 
     if (authError) {
       setError(authError.message);
@@ -42,7 +40,7 @@ const AuthPage = () => {
       // After successful email/password login, offer to save for biometric
       try {
         await saveCredentials(email, password);
-        setBioStatus(prev => prev ? { ...prev, hasCredentials: true } : prev);
+        setBioStatus((prev) => (prev ? { ...prev, hasCredentials: true } : prev));
       } catch {
         // Non-critical, silently ignore
       }
@@ -73,11 +71,7 @@ const AuthPage = () => {
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-sm"
-      >
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-sm">
         <div className="flex items-center gap-3 justify-center mb-8">
           <div className="w-12 h-12 rounded-xl bg-primary/20 flex items-center justify-center">
             <Play className="w-6 h-6 text-primary fill-primary" />
@@ -146,18 +140,27 @@ const AuthPage = () => {
                 <AlertCircle className="w-4 h-4" /> {error}
               </div>
             )}
-            {success && (
-              <div className="text-sm text-primary">{success}</div>
-            )}
+            {success && <div className="text-sm text-primary">{success}</div>}
 
-            <Button type="submit" disabled={loading} className="w-full bg-primary text-primary-foreground hover:bg-primary/90 h-11">
+            <Button
+              type="submit"
+              disabled={loading}
+              className="w-full bg-primary text-primary-foreground hover:bg-primary/90 h-11"
+            >
               {loading ? 'Loading...' : isSignUp ? 'Sign Up' : 'Sign In'}
             </Button>
           </form>
 
           <p className="text-sm text-muted-foreground text-center mt-4">
             {isSignUp ? 'Already have an account?' : "Don't have an account?"}{' '}
-            <button onClick={() => { setIsSignUp(!isSignUp); setError(''); setSuccess(''); }} className="text-primary hover:underline">
+            <button
+              onClick={() => {
+                setIsSignUp(!isSignUp);
+                setError('');
+                setSuccess('');
+              }}
+              className="text-primary hover:underline"
+            >
               {isSignUp ? 'Sign in' : 'Sign up'}
             </button>
           </p>

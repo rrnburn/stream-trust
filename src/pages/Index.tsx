@@ -11,7 +11,7 @@ const Index = () => {
   const watchedMedia = useMemo(() => {
     const seen = new Set<string>();
     return watchHistory
-      .map(h => media.find(m => m.id === h.id))
+      .map((h) => media.find((m) => m.id === h.id))
       .filter((m): m is NonNullable<typeof m> => {
         if (!m || seen.has(m.id)) return false;
         seen.add(m.id);
@@ -19,9 +19,9 @@ const Index = () => {
       });
   }, [watchHistory, media]);
 
-  const watchedChannels = watchedMedia.filter(m => m.category === 'channel');
-  const watchedMovies = watchedMedia.filter(m => m.category === 'movie');
-  const watchedSeries = watchedMedia.filter(m => m.category === 'series');
+  const watchedChannels = watchedMedia.filter((m) => m.category === 'channel');
+  const watchedMovies = watchedMedia.filter((m) => m.category === 'movie');
+  const watchedSeries = watchedMedia.filter((m) => m.category === 'series');
 
   if (media.length === 0) {
     return (
@@ -29,7 +29,9 @@ const Index = () => {
         <div className="flex flex-col items-center justify-center py-20 text-center p-4">
           <Tv className="w-16 h-16 text-muted-foreground/30 mb-4" />
           <p className="text-lg text-muted-foreground">No content yet</p>
-          <p className="text-sm text-muted-foreground/60 mt-1">Go to Sources, add an IPTV source, and parse it to see content here</p>
+          <p className="text-sm text-muted-foreground/60 mt-1">
+            Go to Sources, add an IPTV source, and parse it to see content here
+          </p>
         </div>
       </AppLayout>
     );

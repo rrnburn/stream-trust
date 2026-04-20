@@ -32,8 +32,8 @@ export async function playInVlc(url: string, title?: string): Promise<void> {
       className: 'org.videolan.vlc.gui.video.VideoPlayerActivity',
       extra: {
         title: title || 'Video',
-        'from_start': false,
-        'position': 0,
+        from_start: false,
+        position: 0,
       },
     });
     logger.info('NativePlayer', `VLC intent result: ${JSON.stringify(result)}`);
@@ -56,7 +56,7 @@ export async function playInMxPlayer(url: string, title?: string): Promise<void>
       packageName: 'com.mxtech.videoplayer.ad',
       extra: {
         title: title || 'Video',
-        'headers': [`User-Agent: ${PLAYER_UA}`],
+        headers: [`User-Agent: ${PLAYER_UA}`],
       },
     });
     logger.info('NativePlayer', `MX Player intent result: ${JSON.stringify(result)}`);

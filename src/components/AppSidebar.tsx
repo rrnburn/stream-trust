@@ -1,5 +1,19 @@
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
-import { Home, Film, Tv, Search, Heart, Settings, Play, Radio, LogOut, Terminal, ChevronDown, ChevronRight, Download } from 'lucide-react';
+import {
+  Home,
+  Film,
+  Tv,
+  Search,
+  Heart,
+  Settings,
+  Play,
+  Radio,
+  LogOut,
+  Terminal,
+  ChevronDown,
+  ChevronRight,
+  Download,
+} from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useMedia } from '@/context/AppContext';
 import { useEffect, useMemo, useState } from 'react';
@@ -32,15 +46,15 @@ const AppSidebar = () => {
   // Auto-expand the section matching the current route
   const [expandedSections, setExpandedSections] = useState<Set<string>>(() => {
     const initial = new Set<string>();
-    const matchingItem = navItems.find(item => item.to === location.pathname);
+    const matchingItem = navItems.find((item) => item.to === location.pathname);
     if (matchingItem) initial.add(matchingItem.to);
     return initial;
   });
 
   useEffect(() => {
-    const matchingItem = navItems.find(item => item.to === location.pathname);
+    const matchingItem = navItems.find((item) => item.to === location.pathname);
     if (matchingItem?.category) {
-      setExpandedSections(prev => {
+      setExpandedSections((prev) => {
         if (prev.has(matchingItem.to)) return prev;
         const next = new Set(prev);
         next.add(matchingItem.to);
@@ -52,24 +66,24 @@ const AppSidebar = () => {
   // Build groups per category
   const groupsByCategory = useMemo(() => {
     const map: Record<string, string[]> = {};
-    
+
     // channels
-    const channels = media.filter(m => m.category === 'channel');
-    map['channel'] = [...new Set(channels.map(c => c.group || 'Uncategorized'))].sort();
-    
+    const channels = media.filter((m) => m.category === 'channel');
+    map['channel'] = [...new Set(channels.map((c) => c.group || 'Uncategorized'))].sort();
+
     // movies
-    const movies = media.filter(m => m.category === 'movie');
-    map['movie'] = [...new Set(movies.map(c => c.group || 'Uncategorized'))].sort();
-    
+    const movies = media.filter((m) => m.category === 'movie');
+    map['movie'] = [...new Set(movies.map((c) => c.group || 'Uncategorized'))].sort();
+
     // series
-    const series = media.filter(m => m.category === 'series');
-    map['series'] = [...new Set(series.map(c => c.group || 'Uncategorized'))].sort();
+    const series = media.filter((m) => m.category === 'series');
+    map['series'] = [...new Set(series.map((c) => c.group || 'Uncategorized'))].sort();
 
     return map;
   }, [media]);
 
   const toggleSection = (key: string) => {
-    setExpandedSections(prev => {
+    setExpandedSections((prev) => {
       const next = new Set(prev);
       next.has(key) ? next.delete(key) : next.add(key);
       return next;
@@ -111,8 +125,8 @@ const AppSidebar = () => {
                       active && !currentGroup
                         ? 'bg-primary/15 text-primary'
                         : active
-                        ? 'text-primary'
-                        : 'text-muted-foreground hover:text-foreground hover:bg-secondary'
+                          ? 'text-primary'
+                          : 'text-muted-foreground hover:text-foreground hover:bg-secondary'
                     }`}
                   >
                     <Icon className="w-5 h-5 shrink-0" />
@@ -127,7 +141,7 @@ const AppSidebar = () => {
                 </div>
                 {isExpanded && (
                   <div className="hidden lg:block ml-8 mt-0.5 space-y-0.5 max-h-48 overflow-y-auto scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
-                    {groups.map(g => {
+                    {groups.map((g) => {
                       const isActiveGroup = active && currentGroup === g;
                       return (
                         <Link
@@ -155,9 +169,7 @@ const AppSidebar = () => {
               key={to}
               to={to}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
-                active
-                  ? 'bg-primary/15 text-primary'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-secondary'
+                active ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:text-foreground hover:bg-secondary'
               }`}
             >
               <Icon className="w-5 h-5 shrink-0" />
@@ -168,9 +180,7 @@ const AppSidebar = () => {
       </nav>
 
       <div className="p-4 lg:px-6 border-t border-sidebar-border space-y-3 shrink-0">
-        {user && (
-          <p className="text-xs text-muted-foreground truncate hidden lg:block">{user.email}</p>
-        )}
+        {user && <p className="text-xs text-muted-foreground truncate hidden lg:block">{user.email}</p>}
         <button
           onClick={signOut}
           className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors w-full"

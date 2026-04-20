@@ -39,7 +39,19 @@ interface EpisodeModalProps {
   onPlay: (url: string, title: string) => void;
 }
 
-const EpisodeModal = ({ open, onClose, seriesId, seriesTitle, seriesPoster, sourceId, streamUrl, sourceUrl, sourceUsername, sourcePassword, onPlay }: EpisodeModalProps) => {
+const EpisodeModal = ({
+  open,
+  onClose,
+  seriesId,
+  seriesTitle,
+  seriesPoster,
+  sourceId,
+  streamUrl,
+  sourceUrl,
+  sourceUsername,
+  sourcePassword,
+  onPlay,
+}: EpisodeModalProps) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [seriesInfo, setSeriesInfo] = useState<SeriesInfo | null>(null);
@@ -106,7 +118,7 @@ const EpisodeModal = ({ open, onClose, seriesId, seriesTitle, seriesPoster, sour
             {seriesInfo.seasons.length > 1 && (
               <div className="w-full overflow-x-auto scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
                 <div className="flex gap-2 pb-2 w-max">
-                  {seriesInfo.seasons.map(s => (
+                  {seriesInfo.seasons.map((s) => (
                     <button
                       key={s}
                       onClick={() => setSelectedSeason(s)}
@@ -129,7 +141,7 @@ const EpisodeModal = ({ open, onClose, seriesId, seriesTitle, seriesPoster, sour
                 {currentEpisodes.length === 0 && (
                   <p className="text-center py-8 text-muted-foreground">No episodes found for this season.</p>
                 )}
-                {currentEpisodes.map(ep => {
+                {currentEpisodes.map((ep) => {
                   const epLabel = `${seriesTitle} - S${selectedSeason}E${ep.episodeNum}`;
                   // Stable per-episode id so downloads are tracked separately per episode.
                   const epDownloadId = `${seriesId}:s${selectedSeason}e${ep.episodeNum}:${ep.id}`;
@@ -153,13 +165,9 @@ const EpisodeModal = ({ open, onClose, seriesId, seriesTitle, seriesPoster, sour
                             <span className="text-xs font-mono text-muted-foreground">E{ep.episodeNum}</span>
                             <span className="text-sm font-medium text-foreground truncate">{ep.title}</span>
                           </div>
-                          {ep.plot && (
-                            <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{ep.plot}</p>
-                          )}
+                          {ep.plot && <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{ep.plot}</p>}
                         </div>
-                        {ep.duration && (
-                          <span className="text-xs text-muted-foreground shrink-0">{ep.duration}</span>
-                        )}
+                        {ep.duration && <span className="text-xs text-muted-foreground shrink-0">{ep.duration}</span>}
                       </button>
                       <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
                         <DownloadButton

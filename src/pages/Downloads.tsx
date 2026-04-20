@@ -94,9 +94,7 @@ const Downloads = () => {
           </div>
         )}
 
-        {native && loading && (
-          <div className="text-muted-foreground text-sm">Loading…</div>
-        )}
+        {native && loading && <div className="text-muted-foreground text-sm">Loading…</div>}
 
         {native && !loading && items.length === 0 && (
           <div className="rounded-xl border border-border bg-card/40 p-8 text-center text-muted-foreground">

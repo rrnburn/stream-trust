@@ -6,31 +6,34 @@ import MediaGrid from '@/components/MediaGrid';
 import { PlayCircle, Search } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 
-
 const VOD = () => {
   const media = useMedia();
   const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState('');
   const selectedGroup = searchParams.get('group') || 'all';
   const setSelectedGroup = (g: string) => {
-    if (g === 'all') { setSearchParams({}); } else { setSearchParams({ group: g }); }
+    if (g === 'all') {
+      setSearchParams({});
+    } else {
+      setSearchParams({ group: g });
+    }
   };
 
-  const allVod = useMemo(() => media.filter(m => m.category === 'movie' || m.category === 'vod'), [media]);
+  const allVod = useMemo(() => media.filter((m) => m.category === 'movie' || m.category === 'vod'), [media]);
 
   const groups = useMemo(() => {
-    const g = [...new Set(allVod.map(i => i.group || 'Uncategorized'))].sort();
+    const g = [...new Set(allVod.map((i) => i.group || 'Uncategorized'))].sort();
     return g;
   }, [allVod]);
 
   const vodItems = useMemo(() => {
     let items = allVod;
     if (selectedGroup !== 'all') {
-      items = items.filter(i => (i.group || 'Uncategorized') === selectedGroup);
+      items = items.filter((i) => (i.group || 'Uncategorized') === selectedGroup);
     }
     if (search) {
       const q = search.toLowerCase();
-      items = items.filter(i => i.title.toLowerCase().includes(q));
+      items = items.filter((i) => i.title.toLowerCase().includes(q));
     }
     return items;
   }, [allVod, search, selectedGroup]);
@@ -57,7 +60,7 @@ const VOD = () => {
             <Input
               placeholder="Search..."
               value={search}
-              onChange={e => setSearch(e.target.value)}
+              onChange={(e) => setSearch(e.target.value)}
               className="pl-9"
             />
           </div>
@@ -70,17 +73,21 @@ const VOD = () => {
               <button
                 onClick={() => setSelectedGroup('all')}
                 className={`px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
-                  selectedGroup === 'all' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-muted-foreground hover:text-foreground'
+                  selectedGroup === 'all'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-secondary text-muted-foreground hover:text-foreground'
                 }`}
               >
                 All ({allVod.length})
               </button>
-              {groups.map(g => (
+              {groups.map((g) => (
                 <button
                   key={g}
                   onClick={() => setSelectedGroup(g)}
                   className={`px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
-                    selectedGroup === g ? 'bg-primary text-primary-foreground' : 'bg-secondary text-muted-foreground hover:text-foreground'
+                    selectedGroup === g
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-secondary text-muted-foreground hover:text-foreground'
                   }`}
                 >
                   {g}

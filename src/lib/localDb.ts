@@ -113,25 +113,58 @@ export async function getSources() {
   return res.values || [];
 }
 
-export async function addSourceLocal(source: { name: string; type: string; url: string; username?: string; password?: string; epg_url?: string }) {
+export async function addSourceLocal(source: {
+  name: string;
+  type: string;
+  url: string;
+  username?: string;
+  password?: string;
+  epg_url?: string;
+}) {
   const d = await initLocalDb();
   const id = uuid();
   await d.run(
     'INSERT INTO iptv_sources (id, name, type, url, username, password, epg_url) VALUES (?, ?, ?, ?, ?, ?, ?)',
-    [id, source.name, source.type, source.url, source.username || null, source.password || null, source.epg_url || null],
+    [
+      id,
+      source.name,
+      source.type,
+      source.url,
+      source.username || null,
+      source.password || null,
+      source.epg_url || null,
+    ],
   );
   return id;
 }
 
-export async function updateSourceLocal(id: string, fields: { name?: string; url?: string; username?: string; password?: string; epg_url?: string }) {
+export async function updateSourceLocal(
+  id: string,
+  fields: { name?: string; url?: string; username?: string; password?: string; epg_url?: string },
+) {
   const d = await initLocalDb();
   const sets: string[] = [];
   const vals: unknown[] = [];
-  if (fields.name !== undefined) { sets.push('name = ?'); vals.push(fields.name); }
-  if (fields.url !== undefined) { sets.push('url = ?'); vals.push(fields.url); }
-  if (fields.username !== undefined) { sets.push('username = ?'); vals.push(fields.username || null); }
-  if (fields.password !== undefined) { sets.push('password = ?'); vals.push(fields.password || null); }
-  if (fields.epg_url !== undefined) { sets.push('epg_url = ?'); vals.push(fields.epg_url || null); }
+  if (fields.name !== undefined) {
+    sets.push('name = ?');
+    vals.push(fields.name);
+  }
+  if (fields.url !== undefined) {
+    sets.push('url = ?');
+    vals.push(fields.url);
+  }
+  if (fields.username !== undefined) {
+    sets.push('username = ?');
+    vals.push(fields.username || null);
+  }
+  if (fields.password !== undefined) {
+    sets.push('password = ?');
+    vals.push(fields.password || null);
+  }
+  if (fields.epg_url !== undefined) {
+    sets.push('epg_url = ?');
+    vals.push(fields.epg_url || null);
+  }
   if (sets.length === 0) return;
   vals.push(id);
   await d.run(`UPDATE iptv_sources SET ${sets.join(', ')} WHERE id = ?`, vals);
@@ -153,7 +186,15 @@ export async function getParsedMedia() {
 
 export async function insertParsedMedia(
   sourceId: string,
-  items: Array<{ title: string; logo: string; category: string; group: string; url: string; sourceName?: string; tvgId?: string }>,
+  items: Array<{
+    title: string;
+    logo: string;
+    category: string;
+    group: string;
+    url: string;
+    sourceName?: string;
+    tvgId?: string;
+  }>,
 ) {
   const d = await initLocalDb();
   // Delete old records for this source
@@ -163,9 +204,21 @@ export async function insertParsedMedia(
   const BATCH_SIZE = 500;
   for (let i = 0; i < items.length; i += BATCH_SIZE) {
     const batch = items.slice(i, i + BATCH_SIZE);
-    const statements = batch.map(item => ({
-      statement: 'INSERT INTO parsed_media (id, source_id, title, poster, category, genre, description, stream_url, group_name, tvg_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      values: [uuid(), sourceId, item.title, item.logo || '', item.category, item.group || 'Uncategorized', `From ${item.sourceName || 'source'}`, item.url, item.group || null, item.tvgId || null],
+    const statements = batch.map((item) => ({
+      statement:
+        'INSERT INTO parsed_media (id, source_id, title, poster, category, genre, description, stream_url, group_name, tvg_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      values: [
+        uuid(),
+        sourceId,
+        item.title,
+        item.logo || '',
+        item.category,
+        item.group || 'Uncategorized',
+        `From ${item.sourceName || 'source'}`,
+        item.url,
+        item.group || null,
+        item.tvgId || null,
+      ],
     }));
     await d.executeSet(statements);
   }
@@ -193,16 +246,15 @@ export async function toggleFavoriteLocal(mediaId: string) {
 
 export async function getWatchHistory() {
   const d = await initLocalDb();
-  const res = await d.query('SELECT media_id, progress, watched_at FROM watch_history ORDER BY watched_at DESC LIMIT 50');
+  const res = await d.query(
+    'SELECT media_id, progress, watched_at FROM watch_history ORDER BY watched_at DESC LIMIT 50',
+  );
   return (res.values || []).map((r: any) => ({ id: r.media_id, progress: r.progress, timestamp: r.watched_at }));
 }
 
 export async function addToHistoryLocal(mediaId: string, progress: number) {
   const d = await initLocalDb();
-  await d.run(
-    'INSERT INTO watch_history (id, media_id, progress) VALUES (?, ?, ?)',
-    [uuid(), mediaId, progress],
-  );
+  await d.run('INSERT INTO watch_history (id, media_id, progress) VALUES (?, ?, ?)', [uuid(), mediaId, progress]);
 }
 
 // ── EPG Programs ───────────────────────────────────────────
@@ -220,15 +272,23 @@ export async function getEpgPrograms() {
 
 export async function insertEpgPrograms(
   sourceId: string,
-  programs: Array<{ channel_id: string; title: string; description: string; start_time: string; end_time: string; category: string }>,
+  programs: Array<{
+    channel_id: string;
+    title: string;
+    description: string;
+    start_time: string;
+    end_time: string;
+    category: string;
+  }>,
 ) {
   const d = await initLocalDb();
 
   const BATCH_SIZE = 500;
   for (let i = 0; i < programs.length; i += BATCH_SIZE) {
     const batch = programs.slice(i, i + BATCH_SIZE);
-    const statements = batch.map(p => ({
-      statement: 'INSERT INTO epg_programs (id, source_id, channel_id, title, description, start_time, end_time, category) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+    const statements = batch.map((p) => ({
+      statement:
+        'INSERT INTO epg_programs (id, source_id, channel_id, title, description, start_time, end_time, category) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
       values: [uuid(), sourceId, p.channel_id, p.title, p.description, p.start_time, p.end_time, p.category],
     }));
     await d.executeSet(statements);
@@ -237,7 +297,14 @@ export async function insertEpgPrograms(
 
 export async function replaceEpgPrograms(
   sourceId: string,
-  programs: Array<{ channel_id: string; title: string; description: string; start_time: string; end_time: string; category: string }>,
+  programs: Array<{
+    channel_id: string;
+    title: string;
+    description: string;
+    start_time: string;
+    end_time: string;
+    category: string;
+  }>,
 ) {
   const d = await initLocalDb();
   await d.run('DELETE FROM epg_programs WHERE source_id = ?', [sourceId]);

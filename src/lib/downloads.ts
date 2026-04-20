@@ -91,37 +91,33 @@ export async function downloadStream(
     const fileName = `${sanitize(title)}_${mediaId.slice(0, 8)}.${ext}`;
     const relPath = `downloads/${fileName}`;
 
-    // Ensure downloads directory exists (check first to avoid noisy plugin errors)
-    let dirExists = false;
+    // Ensure downloads directory exists. mkdir with recursive:true is idempotent;
+    // we swallow the "already exists" error silently to avoid noisy native logs.
     try {
-      await Filesystem.stat({ path: 'downloads', directory: Directory.Data });
-      dirExists = true;
-    } catch {
-      dirExists = false;
-    }
-    if (!dirExists) {
-      try {
-        await Filesystem.mkdir({
-          path: 'downloads',
-          directory: Directory.Data,
-          recursive: true,
-        });
-      } catch (e) {
-        // Race condition or already exists — ignore silently
-        const msg = e instanceof Error ? e.message : String(e);
-        if (!msg.toLowerCase().includes('already exists')) {
-          logger.warn('Downloads', `mkdir failed: ${msg}`);
-        }
+      await Filesystem.mkdir({
+        path: 'downloads',
+        directory: Directory.Data,
+        recursive: true,
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (!msg.toLowerCase().includes('already exists')) {
+        logger.warn('Downloads', `mkdir failed: ${msg}`);
       }
     }
 
-    // Remove any prior partial file (only if it exists)
+    // Remove any prior partial file. Check via readdir (which doesn't log errors
+    // when the file is absent) instead of stat, which spams the native console.
     try {
-      await Filesystem.stat({ path: relPath, directory: Directory.Data });
-      // exists — delete it
-      await Filesystem.deleteFile({ path: relPath, directory: Directory.Data });
+      const list = await Filesystem.readdir({ path: 'downloads', directory: Directory.Data });
+      const exists = list.files.some(
+        (f) => (typeof f === 'string' ? f : f.name) === fileName,
+      );
+      if (exists) {
+        await Filesystem.deleteFile({ path: relPath, directory: Directory.Data });
+      }
     } catch {
-      // not present — nothing to clean up
+      // readdir failed (dir missing despite mkdir, or permissions) — ignore
     }
 
     const reader = res.body.getReader();

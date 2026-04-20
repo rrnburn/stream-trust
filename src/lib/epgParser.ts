@@ -17,19 +17,10 @@ export function parseXmlTvLocal(xml: string): LocalEpgProgram[] {
   const now = new Date();
   const cutoff = new Date(now.getTime() + 24 * 60 * 60 * 1000);
 
-  // Limit total programs to prevent memory issues on Android
-  const MAX_PROGRAMS = 10000;
-
   const programmeRegex = /<programme\s+([^>]*)>([\s\S]*?)<\/programme>/gi;
   let match: RegExpExecArray | null;
 
   while ((match = programmeRegex.exec(xml)) !== null) {
-    // Safety check to prevent runaway memory usage
-    if (programs.length >= MAX_PROGRAMS) {
-      console.warn('Reached max program limit, stopping parse');
-      break;
-    }
-
     const attrs = match[1];
     const body = match[2];
 

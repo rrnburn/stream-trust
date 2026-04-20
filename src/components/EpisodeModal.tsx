@@ -129,32 +129,51 @@ const EpisodeModal = ({ open, onClose, seriesId, seriesTitle, seriesPoster, sour
                 {currentEpisodes.length === 0 && (
                   <p className="text-center py-8 text-muted-foreground">No episodes found for this season.</p>
                 )}
-                {currentEpisodes.map(ep => (
-                  <button
-                    key={ep.id}
-                    onClick={() => {
-                      onPlay(ep.streamUrl, `${seriesTitle} - S${selectedSeason}E${ep.episodeNum}`);
-                      onClose();
-                    }}
-                    className="w-full flex items-start gap-3 p-3 rounded-lg hover:bg-secondary/80 transition-colors text-left group"
-                  >
-                    <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0 group-hover:bg-primary/20 transition-colors">
-                      <Play className="w-4 h-4 text-primary" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-mono text-muted-foreground">E{ep.episodeNum}</span>
-                        <span className="text-sm font-medium text-foreground truncate">{ep.title}</span>
+                {currentEpisodes.map(ep => {
+                  const epLabel = `${seriesTitle} - S${selectedSeason}E${ep.episodeNum}`;
+                  // Stable per-episode id so downloads are tracked separately per episode.
+                  const epDownloadId = `${seriesId}:s${selectedSeason}e${ep.episodeNum}:${ep.id}`;
+                  return (
+                    <div
+                      key={ep.id}
+                      className="w-full flex items-start gap-3 p-3 rounded-lg hover:bg-secondary/80 transition-colors group"
+                    >
+                      <button
+                        onClick={() => {
+                          onPlay(ep.streamUrl, epLabel);
+                          onClose();
+                        }}
+                        className="flex items-start gap-3 flex-1 min-w-0 text-left"
+                      >
+                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0 group-hover:bg-primary/20 transition-colors">
+                          <Play className="w-4 h-4 text-primary" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-mono text-muted-foreground">E{ep.episodeNum}</span>
+                            <span className="text-sm font-medium text-foreground truncate">{ep.title}</span>
+                          </div>
+                          {ep.plot && (
+                            <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{ep.plot}</p>
+                          )}
+                        </div>
+                        {ep.duration && (
+                          <span className="text-xs text-muted-foreground shrink-0">{ep.duration}</span>
+                        )}
+                      </button>
+                      <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
+                        <DownloadButton
+                          mediaId={epDownloadId}
+                          title={epLabel}
+                          poster={ep.image || seriesPoster || ''}
+                          category="series"
+                          streamUrl={ep.streamUrl}
+                          sourceId={sourceId}
+                        />
                       </div>
-                      {ep.plot && (
-                        <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{ep.plot}</p>
-                      )}
                     </div>
-                    {ep.duration && (
-                      <span className="text-xs text-muted-foreground shrink-0">{ep.duration}</span>
-                    )}
-                  </button>
-                ))}
+                  );
+                })}
               </div>
             </ScrollArea>
           </>

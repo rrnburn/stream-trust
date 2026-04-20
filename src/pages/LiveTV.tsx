@@ -104,20 +104,21 @@ const LiveTV = () => {
     });
   };
 
-  // Match EPG programs for the active channel using multiple identifiers
+  // Match EPG programs for the active channel using normalized identifiers.
+  // EPG channel IDs vary widely between providers (e.g. "BBC.One.uk", "bbc1",
+  // "BBC One"), so we normalize to alphanumerics-only lowercase before comparing.
   const channelPrograms = useMemo(() => {
     if (!activeChannel || epgPrograms.length === 0) return [];
-    
+    const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+
     const matchIds = new Set<string>();
-    if (activeChannel.tvgId) matchIds.add(activeChannel.tvgId.toLowerCase());
-    if (activeChannel.id) matchIds.add(activeChannel.id.toLowerCase());
-    if (activeChannel.title) matchIds.add(activeChannel.title.toLowerCase());
+    if (activeChannel.tvgId) matchIds.add(normalize(activeChannel.tvgId));
+    if (activeChannel.id) matchIds.add(normalize(activeChannel.id));
+    if (activeChannel.title) matchIds.add(normalize(activeChannel.title));
+    matchIds.delete('');
 
     return epgPrograms
-      .filter(p => {
-        const chId = (p.channel_id || '').toLowerCase();
-        return matchIds.has(chId);
-      })
+      .filter(p => matchIds.has(normalize(p.channel_id || '')))
       .sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
   }, [activeChannel, epgPrograms]);
 

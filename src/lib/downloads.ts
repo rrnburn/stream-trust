@@ -68,15 +68,8 @@ export async function downloadStream(
   try {
     logger.info('Downloads', `Starting download: ${title}`, { mediaId, url: url.substring(0, 120) });
 
-    const probe = await fetch(url, {
-      signal: controller.signal,
-      method: 'GET',
-      headers: { Range: 'bytes=0-0' },
-    });
-    if (!probe.ok) throw new Error(`HTTP ${probe.status}`);
-
-    const total = parseInt(probe.headers.get('content-length') || '0', 10);
-    const contentType = probe.headers.get('content-type');
+    let total = 0;
+    const contentType = null;
     const ext = inferExtension(url, contentType);
     const fileName = `${sanitize(title)}_${mediaId.slice(0, 8)}.${ext}`;
     const relPath = `downloads/${fileName}`;
@@ -114,7 +107,8 @@ export async function downloadStream(
     const progressListener = await Filesystem.addListener('progress', (status) => {
       if (status.url !== url) return;
       loaded = status.bytes;
-      const totalBytes = status.contentLength || total;
+      total = status.contentLength || total;
+      const totalBytes = total;
       const percent = totalBytes > 0 ? Math.round((status.bytes / totalBytes) * 100) : 0;
       onProgress?.({ loaded: status.bytes, total: totalBytes, percent });
     });

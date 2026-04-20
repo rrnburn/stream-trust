@@ -18,6 +18,7 @@ import VOD from './pages/VOD';
 import NotFound from './pages/NotFound';
 import DebugLogs from './pages/DebugLogs';
 import Downloads from './pages/Downloads';
+import EPGGuide from './pages/EPGGuide';
 
 const queryClient = new QueryClient();
 
@@ -135,6 +136,14 @@ const AppRoutes = () => (
       element={
         <ProtectedRoute>
           <Downloads />
+        </ProtectedRoute>
+      }
+    />
+    <Route
+      path="/epg"
+      element={
+        <ProtectedRoute>
+          <EPGGuide />
         </ProtectedRoute>
       }
     />

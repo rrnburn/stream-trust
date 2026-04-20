@@ -50,7 +50,14 @@ export function parseXmlTvLocal(xml: string): LocalEpgProgram[] {
     });
   }
 
-  return programs;
+  // Deduplicate: remove programs with identical channel_id + start_time
+  const seen = new Set<string>();
+  return programs.filter((p) => {
+    const key = `${p.channel_id}|${p.start_time}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function extractAttr(attrs: string, name: string): string | null {

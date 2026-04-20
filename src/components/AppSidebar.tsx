@@ -13,6 +13,7 @@ import {
   ChevronDown,
   ChevronRight,
   Download,
+  CalendarDays,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useMedia } from '@/context/AppContext';
@@ -29,6 +30,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { to: '/', icon: Home, label: 'Home' },
   { to: '/live-tv', icon: Radio, label: 'Live TV', category: 'channel' },
+  { to: '/epg', icon: CalendarDays, label: 'TV Guide' },
   { to: '/movies', icon: Film, label: 'Movies', category: 'movie' },
   { to: '/series', icon: Tv, label: 'Series', category: 'series' },
   { to: '/search', icon: Search, label: 'Search' },

@@ -40,9 +40,9 @@ if (fs.existsSync(gradlePropsPath)) {
     console.log('✓ Updating gradle.properties');
     gradleProps += `
 # Memory optimization
-org.gradle.jvmargs=-Xmx4096m -XX:MaxPermSize=512m -XX:+HeapDumpOnOutOfMemoryError -Dfile.encoding=UTF-8
+org.gradle.jvmargs=-Xmx4096m -XX:+HeapDumpOnOutOfMemoryError -Dfile.encoding=UTF-8
 org.gradle.daemon=true
-org.gradle.configureondemand=true
+org.gradle.caching=true
 android.enableJetifier=true
 android.useAndroidX=true
 `;

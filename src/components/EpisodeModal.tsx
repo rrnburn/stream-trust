@@ -28,7 +28,10 @@ interface SeriesInfo {
 interface EpisodeModalProps {
   open: boolean;
   onClose: () => void;
+  seriesId: string; // parent series media id (used to namespace per-episode download keys)
   seriesTitle: string;
+  seriesPoster?: string;
+  sourceId?: string;
   streamUrl: string; // e.g. https://host/series/user/pass/12345
   sourceUrl: string; // iptv source base url
   sourceUsername?: string;
@@ -36,7 +39,7 @@ interface EpisodeModalProps {
   onPlay: (url: string, title: string) => void;
 }
 
-const EpisodeModal = ({ open, onClose, seriesTitle, streamUrl, sourceUrl, sourceUsername, sourcePassword, onPlay }: EpisodeModalProps) => {
+const EpisodeModal = ({ open, onClose, seriesId, seriesTitle, seriesPoster, sourceId, streamUrl, sourceUrl, sourceUsername, sourcePassword, onPlay }: EpisodeModalProps) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [seriesInfo, setSeriesInfo] = useState<SeriesInfo | null>(null);

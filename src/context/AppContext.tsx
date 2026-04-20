@@ -205,17 +205,7 @@ const LocalAppProvider = ({ children }: { children: ReactNode }) => {
       if (programs.length > 0) {
         toast.info(`Saving ${programs.length} programs...`);
         
-        // Insert in batches to avoid overwhelming SQLite
-        const BATCH_SIZE = 1000;
-        for (let i = 0; i < programs.length; i += BATCH_SIZE) {
-          const batch = programs.slice(i, i + BATCH_SIZE);
-          await db.insertEpgPrograms(source.id, batch);
-          
-          // Yield to UI thread between batches
-          if (i + BATCH_SIZE < programs.length) {
-            await new Promise(resolve => setTimeout(resolve, 50));
-          }
-        }
+        await db.replaceEpgPrograms(source.id, programs);
         
         const epg = await db.getEpgPrograms();
         setEpgPrograms(epg);

@@ -135,6 +135,7 @@ Deno.serve(async (req: Request) => {
           logo: s.stream_icon || '',
           url: `${streamBase}/live/${username}/${password}/${s.stream_id}.m3u8`,
           category: 'channel' as const,
+          tvgId: s.epg_channel_id || s.epg_channel || s.tvg_id || undefined,
         })),
         ...vodStreams.map((s: any) => ({
           title: s.name || 'Unknown',

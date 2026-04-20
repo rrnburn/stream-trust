@@ -20,17 +20,19 @@ export const useAuth = () => {
   return ctx;
 };
 
-// Fake local user for native builds (no cloud auth needed)
+// Fake local user for native builds or when VITE_SKIP_AUTH is set
 const LOCAL_USER = { id: 'local-user', email: 'local@device' } as User;
+const SKIP_AUTH = import.meta.env.VITE_SKIP_AUTH === 'true';
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const native = isNativePlatform();
-  const [user, setUser] = useState<User | null>(native ? LOCAL_USER : null);
+  const bypass = native || SKIP_AUTH;
+  const [user, setUser] = useState<User | null>(bypass ? LOCAL_USER : null);
   const [session, setSession] = useState<Session | null>(null);
-  const [loading, setLoading] = useState(!native);
+  const [loading, setLoading] = useState(!bypass);
 
   useEffect(() => {
-    if (native) return; // no cloud auth on native
+    if (bypass) return; // no cloud auth on native or when bypassed
 
     const {
       data: { subscription },
@@ -47,10 +49,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     });
 
     return () => subscription.unsubscribe();
-  }, [native]);
+  }, [bypass]);
 
   const signUp = async (email: string, password: string) => {
-    if (native) return { error: null };
+    if (bypass) return { error: null };
     const { error } = await supabase.auth.signUp({
       email,
       password,
@@ -60,13 +62,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const signIn = async (email: string, password: string) => {
-    if (native) return { error: null };
+    if (bypass) return { error: null };
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     return { error: error as Error | null };
   };
 
   const signOut = async () => {
-    if (native) return;
+    if (bypass) return;
     await supabase.auth.signOut();
   };
 

@@ -6,13 +6,19 @@
 import { CapacitorSQLite, SQLiteConnection, SQLiteDBConnection } from '@capacitor-community/sqlite';
 import { startOfHour } from 'date-fns';
 
-const sqlite = new SQLiteConnection(CapacitorSQLite);
+let sqlite: SQLiteConnection | null = null;
+try {
+  sqlite = new SQLiteConnection(CapacitorSQLite);
+} catch (e) {
+  console.error('SQLite plugin not available:', e);
+}
 let db: SQLiteDBConnection | null = null;
 
 const DB_NAME = 'streaminstuff';
 
 export async function initLocalDb() {
   if (db) return db;
+  if (!sqlite) throw new Error('SQLite plugin failed to initialize');
 
   const ret = await sqlite.checkConnectionsConsistency();
   const isConn = (await sqlite.isConnection(DB_NAME, false)).result;

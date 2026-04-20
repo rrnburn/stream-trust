@@ -221,7 +221,7 @@ const LocalAppProvider = ({ children }: { children: ReactNode }) => {
         throw new Error('EPG file too large (>20MB). Consider using a smaller EPG source.');
       }
 
-      const xml = await res.text();
+      let xml = await res.text();
       logger.info('EPG', `Downloaded EPG file: ${(xml.length / 1024).toFixed(1)} KB`);
 
       // Parse in chunks to avoid blocking UI
@@ -234,8 +234,7 @@ const LocalAppProvider = ({ children }: { children: ReactNode }) => {
       logger.info('EPG', `Parsed ${programs.length} programs from XML`);
 
       // Clear XML from memory immediately after parsing
-      // @ts-expect-error - Allow reassignment to release memory
-      xml = null;
+      xml = null as any;
 
       if (programs.length > 0) {
         toast.info(`Saving ${programs.length} programs...`);

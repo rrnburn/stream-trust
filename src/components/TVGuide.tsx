@@ -27,7 +27,8 @@ const TIMELINE_HOURS = 24;
 const CHANNEL_COL_WIDTH = 160;
 
 const TVGuide = ({ channels, programs, loading, onChannelSelect }: TVGuideProps) => {
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const headerScrollRef = useRef<HTMLDivElement>(null);
+  const bodyScrollRef = useRef<HTMLDivElement>(null);
   const [now] = useState(() => new Date());
   const timelineStart = startOfHour(now);
 
@@ -57,13 +58,19 @@ const TVGuide = ({ channels, programs, loading, onChannelSelect }: TVGuideProps)
     return map;
   }, [programs]);
 
-  // Scroll to current time on mount
-  useEffect(() => {
-    if (scrollRef.current) {
-      const offsetMinutes = differenceInMinutes(now, timelineStart);
-      const scrollTo = (offsetMinutes / 60) * HOUR_WIDTH - 100;
-      scrollRef.current.scrollLeft = Math.max(0, scrollTo);
+  // Sync header scroll when body scrolls
+  const handleBodyScroll = () => {
+    if (bodyScrollRef.current && headerScrollRef.current) {
+      headerScrollRef.current.scrollLeft = bodyScrollRef.current.scrollLeft;
     }
+  };
+
+  // Scroll both panels to current time on mount
+  useEffect(() => {
+    const offsetMinutes = differenceInMinutes(now, timelineStart);
+    const scrollTo = Math.max(0, (offsetMinutes / 60) * HOUR_WIDTH - 100);
+    if (bodyScrollRef.current) bodyScrollRef.current.scrollLeft = scrollTo;
+    if (headerScrollRef.current) headerScrollRef.current.scrollLeft = scrollTo;
   }, [now, timelineStart]);
 
   const totalWidth = TIMELINE_HOURS * HOUR_WIDTH;
@@ -78,15 +85,7 @@ const TVGuide = ({ channels, programs, loading, onChannelSelect }: TVGuideProps)
     );
   }
 
-  if (programs.length === 0) {
-    return (
-      <div className="text-center py-10">
-        <Clock className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
-        <p className="text-muted-foreground text-sm">No EPG data available</p>
-        <p className="text-xs text-muted-foreground/60 mt-1">Add an EPG URL in Sources to see the program guide</p>
-      </div>
-    );
-  }
+  const hasPrograms = programs.length > 0;
 
   return (
     <div className="flex flex-col border border-border rounded-lg overflow-hidden bg-card">
@@ -98,7 +97,7 @@ const TVGuide = ({ channels, programs, loading, onChannelSelect }: TVGuideProps)
         >
           Channels
         </div>
-        <div className="overflow-hidden flex-1" ref={scrollRef} style={{ overflowX: 'auto' }}>
+        <div className="overflow-hidden flex-1" ref={headerScrollRef}>
           {/* Time header */}
           <div className="relative" style={{ width: totalWidth }}>
             <div className="flex border-b border-border">
@@ -140,7 +139,7 @@ const TVGuide = ({ channels, programs, loading, onChannelSelect }: TVGuideProps)
         </div>
 
         {/* Program grid */}
-        <div className="flex-1 overflow-x-auto" ref={scrollRef}>
+        <div className="flex-1 overflow-x-auto" ref={bodyScrollRef} onScroll={handleBodyScroll}>
           <div className="relative" style={{ width: totalWidth }}>
             {channels.map((ch) => {
               const chPrograms =
@@ -150,7 +149,7 @@ const TVGuide = ({ channels, programs, loading, onChannelSelect }: TVGuideProps)
                 [];
               return (
                 <div key={ch.id} className="relative border-b border-border" style={{ height: ROW_HEIGHT }}>
-                  {chPrograms.map((prog) => {
+                  {chPrograms.map((prog, progIdx) => {
                     const pStart = new Date(prog.start_time);
                     const pEnd = new Date(prog.end_time);
                     const left = Math.max(0, (differenceInMinutes(pStart, timelineStart) / 60) * HOUR_WIDTH);
@@ -161,7 +160,7 @@ const TVGuide = ({ channels, programs, loading, onChannelSelect }: TVGuideProps)
 
                     return (
                       <div
-                        key={prog.id}
+                        key={prog.id ?? `${ch.id}-${progIdx}`}
                         className={`absolute top-1 rounded px-2 py-1 text-xs overflow-hidden cursor-default transition-colors ${
                           isNow
                             ? 'bg-primary/20 border border-primary/40 text-primary'
@@ -185,11 +184,24 @@ const TVGuide = ({ channels, programs, loading, onChannelSelect }: TVGuideProps)
               );
             })}
 
+            {/* No EPG message overlaid on empty grid */}
+            {!hasPrograms && (
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="text-center">
+                  <Clock className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" />
+                  <p className="text-muted-foreground text-sm">No EPG data available</p>
+                  <p className="text-xs text-muted-foreground/60 mt-1">Add an EPG URL in Sources to see the program guide</p>
+                </div>
+              </div>
+            )}
+
             {/* Now indicator line */}
-            <div
-              className="absolute top-0 bottom-0 w-0.5 bg-primary z-10 pointer-events-none"
-              style={{ left: `${nowOffset}px` }}
-            />
+            {hasPrograms && (
+              <div
+                className="absolute top-0 bottom-0 w-0.5 bg-primary z-10 pointer-events-none"
+                style={{ left: `${nowOffset}px` }}
+              />
+            )}
           </div>
         </div>
       </div>

@@ -4,6 +4,7 @@
  */
 
 import { CapacitorSQLite, SQLiteConnection, SQLiteDBConnection } from '@capacitor-community/sqlite';
+import { startOfHour } from 'date-fns';
 
 const sqlite = new SQLiteConnection(CapacitorSQLite);
 let db: SQLiteDBConnection | null = null;
@@ -229,7 +230,7 @@ export async function insertParsedMedia(
 export async function getFavorites() {
   const d = await initLocalDb();
   const res = await d.query('SELECT media_id FROM favorites');
-  return (res.values || []).map((r: any) => r.media_id);
+  return (res.values || []).map((r: { media_id: string }) => r.media_id);
 }
 
 export async function toggleFavoriteLocal(mediaId: string) {
@@ -249,7 +250,7 @@ export async function getWatchHistory() {
   const res = await d.query(
     'SELECT media_id, progress, watched_at FROM watch_history ORDER BY watched_at DESC LIMIT 50',
   );
-  return (res.values || []).map((r: any) => ({ id: r.media_id, progress: r.progress, timestamp: r.watched_at }));
+  return (res.values || []).map((r: { media_id: string; progress: number; watched_at: string }) => ({ id: r.media_id, progress: r.progress, timestamp: r.watched_at }));
 }
 
 export async function addToHistoryLocal(mediaId: string, progress: number) {
@@ -261,11 +262,11 @@ export async function addToHistoryLocal(mediaId: string, progress: number) {
 
 export async function getEpgPrograms() {
   const d = await initLocalDb();
-  const now = new Date().toISOString();
+  const windowStart = startOfHour(new Date()).toISOString();
   const cutoff = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
   const res = await d.query(
     'SELECT * FROM epg_programs WHERE end_time > ? AND start_time < ? ORDER BY start_time ASC',
-    [now, cutoff],
+    [windowStart, cutoff],
   );
   return res.values || [];
 }

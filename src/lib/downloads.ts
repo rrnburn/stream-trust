@@ -91,22 +91,37 @@ export async function downloadStream(
     const fileName = `${sanitize(title)}_${mediaId.slice(0, 8)}.${ext}`;
     const relPath = `downloads/${fileName}`;
 
-    // Ensure downloads directory exists
+    // Ensure downloads directory exists (check first to avoid noisy plugin errors)
+    let dirExists = false;
     try {
-      await Filesystem.mkdir({
-        path: 'downloads',
-        directory: Directory.Data,
-        recursive: true,
-      });
+      await Filesystem.stat({ path: 'downloads', directory: Directory.Data });
+      dirExists = true;
     } catch {
-      // already exists — ignore
+      dirExists = false;
+    }
+    if (!dirExists) {
+      try {
+        await Filesystem.mkdir({
+          path: 'downloads',
+          directory: Directory.Data,
+          recursive: true,
+        });
+      } catch (e) {
+        // Race condition or already exists — ignore silently
+        const msg = e instanceof Error ? e.message : String(e);
+        if (!msg.toLowerCase().includes('already exists')) {
+          logger.warn('Downloads', `mkdir failed: ${msg}`);
+        }
+      }
     }
 
-    // Remove any prior partial file
+    // Remove any prior partial file (only if it exists)
     try {
+      await Filesystem.stat({ path: relPath, directory: Directory.Data });
+      // exists — delete it
       await Filesystem.deleteFile({ path: relPath, directory: Directory.Data });
     } catch {
-      // not present — ignore
+      // not present — nothing to clean up
     }
 
     const reader = res.body.getReader();

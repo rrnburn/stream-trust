@@ -158,7 +158,10 @@ const MediaDetail = () => {
           <EpisodeModal
             open={showEpisodeModal}
             onClose={() => setShowEpisodeModal(false)}
+            seriesId={item.id}
             seriesTitle={item.title}
+            seriesPoster={item.poster}
+            sourceId={item.sourceId}
             streamUrl={item.streamUrl || ''}
             sourceUrl={source?.url || ''}
             sourceUsername={source?.username}

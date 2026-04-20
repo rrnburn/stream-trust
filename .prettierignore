@@ -1,0 +1,33 @@
+# Dependencies
+node_modules
+bun.lockb
+package-lock.json
+yarn.lock
+
+# Build outputs
+dist
+build
+coverage
+.next
+out
+
+# Environment files
+.env
+.env.*
+
+# IDE
+.vscode
+.idea
+
+# Capacitor
+android
+ios
+.capacitor
+
+# Supabase
+supabase/.temp
+supabase/seed.sql
+
+# Misc
+*.log
+.DS_Store

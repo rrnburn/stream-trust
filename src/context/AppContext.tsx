@@ -104,7 +104,7 @@ const LocalAppProvider = ({ children }: { children: ReactNode }) => {
       );
       setEpgPrograms(epg);
     } catch (e) {
-      console.error('Local DB load error:', e);
+      logger.error('AppContext', 'Local DB load error', { error: String(e) });
     }
     setLoadingSources(false);
   }, []);
@@ -184,7 +184,6 @@ const LocalAppProvider = ({ children }: { children: ReactNode }) => {
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : 'Unknown';
       logger.error('AppContext', `Failed to parse playlist: ${message}`, { source: source.name });
-      console.error('Failed to parse playlist:', e);
       toast.error(`Failed to parse: ${message}`);
     }
     setParsingPlaylist(false);
@@ -201,7 +200,7 @@ const LocalAppProvider = ({ children }: { children: ReactNode }) => {
     try {
       const db = await getLocalDb();
       const { parseXmlTvLocal } = await getEpgParser();
-      console.log('📥 Downloading EPG:', url);
+      logger.info('EPG', `📥 Downloading EPG from: ${url}`);
 
       // Download with timeout and size limit to prevent crashes
       const controller = new AbortController();
@@ -217,24 +216,32 @@ const LocalAppProvider = ({ children }: { children: ReactNode }) => {
 
       // Check file size before loading into memory
       const contentLength = res.headers.get('content-length');
-      if (contentLength && parseInt(contentLength) > 100 * 1024 * 1024) {
-        throw new Error('EPG file too large (>100MB)');
+      const maxSize = 20 * 1024 * 1024; // Reduced to 20MB to prevent memory issues
+      if (contentLength && parseInt(contentLength) > maxSize) {
+        throw new Error('EPG file too large (>20MB). Consider using a smaller EPG source.');
       }
 
       const xml = await res.text();
-      console.log('EPG size:', xml.length);
+      logger.info('EPG', `Downloaded EPG file: ${(xml.length / 1024).toFixed(1)} KB`);
 
       // Parse in chunks to avoid blocking UI
       toast.info('Parsing EPG data...');
 
-      // Use setTimeout to yield to UI thread
+      // Use setTimeout to yield to UI thread multiple times during parsing
       await new Promise((resolve) => setTimeout(resolve, 100));
 
       const programs = parseXmlTvLocal(xml);
-      console.log('Programs parsed:', programs.length);
+      logger.info('EPG', `Parsed ${programs.length} programs from XML`);
+
+      // Clear XML from memory immediately after parsing
+      // @ts-expect-error - Allow reassignment to release memory
+      xml = null;
 
       if (programs.length > 0) {
         toast.info(`Saving ${programs.length} programs...`);
+
+        // Yield to UI thread before heavy database operation
+        await new Promise((resolve) => setTimeout(resolve, 50));
 
         await db.replaceEpgPrograms(source.id, programs);
 
@@ -244,20 +251,20 @@ const LocalAppProvider = ({ children }: { children: ReactNode }) => {
 
         // Debug: Log first 10 unique EPG channel IDs for matching verification
         const uniqueChannelIds = [...new Set(programs.map((p) => p.channel_id))].slice(0, 10);
-        console.log('📺 EPG Channel IDs (first 10):', uniqueChannelIds);
+        logger.info('EPG', '📺 EPG Channel IDs (first 10)', { channelIds: uniqueChannelIds });
 
         // Debug: Log parsed media tvg_ids for comparison
         const media = await db.getParsedMedia();
         const channelMedia = (media as MediaRow[]).filter((m) => m.category === 'channel');
         const tvgIds = [...new Set(channelMedia.map((m) => m.tvg_id).filter(Boolean))].slice(0, 10);
-        console.log('📺 Playlist TVG-IDs (first 10):', tvgIds);
+        logger.info('EPG', '📺 Playlist TVG-IDs (first 10)', { tvgIds });
 
         toast.success(`Loaded ${programs.length} programs for ${channels} channels`);
       } else {
         toast.info('No programs found in EPG data');
       }
     } catch (e: unknown) {
-      console.error('EPG parse error:', e);
+      logger.error('EPG', 'Parse error', { error: String(e) });
       if (e instanceof Error && e.name === 'AbortError') {
         toast.error('EPG download timeout - file too large or slow connection');
       } else {
@@ -469,8 +476,8 @@ const CloudAppProvider = ({ children }: { children: ReactNode }) => {
         toast.info('No items found in playlist');
       }
     } catch (e: unknown) {
-      console.error('Failed to parse playlist:', e);
       const message = e instanceof Error ? e.message : 'Unknown error';
+      logger.error('AppContext', `Failed to parse playlist: ${message}`);
       toast.error(`Failed to parse: ${message}`);
     }
     setParsingPlaylist(false);
@@ -506,8 +513,8 @@ const CloudAppProvider = ({ children }: { children: ReactNode }) => {
       toast.success(`Loaded ${data?.total || 0} programs for ${data?.channels || 0} channels`);
       await loadEpgPrograms();
     } catch (e: unknown) {
-      console.error('Failed to parse EPG:', e);
       const message = e instanceof Error ? e.message : 'Unknown error';
+      logger.error('AppContext', `Failed to parse EPG: ${message}`);
       toast.error(`Failed to load EPG: ${message}`);
     }
     setParsingEpg(false);

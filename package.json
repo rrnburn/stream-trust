@@ -12,7 +12,11 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "format": "prettier --write \"src/**/*.{ts,tsx,js,jsx,json,css,md}\"",
-    "format:check": "prettier --check \"src/**/*.{ts,tsx,js,jsx,json,css,md}\""
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,js,jsx,json,css,md}\"",
+    "android:setup": "npx cap add android && node scripts/configure-android.js",
+    "android:sync": "npx cap sync android",
+    "android:open": "npx cap open android",
+    "android:configure": "node scripts/configure-android.js && npm run android:sync"
   },
   "dependencies": {
     "@capacitor-community/sqlite": "^8.0.1",

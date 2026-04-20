@@ -75,6 +75,9 @@ jobs:
           </paths>
           EOF
 
+      - name: Configure Android memory optimization
+        run: node scripts/configure-android.js
+
       - name: Sync Capacitor
         run: npx cap sync android
 

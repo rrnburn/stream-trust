@@ -283,7 +283,8 @@ export async function insertEpgPrograms(
 ) {
   const d = await initLocalDb();
 
-  const BATCH_SIZE = 500;
+  // Reduced batch size to minimize memory pressure
+  const BATCH_SIZE = 200;
   for (let i = 0; i < programs.length; i += BATCH_SIZE) {
     const batch = programs.slice(i, i + BATCH_SIZE);
     const statements = batch.map((p) => ({
@@ -292,6 +293,11 @@ export async function insertEpgPrograms(
       values: [uuid(), sourceId, p.channel_id, p.title, p.description, p.start_time, p.end_time, p.category],
     }));
     await d.executeSet(statements);
+    
+    // Yield to UI thread every 5 batches to prevent freezing
+    if (i % (BATCH_SIZE * 5) === 0 && i > 0) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
   }
 }
 

@@ -4,6 +4,8 @@
  * can parse playlists without hitting the server.
  */
 
+import { logger } from './logger';
+
 export interface ParsedItem {
   title: string;
   group: string;
@@ -186,7 +188,7 @@ export async function parsePlaylistLocally(
 
     epgUrl = `http://${base}/xmltv.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`;
 
-    console.log('📺 Xtream EPG URL generated:', epgUrl);
+    logger.info('PlaylistParser', '📺 Xtream EPG URL generated', { epgUrl });
   } else {
     const response = await fetch(url, {
       headers: { 'User-Agent': 'okhttp/4.9.2', Accept: '*/*' },
@@ -195,7 +197,9 @@ export async function parsePlaylistLocally(
     const result = parseM3U(await response.text());
     items = result.items;
     epgUrl = result.epgUrl;
-    console.log('📺 Xtream EPG URL generated:', epgUrl);
+    if (epgUrl) {
+      logger.info('PlaylistParser', '📺 M3U EPG URL found', { epgUrl });
+    }
   }
 
   return {

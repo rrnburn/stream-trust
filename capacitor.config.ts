@@ -6,10 +6,21 @@ const config: CapacitorConfig = {
   webDir: 'dist',
   android: {
     allowMixedContent: true,
+    // Increase memory allocation for large EPG files
+    webContentsDebuggingEnabled: true,
+    loggingBehavior: 'debug',
+    buildOptions: {
+      signingType: 'apksigner',
+    },
   },
   server: {
     cleartext: true,
     androidScheme: 'https',
+  },
+  plugins: {
+    SplashScreen: {
+      launchShowDuration: 2000,
+    },
   },
 };
 

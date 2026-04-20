@@ -69,7 +69,16 @@ export async function downloadStream(
     logger.info('Downloads', `Starting download: ${title}`, { mediaId, url: url.substring(0, 120) });
 
     let total = 0;
-    const contentType = null;
+    let contentType: string | null = null;
+    try {
+      const headResponse = await fetch(url, { method: 'HEAD', signal: controller.signal });
+      contentType = headResponse.headers.get('content-type');
+      const contentLength = headResponse.headers.get('content-length');
+      if (contentLength) total = parseInt(contentLength, 10);
+    } catch (e) {
+      logger.warn('Downloads', `HEAD request failed, proceeding without metadata`, { error: String(e) });
+    }
+
     const ext = inferExtension(url, contentType);
     const fileName = `${sanitize(title)}_${mediaId.slice(0, 8)}.${ext}`;
     const relPath = `downloads/${fileName}`;

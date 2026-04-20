@@ -210,6 +210,17 @@ const LocalAppProvider = ({ children }: { children: ReactNode }) => {
         const epg = await db.getEpgPrograms();
         setEpgPrograms(epg);
         const channels = new Set(programs.map(p => p.channel_id)).size;
+        
+        // Debug: Log first 10 unique EPG channel IDs for matching verification
+        const uniqueChannelIds = [...new Set(programs.map(p => p.channel_id))].slice(0, 10);
+        console.log('📺 EPG Channel IDs (first 10):', uniqueChannelIds);
+        
+        // Debug: Log parsed media tvg_ids for comparison
+        const media = await db.getParsedMedia();
+        const channelMedia = (media as MediaRow[]).filter((m) => m.category === 'channel');
+        const tvgIds = [...new Set(channelMedia.map((m) => m.tvg_id).filter(Boolean))].slice(0, 10);
+        console.log('📺 Playlist TVG-IDs (first 10):', tvgIds);
+        
         toast.success(`Loaded ${programs.length} programs for ${channels} channels`);
       } else {
         toast.info('No programs found in EPG data');

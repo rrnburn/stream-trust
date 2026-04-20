@@ -27,8 +27,8 @@ const TIMELINE_HOURS = 24;
 const CHANNEL_COL_WIDTH = 160;
 
 const TVGuide = ({ channels, programs, loading, onChannelSelect }: TVGuideProps) => {
-  const headerScrollRef = useRef<HTMLDivElement>(null);
-  const bodyScrollRef = useRef<HTMLDivElement>(null);
+  // Single scroll container — both x and y handled together, no sync needed
+  const scrollRef = useRef<HTMLDivElement>(null);
   const [now] = useState(() => new Date());
   const timelineStart = startOfHour(now);
 
@@ -58,19 +58,13 @@ const TVGuide = ({ channels, programs, loading, onChannelSelect }: TVGuideProps)
     return map;
   }, [programs]);
 
-  // Sync header scroll when body scrolls
-  const handleBodyScroll = () => {
-    if (bodyScrollRef.current && headerScrollRef.current) {
-      headerScrollRef.current.scrollLeft = bodyScrollRef.current.scrollLeft;
-    }
-  };
-
-  // Scroll both panels to current time on mount
+  // Scroll to current time on mount
   useEffect(() => {
-    const offsetMinutes = differenceInMinutes(now, timelineStart);
-    const scrollTo = Math.max(0, (offsetMinutes / 60) * HOUR_WIDTH - 100);
-    if (bodyScrollRef.current) bodyScrollRef.current.scrollLeft = scrollTo;
-    if (headerScrollRef.current) headerScrollRef.current.scrollLeft = scrollTo;
+    if (scrollRef.current) {
+      const offsetMinutes = differenceInMinutes(now, timelineStart);
+      const scrollTo = Math.max(0, (offsetMinutes / 60) * HOUR_WIDTH - 100);
+      scrollRef.current.scrollLeft = scrollTo;
+    }
   }, [now, timelineStart]);
 
   const totalWidth = TIMELINE_HOURS * HOUR_WIDTH;
@@ -88,74 +82,77 @@ const TVGuide = ({ channels, programs, loading, onChannelSelect }: TVGuideProps)
   const hasPrograms = programs.length > 0;
 
   return (
-    <div className="flex flex-col border border-border rounded-lg overflow-hidden bg-card">
-      {/* Header: timeline */}
-      <div className="flex">
-        <div
-          className="shrink-0 bg-card border-r border-b border-border px-2 py-2 text-xs font-medium text-muted-foreground flex items-center"
-          style={{ width: CHANNEL_COL_WIDTH }}
-        >
-          Channels
-        </div>
-        <div className="overflow-hidden flex-1" ref={headerScrollRef}>
-          {/* Time header */}
-          <div className="relative" style={{ width: totalWidth }}>
-            <div className="flex border-b border-border">
-              {timeSlots.map((slot, i) => (
-                <div
-                  key={i}
-                  className="shrink-0 px-2 py-2 text-xs text-muted-foreground border-r border-border font-mono"
-                  style={{ width: HOUR_WIDTH }}
-                >
-                  {format(slot, 'HH:mm')}
-                </div>
-              ))}
-            </div>
+    // Single scroll container — x and y scroll together, no dual-container desync
+    <div
+      ref={scrollRef}
+      className="border border-border rounded-lg overflow-auto max-h-[60vh] bg-card"
+    >
+      <div style={{ width: CHANNEL_COL_WIDTH + totalWidth }}>
+
+        {/* ── Sticky time header ─────────────────────────────── */}
+        <div className="flex sticky top-0 z-30 bg-card border-b border-border">
+          {/* Corner cell — sticky both left and top */}
+          <div
+            className="shrink-0 sticky left-0 z-40 bg-card border-r border-border px-2 py-2 text-xs font-medium text-muted-foreground flex items-center"
+            style={{ width: CHANNEL_COL_WIDTH }}
+          >
+            Channels
+          </div>
+          <div className="flex">
+            {timeSlots.map((slot, i) => (
+              <div
+                key={i}
+                className="shrink-0 px-2 py-2 text-xs text-muted-foreground border-r border-border font-mono"
+                style={{ width: HOUR_WIDTH }}
+              >
+                {format(slot, 'HH:mm')}
+              </div>
+            ))}
           </div>
         </div>
-      </div>
 
-      {/* Body: channels + programs */}
-      <div className="flex max-h-[60vh] overflow-y-auto">
-        {/* Channel column */}
-        <div className="shrink-0 border-r border-border" style={{ width: CHANNEL_COL_WIDTH }}>
-          {channels.map((ch) => (
-            <button
-              key={ch.id}
-              onClick={() => onChannelSelect?.(ch)}
-              className="flex items-center gap-2 w-full px-2 border-b border-border hover:bg-secondary/50 transition-colors text-left"
-              style={{ height: ROW_HEIGHT }}
-            >
-              {ch.poster ? (
-                <img src={ch.poster} alt="" className="w-6 h-6 rounded object-cover shrink-0 bg-muted" />
-              ) : (
-                <div className="w-6 h-6 rounded bg-muted flex items-center justify-center shrink-0">
-                  <Radio className="w-3 h-3 text-muted-foreground" />
-                </div>
-              )}
-              <span className="text-xs text-foreground truncate">{ch.title}</span>
-            </button>
-          ))}
-        </div>
+        {/* ── Channel rows ───────────────────────────────────── */}
+        <div className="relative">
+          {/* Now indicator — single element spanning all rows */}
+          {hasPrograms && (
+            <div
+              className="absolute top-0 bottom-0 w-0.5 bg-primary z-10 pointer-events-none"
+              style={{ left: CHANNEL_COL_WIDTH + nowOffset }}
+            />
+          )}
 
-        {/* Program grid */}
-        <div className="flex-1 overflow-x-auto" ref={bodyScrollRef} onScroll={handleBodyScroll}>
-          <div className="relative" style={{ width: totalWidth }}>
-            {channels.map((ch) => {
-              const chPrograms =
-                programsByChannel[normalize(ch.tvgId || '')] ||
-                programsByChannel[normalize(ch.id || '')] ||
-                programsByChannel[normalize(ch.title || '')] ||
-                [];
-              return (
-                <div key={ch.id} className="relative border-b border-border" style={{ height: ROW_HEIGHT }}>
+          {channels.map((ch) => {
+            const chPrograms =
+              programsByChannel[normalize(ch.tvgId || '')] ||
+              programsByChannel[normalize(ch.id || '')] ||
+              programsByChannel[normalize(ch.title || '')] ||
+              [];
+            return (
+              <div key={ch.id} className="flex border-b border-border" style={{ height: ROW_HEIGHT }}>
+                {/* Channel name — sticky left, always visible during horizontal scroll */}
+                <button
+                  onClick={() => onChannelSelect?.(ch)}
+                  className="shrink-0 sticky left-0 z-20 bg-card border-r border-border flex items-center gap-2 px-2 hover:bg-secondary/50 transition-colors text-left"
+                  style={{ width: CHANNEL_COL_WIDTH, height: ROW_HEIGHT }}
+                >
+                  {ch.poster ? (
+                    <img src={ch.poster} alt="" className="w-6 h-6 rounded object-cover shrink-0 bg-muted" />
+                  ) : (
+                    <div className="w-6 h-6 rounded bg-muted flex items-center justify-center shrink-0">
+                      <Radio className="w-3 h-3 text-muted-foreground" />
+                    </div>
+                  )}
+                  <span className="text-xs text-foreground truncate">{ch.title}</span>
+                </button>
+
+                {/* Programs */}
+                <div className="relative shrink-0" style={{ width: totalWidth, height: ROW_HEIGHT }}>
                   {chPrograms.map((prog, progIdx) => {
                     const pStart = new Date(prog.start_time);
                     const pEnd = new Date(prog.end_time);
                     const left = Math.max(0, (differenceInMinutes(pStart, timelineStart) / 60) * HOUR_WIDTH);
                     const duration = differenceInMinutes(pEnd, pStart);
                     const width = Math.max(30, (duration / 60) * HOUR_WIDTH - 2);
-
                     const isNow = now >= pStart && now < pEnd;
 
                     return (
@@ -166,11 +163,7 @@ const TVGuide = ({ channels, programs, loading, onChannelSelect }: TVGuideProps)
                             ? 'bg-primary/20 border border-primary/40 text-primary'
                             : 'bg-secondary/60 border border-border text-foreground hover:bg-secondary'
                         }`}
-                        style={{
-                          left: `${left}px`,
-                          width: `${width}px`,
-                          height: ROW_HEIGHT - 8,
-                        }}
+                        style={{ left: `${left}px`, width: `${width}px`, height: ROW_HEIGHT - 8 }}
                         title={`${prog.title}\n${format(pStart, 'HH:mm')} - ${format(pEnd, 'HH:mm')}${prog.description ? '\n' + prog.description : ''}`}
                       >
                         <div className="font-medium truncate leading-tight">{prog.title}</div>
@@ -181,29 +174,36 @@ const TVGuide = ({ channels, programs, loading, onChannelSelect }: TVGuideProps)
                     );
                   })}
                 </div>
-              );
-            })}
-
-            {/* No EPG message overlaid on empty grid */}
-            {!hasPrograms && (
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="text-center">
-                  <Clock className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" />
-                  <p className="text-muted-foreground text-sm">No EPG data available</p>
-                  <p className="text-xs text-muted-foreground/60 mt-1">Add an EPG URL in Sources to see the program guide</p>
-                </div>
               </div>
-            )}
+            );
+          })}
 
-            {/* Now indicator line */}
-            {hasPrograms && (
-              <div
-                className="absolute top-0 bottom-0 w-0.5 bg-primary z-10 pointer-events-none"
-                style={{ left: `${nowOffset}px` }}
-              />
-            )}
-          </div>
+          {/* No EPG overlay — channels loaded but no programs parsed yet */}
+          {!hasPrograms && channels.length > 0 && (
+            <div
+              className="absolute inset-0 flex items-center justify-center"
+              style={{ left: CHANNEL_COL_WIDTH }}
+            >
+              <div className="text-center">
+                <Clock className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" />
+                <p className="text-muted-foreground text-sm">No EPG data available</p>
+                <p className="text-xs text-muted-foreground/60 mt-1">
+                  Add an EPG URL in Sources to see the program guide
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Empty state — no channels at all */}
+          {channels.length === 0 && (
+            <div className="py-10 text-center" style={{ width: CHANNEL_COL_WIDTH + totalWidth }}>
+              <Clock className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" />
+              <p className="text-muted-foreground text-sm">No channels available</p>
+              <p className="text-xs text-muted-foreground/60 mt-1">Add an IPTV source in Sources</p>
+            </div>
+          )}
         </div>
+
       </div>
     </div>
   );

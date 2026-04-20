@@ -447,19 +447,7 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
     }
 
     return cleanup;
-  }, [
-    src,
-    useProxy,
-    hlsFallback,
-    retryCount,
-    getPlaybackUrl,
-    cleanup,
-    isLiveStream,
-    normalizeStreamUrl,
-    title,
-    isNative,
-    nativeActive,
-  ]);
+  }, [src, useProxy, hlsFallback, retryCount, getPlaybackUrl, cleanup, isLiveStream, normalizeStreamUrl, title, isNative, nativeActive, initHlsJs]);
 
   // Reset proxy and retry state when src changes
   useEffect(() => {
@@ -506,6 +494,7 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
     const onPause = () => setPlaying(false);
     const onWaiting = () => setBuffering(true);
     const onPlaying = () => {
+      setPlaying(true); // ensure playing state is set even if 'play' event was missed
       setBuffering(false);
       setPreBuffering(false);
     };

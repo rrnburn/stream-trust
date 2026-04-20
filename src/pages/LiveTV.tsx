@@ -26,14 +26,26 @@ const LiveTV = () => {
     return [...new Set(channels.map(c => c.group || 'Uncategorized'))].sort();
   }, [channels]);
 
-  // Multi-select groups: empty Set = show all
+  // Multi-select groups: empty Set = show all.
+  // Persisted to localStorage so the user's selection survives navigation/reload.
+  const STORAGE_KEY = 'livetv:selectedGroups';
   const [selectedGroups, setSelectedGroups] = useState<Set<string>>(() => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        const arr = JSON.parse(stored);
+        if (Array.isArray(arr)) return new Set(arr);
+      }
+    } catch { /* ignore */ }
     const initial = searchParams.get('group');
     return initial ? new Set([initial]) : new Set();
   });
 
-  // Keep URL in sync (single value when one selected, none otherwise)
+  // Persist selection to localStorage and keep URL in sync
   useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify([...selectedGroups]));
+    } catch { /* ignore quota errors */ }
     if (selectedGroups.size === 1) {
       const only = [...selectedGroups][0];
       setSearchParams({ group: only }, { replace: true });
@@ -92,20 +104,21 @@ const LiveTV = () => {
     });
   };
 
-  // Match EPG programs for the active channel using multiple identifiers
+  // Match EPG programs for the active channel using normalized identifiers.
+  // EPG channel IDs vary widely between providers (e.g. "BBC.One.uk", "bbc1",
+  // "BBC One"), so we normalize to alphanumerics-only lowercase before comparing.
   const channelPrograms = useMemo(() => {
     if (!activeChannel || epgPrograms.length === 0) return [];
-    
+    const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+
     const matchIds = new Set<string>();
-    if (activeChannel.tvgId) matchIds.add(activeChannel.tvgId.toLowerCase());
-    if (activeChannel.id) matchIds.add(activeChannel.id.toLowerCase());
-    if (activeChannel.title) matchIds.add(activeChannel.title.toLowerCase());
+    if (activeChannel.tvgId) matchIds.add(normalize(activeChannel.tvgId));
+    if (activeChannel.id) matchIds.add(normalize(activeChannel.id));
+    if (activeChannel.title) matchIds.add(normalize(activeChannel.title));
+    matchIds.delete('');
 
     return epgPrograms
-      .filter(p => {
-        const chId = (p.channel_id || '').toLowerCase();
-        return matchIds.has(chId);
-      })
+      .filter(p => matchIds.has(normalize(p.channel_id || '')))
       .sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
   }, [activeChannel, epgPrograms]);
 

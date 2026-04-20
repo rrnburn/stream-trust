@@ -144,6 +144,11 @@ const MediaDetail = () => {
                 />
               )}
             </div>
+            {isSeries && (
+              <p className="mt-3 text-xs text-muted-foreground">
+                Tap <span className="text-foreground font-medium">Browse Episodes</span> to play or download individual episodes offline.
+              </p>
+            )}
           </div>
         </motion.div>
 
@@ -158,7 +163,10 @@ const MediaDetail = () => {
           <EpisodeModal
             open={showEpisodeModal}
             onClose={() => setShowEpisodeModal(false)}
+            seriesId={item.id}
             seriesTitle={item.title}
+            seriesPoster={item.poster}
+            sourceId={item.sourceId}
             streamUrl={item.streamUrl || ''}
             sourceUrl={source?.url || ''}
             sourceUsername={source?.username}

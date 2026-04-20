@@ -223,7 +223,6 @@ export async function insertEpgPrograms(
   programs: Array<{ channel_id: string; title: string; description: string; start_time: string; end_time: string; category: string }>,
 ) {
   const d = await initLocalDb();
-  await d.run('DELETE FROM epg_programs WHERE source_id = ?', [sourceId]);
 
   const BATCH_SIZE = 500;
   for (let i = 0; i < programs.length; i += BATCH_SIZE) {
@@ -234,6 +233,15 @@ export async function insertEpgPrograms(
     }));
     await d.executeSet(statements);
   }
+}
+
+export async function replaceEpgPrograms(
+  sourceId: string,
+  programs: Array<{ channel_id: string; title: string; description: string; start_time: string; end_time: string; category: string }>,
+) {
+  const d = await initLocalDb();
+  await d.run('DELETE FROM epg_programs WHERE source_id = ?', [sourceId]);
+  await insertEpgPrograms(sourceId, programs);
 }
 
 // ── Downloads ───────────────────────────────────────────────

@@ -75,6 +75,7 @@ export async function downloadStream(
       contentType = headResponse.headers.get('content-type');
       const contentLength = headResponse.headers.get('content-length');
       if (contentLength) total = parseInt(contentLength, 10);
+      logger.info('Downloads', `HEAD ok`, { mediaId, status: headResponse.status, contentType, total });
     } catch (e) {
       logger.warn('Downloads', `HEAD request failed, proceeding without metadata`, { error: String(e) });
     }
@@ -111,22 +112,35 @@ export async function downloadStream(
     }
 
     let loaded = 0;
+    let progressEventsReceived = 0;
+    // NOTE: do NOT filter by status.url — Capacitor may report the resolved/redirected
+    // URL (e.g. after a 302), which won't match the original. Since we only run one
+    // download at a time per mediaId and the listener is removed in finally, accepting
+    // all events is safe and far more reliable.
     const progressListener = await Filesystem.addListener('progress', (status) => {
-      if (status.url !== url) return;
+      progressEventsReceived++;
       loaded = status.bytes;
-      total = status.contentLength || total;
-      const totalBytes = total;
-      const percent = totalBytes > 0 ? Math.round((status.bytes / totalBytes) * 100) : 0;
-      onProgress?.({ loaded: status.bytes, total: totalBytes, percent });
+      if (status.contentLength && status.contentLength > 0) total = status.contentLength;
+      const percent = total > 0 ? Math.min(100, Math.round((status.bytes / total) * 100)) : 0;
+      onProgress?.({ loaded: status.bytes, total, percent });
     });
 
+    let resultPath: string | undefined;
     try {
-      await Filesystem.downloadFile({
+      logger.info('Downloads', `Invoking native downloadFile`, { mediaId, relPath });
+      const dl = await Filesystem.downloadFile({
         url,
         path: relPath,
         directory: Directory.Data,
         recursive: true,
         progress: true,
+      });
+      resultPath = dl.path;
+      logger.info('Downloads', `Native downloadFile returned`, {
+        mediaId,
+        path: dl.path,
+        progressEvents: progressEventsReceived,
+        loaded,
       });
     } finally {
       await progressListener.remove();
@@ -134,20 +148,33 @@ export async function downloadStream(
 
     if (handle.cancelled) throw new Error('Download cancelled');
 
-    // Final progress
+    // Verify the file actually landed and get its size — important when the server
+    // didn't send Content-Length (loaded stays 0 even though the file is fully written).
+    let finalSize = loaded;
+    try {
+      const stat = await Filesystem.stat({ path: relPath, directory: Directory.Data });
+      finalSize = stat.size || loaded;
+    } catch (e) {
+      logger.warn('Downloads', `Post-download stat failed`, { error: String(e), relPath });
+    }
+
+    if (finalSize === 0) {
+      throw new Error('Downloaded file is empty — the server may have rejected the request');
+    }
+
+    // Final progress (in case the server never sent Content-Length and no events fired)
     if (onProgress) {
-      const percent = total > 0 ? Math.round((loaded / total) * 100) : 100;
-      onProgress({ loaded, total: total || loaded, percent });
+      onProgress({ loaded: finalSize, total: total || finalSize, percent: 100 });
     }
 
     const stat = await Filesystem.getUri({ path: relPath, directory: Directory.Data });
 
-    logger.info('Downloads', `Completed: ${title}`, { mediaId, bytes: loaded, path: stat.uri });
+    logger.info('Downloads', `Completed: ${title}`, { mediaId, bytes: finalSize, path: stat.uri });
 
     return {
       filePath: relPath,
       uri: stat.uri,
-      size: loaded,
+      size: finalSize,
       mime: contentType || `video/${ext}`,
     };
   } catch (e) {

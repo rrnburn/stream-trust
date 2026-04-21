@@ -786,7 +786,7 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
       {/* Controls overlay */}
       {/* Center play button — always absolutely centered, independent of controls */}
       <AnimatePresence>
-        {!playing && !buffering && !preBuffering && !error && (
+        {!playing && !buffering && !preBuffering && !error && currentTime === 0 && (
           <motion.div
             initial={{ opacity: 0, scale: 0.8 }}
             animate={{ opacity: 1, scale: 1 }}

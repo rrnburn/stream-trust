@@ -783,27 +783,6 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
         </div>
       )}
 
-      {/* Controls overlay */}
-      {/* Center play button — always absolutely centered, independent of controls */}
-      <AnimatePresence>
-        {!playing && !buffering && !preBuffering && !error && currentTime === 0 && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.8 }}
-            transition={{ duration: 0.2 }}
-            className="absolute inset-0 z-20 flex items-center justify-center pointer-events-none"
-          >
-            <button
-              onClick={togglePlay}
-              className="w-16 h-16 rounded-full bg-primary/90 flex items-center justify-center hover:bg-primary transition-colors pointer-events-auto active:scale-95"
-            >
-              <Play className="w-7 h-7 text-primary-foreground fill-primary-foreground ml-1" />
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
       {/* Controls overlay — title bar + bottom bar */}
       <AnimatePresence>
         {showControls && !error && (

@@ -158,16 +158,18 @@ const TVGuide = ({ channels, programs, loading, onChannelSelect }: TVGuideProps)
                     return (
                       <div
                         key={prog.id ?? `${ch.id}-${progIdx}`}
-                        className={`absolute top-1 rounded px-2 py-1 text-xs overflow-hidden cursor-default transition-colors ${
+                        className={`absolute top-1 rounded px-2 py-1 text-xs overflow-hidden cursor-default transition-colors box-border ${
                           isNow
                             ? 'bg-primary/20 border border-primary/40 text-primary'
                             : 'bg-secondary/60 border border-border text-foreground hover:bg-secondary'
                         }`}
-                        style={{ left: `${left}px`, width: `${width}px`, height: ROW_HEIGHT - 8 }}
+                        style={{ left: `${left}px`, width: `${width}px`, height: ROW_HEIGHT - 8, maxWidth: `${width}px` }}
                         title={`${prog.title}\n${format(pStart, 'HH:mm')} - ${format(pEnd, 'HH:mm')}${prog.description ? '\n' + prog.description : ''}`}
                       >
-                        <div className="font-medium truncate leading-tight">{prog.title}</div>
-                        <div className="text-[10px] text-muted-foreground truncate">
+                        <div className="font-medium leading-tight overflow-hidden text-ellipsis whitespace-nowrap">
+                          {prog.title}
+                        </div>
+                        <div className="text-[10px] text-muted-foreground overflow-hidden text-ellipsis whitespace-nowrap">
                           {format(pStart, 'HH:mm')} - {format(pEnd, 'HH:mm')}
                         </div>
                       </div>

@@ -943,8 +943,8 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
                   <button onClick={toggleMute} className="hover:text-primary transition-colors p-1">
                     {muted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
                   </button>
-                  <span className="text-xs text-white/70">
-                    {formatTime(currentTime)} / {formatTime(duration)}
+                  <span className="text-xs text-white/70 tabular-nums">
+                    {formatTime(scrubTime ?? currentTime)} / {formatTime(duration)}
                   </span>
                 </div>
                 <div className="flex items-center gap-1">

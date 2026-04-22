@@ -87,6 +87,11 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
   const [copied, setCopied] = useState(false);
   const [scaleMode, setScaleMode] = useState<'fit' | 'fill' | 'stretch' | 'zoom' | '16:9' | '16:10' | '4:3'>('fit');
   const [showScaleMenu, setShowScaleMenu] = useState(false);
+  const [scrubbing, setScrubbing] = useState(false);
+  const [scrubTime, setScrubTime] = useState<number | null>(null);
+  const [hoverTime, setHoverTime] = useState<number | null>(null);
+  const [hoverX, setHoverX] = useState(0);
+  const progressBarRef = useRef<HTMLDivElement>(null);
 
   const MAX_RETRIES = 3;
   const isNative = isNativePlatform();
@@ -558,12 +563,67 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
     }
   };
 
+  const computeTimeFromClientX = useCallback(
+    (clientX: number): number | null => {
+      const bar = progressBarRef.current;
+      if (!bar || !duration || !isFinite(duration)) return null;
+      const rect = bar.getBoundingClientRect();
+      const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+      return pct * duration;
+    },
+    [duration],
+  );
+
   const seekTo = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!videoRef.current || !duration) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const pct = (e.clientX - rect.left) / rect.width;
-    videoRef.current.currentTime = pct * duration;
+    const t = computeTimeFromClientX(e.clientX);
+    if (t == null || !videoRef.current) return;
+    videoRef.current.currentTime = t;
   };
+
+  // Pointer-based scrubbing (works for mouse + touch)
+  const handleScrubStart = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      const t = computeTimeFromClientX(e.clientX);
+      if (t == null) return;
+      e.currentTarget.setPointerCapture(e.pointerId);
+      setScrubbing(true);
+      setScrubTime(t);
+    },
+    [computeTimeFromClientX],
+  );
+
+  const handleScrubMove = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      const t = computeTimeFromClientX(e.clientX);
+      if (t == null) return;
+      const bar = progressBarRef.current;
+      if (bar) {
+        const rect = bar.getBoundingClientRect();
+        setHoverX(Math.max(0, Math.min(rect.width, e.clientX - rect.left)));
+        setHoverTime(t);
+      }
+      if (scrubbing) setScrubTime(t);
+    },
+    [computeTimeFromClientX, scrubbing],
+  );
+
+  const handleScrubEnd = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (!scrubbing) return;
+      try {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      } catch {
+        /* ignore */
+      }
+      const t = scrubTime;
+      setScrubbing(false);
+      setScrubTime(null);
+      if (t != null && videoRef.current) {
+        videoRef.current.currentTime = t;
+      }
+    },
+    [scrubbing, scrubTime],
+  );
 
   const showControlsTemporarily = () => {
     setShowControls(true);
@@ -828,12 +888,43 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
 
             <div className="bg-gradient-to-t from-black/80 to-transparent p-3 pb-[env(safe-area-inset-bottom,8px)] pt-8 space-y-1.5 pointer-events-auto">
               {duration > 0 && isFinite(duration) && (
-                <div className="w-full h-1.5 bg-white/20 rounded-full cursor-pointer group/bar" onClick={seekTo}>
-                  <div
-                    className="h-full bg-primary rounded-full relative transition-all"
-                    style={{ width: `${(currentTime / duration) * 100}%` }}
-                  >
-                    <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 bg-primary rounded-full opacity-0 group-hover/bar:opacity-100 transition-opacity" />
+                <div
+                  ref={progressBarRef}
+                  className="relative w-full py-3 -my-3 cursor-pointer group/bar touch-none select-none"
+                  onClick={seekTo}
+                  onPointerDown={handleScrubStart}
+                  onPointerMove={handleScrubMove}
+                  onPointerUp={handleScrubEnd}
+                  onPointerCancel={handleScrubEnd}
+                  onPointerLeave={() => setHoverTime(null)}
+                  role="slider"
+                  aria-label="Seek"
+                  aria-valuemin={0}
+                  aria-valuemax={duration}
+                  aria-valuenow={scrubTime ?? currentTime}
+                >
+                  <div className="relative w-full h-1.5 bg-white/20 rounded-full">
+                    <div
+                      className="h-full bg-primary rounded-full relative"
+                      style={{
+                        width: `${((scrubTime ?? currentTime) / duration) * 100}%`,
+                        transition: scrubbing ? 'none' : 'width 0.1s linear',
+                      }}
+                    >
+                      <div
+                        className={`absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 w-3.5 h-3.5 bg-primary rounded-full shadow-md transition-opacity ${
+                          scrubbing ? 'opacity-100 scale-125' : 'opacity-0 group-hover/bar:opacity-100'
+                        }`}
+                      />
+                    </div>
+                    {hoverTime != null && (
+                      <div
+                        className="absolute -top-7 -translate-x-1/2 px-1.5 py-0.5 rounded bg-black/80 text-white text-[10px] font-medium pointer-events-none whitespace-nowrap"
+                        style={{ left: `${hoverX}px` }}
+                      >
+                        {formatTime(hoverTime)}
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -852,8 +943,8 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
                   <button onClick={toggleMute} className="hover:text-primary transition-colors p-1">
                     {muted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
                   </button>
-                  <span className="text-xs text-white/70">
-                    {formatTime(currentTime)} / {formatTime(duration)}
+                  <span className="text-xs text-white/70 tabular-nums">
+                    {formatTime(scrubTime ?? currentTime)} / {formatTime(duration)}
                   </span>
                 </div>
                 <div className="flex items-center gap-1">

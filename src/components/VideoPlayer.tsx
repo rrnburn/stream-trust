@@ -888,12 +888,43 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
 
             <div className="bg-gradient-to-t from-black/80 to-transparent p-3 pb-[env(safe-area-inset-bottom,8px)] pt-8 space-y-1.5 pointer-events-auto">
               {duration > 0 && isFinite(duration) && (
-                <div className="w-full h-1.5 bg-white/20 rounded-full cursor-pointer group/bar" onClick={seekTo}>
-                  <div
-                    className="h-full bg-primary rounded-full relative transition-all"
-                    style={{ width: `${(currentTime / duration) * 100}%` }}
-                  >
-                    <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 bg-primary rounded-full opacity-0 group-hover/bar:opacity-100 transition-opacity" />
+                <div
+                  ref={progressBarRef}
+                  className="relative w-full py-3 -my-3 cursor-pointer group/bar touch-none select-none"
+                  onClick={seekTo}
+                  onPointerDown={handleScrubStart}
+                  onPointerMove={handleScrubMove}
+                  onPointerUp={handleScrubEnd}
+                  onPointerCancel={handleScrubEnd}
+                  onPointerLeave={() => setHoverTime(null)}
+                  role="slider"
+                  aria-label="Seek"
+                  aria-valuemin={0}
+                  aria-valuemax={duration}
+                  aria-valuenow={scrubTime ?? currentTime}
+                >
+                  <div className="relative w-full h-1.5 bg-white/20 rounded-full">
+                    <div
+                      className="h-full bg-primary rounded-full relative"
+                      style={{
+                        width: `${((scrubTime ?? currentTime) / duration) * 100}%`,
+                        transition: scrubbing ? 'none' : 'width 0.1s linear',
+                      }}
+                    >
+                      <div
+                        className={`absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 w-3.5 h-3.5 bg-primary rounded-full shadow-md transition-opacity ${
+                          scrubbing ? 'opacity-100 scale-125' : 'opacity-0 group-hover/bar:opacity-100'
+                        }`}
+                      />
+                    </div>
+                    {hoverTime != null && (
+                      <div
+                        className="absolute -top-7 -translate-x-1/2 px-1.5 py-0.5 rounded bg-black/80 text-white text-[10px] font-medium pointer-events-none whitespace-nowrap"
+                        style={{ left: `${hoverX}px` }}
+                      >
+                        {formatTime(hoverTime)}
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

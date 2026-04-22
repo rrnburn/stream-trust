@@ -87,6 +87,11 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
   const [copied, setCopied] = useState(false);
   const [scaleMode, setScaleMode] = useState<'fit' | 'fill' | 'stretch' | 'zoom' | '16:9' | '16:10' | '4:3'>('fit');
   const [showScaleMenu, setShowScaleMenu] = useState(false);
+  const [scrubbing, setScrubbing] = useState(false);
+  const [scrubTime, setScrubTime] = useState<number | null>(null);
+  const [hoverTime, setHoverTime] = useState<number | null>(null);
+  const [hoverX, setHoverX] = useState(0);
+  const progressBarRef = useRef<HTMLDivElement>(null);
 
   const MAX_RETRIES = 3;
   const isNative = isNativePlatform();

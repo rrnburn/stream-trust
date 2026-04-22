@@ -1,11 +1,12 @@
 /**
  * Native download manager for VOD content.
- * Streams a remote URL into local app storage using Capacitor Filesystem,
- * with progress callbacks and pause/cancel support.
+ * Streams a remote URL into local app storage using native file transfer,
+ * with progress callbacks and full-file persistence.
  *
  * Web is intentionally a no-op — downloads only work on native (Android).
  */
 
+import { FileTransfer } from '@capacitor/file-transfer';
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import { isNativePlatform } from '@/lib/platform';
 import { logger } from '@/lib/logger';
@@ -23,6 +24,25 @@ export interface ActiveDownload {
 }
 
 const active = new Map<string, ActiveDownload>();
+
+const DOWNLOAD_HEADERS = {
+  'User-Agent': 'MediaPlayer/1.0 (Linux;Android) ExoPlayerLib/2.19.1',
+  Accept: '*/*',
+};
+
+type TransferError = {
+  code?: string;
+  data?: {
+    httpStatus?: number;
+    body?: string;
+    exception?: string;
+  };
+};
+
+const getTransferError = (error: unknown): TransferError | null => {
+  if (!error || typeof error !== 'object') return null;
+  return error as TransferError;
+};
 
 const sanitize = (s: string) => s.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 80);
 
@@ -71,7 +91,11 @@ export async function downloadStream(
     let total = 0;
     let contentType: string | null = null;
     try {
-      const headResponse = await fetch(url, { method: 'HEAD', signal: controller.signal });
+      const headResponse = await fetch(url, {
+        method: 'HEAD',
+        signal: controller.signal,
+        headers: DOWNLOAD_HEADERS,
+      });
       contentType = headResponse.headers.get('content-type');
       const contentLength = headResponse.headers.get('content-length');
       if (contentLength) total = parseInt(contentLength, 10);
@@ -113,32 +137,35 @@ export async function downloadStream(
 
     let loaded = 0;
     let progressEventsReceived = 0;
-    // NOTE: do NOT filter by status.url — Capacitor may report the resolved/redirected
-    // URL (e.g. after a 302), which won't match the original. Since we only run one
-    // download at a time per mediaId and the listener is removed in finally, accepting
-    // all events is safe and far more reliable.
-    const progressListener = await Filesystem.addListener('progress', (status) => {
+    const downloadsDirUri = await Filesystem.getUri({ path: 'downloads', directory: Directory.Data });
+    const targetUri = `${downloadsDirUri.uri.replace(/\/$/, '')}/${fileName}`;
+
+    // NOTE: do NOT filter by status.url — providers frequently redirect the request,
+    // so the callback may report the resolved URL instead of the original.
+    const progressListener = await FileTransfer.addListener('progress', (status) => {
+      if (status.type !== 'download') return;
       progressEventsReceived++;
       loaded = status.bytes;
-      if (status.contentLength && status.contentLength > 0) total = status.contentLength;
+      if (status.lengthComputable && status.contentLength > 0) total = status.contentLength;
       const percent = total > 0 ? Math.min(100, Math.round((status.bytes / total) * 100)) : 0;
       onProgress?.({ loaded: status.bytes, total, percent });
     });
 
     let resultPath: string | undefined;
     try {
-      logger.info('Downloads', `Invoking native downloadFile`, { mediaId, relPath });
-      const dl = await Filesystem.downloadFile({
+      logger.info('Downloads', `Invoking native downloadFile`, { mediaId, relPath, targetUri });
+      const dl = await FileTransfer.downloadFile({
         url,
-        path: relPath,
-        directory: Directory.Data,
-        recursive: true,
+        path: targetUri,
+        headers: DOWNLOAD_HEADERS,
+        connectTimeout: 30000,
+        readTimeout: 120000,
         progress: true,
       });
-      resultPath = dl.path;
+      resultPath = dl.path || targetUri;
       logger.info('Downloads', `Native downloadFile returned`, {
         mediaId,
-        path: dl.path,
+        path: resultPath,
         progressEvents: progressEventsReceived,
         loaded,
       });
@@ -178,8 +205,16 @@ export async function downloadStream(
       mime: contentType || `video/${ext}`,
     };
   } catch (e) {
+    const transferError = getTransferError(e);
     const message = e instanceof Error ? e.message : 'Unknown error';
-    logger.error('Downloads', `Download failed: ${message}`, { mediaId, title });
+    logger.error('Downloads', `Download failed: ${message}`, {
+      mediaId,
+      title,
+      code: transferError?.code,
+      httpStatus: transferError?.data?.httpStatus,
+      body: transferError?.data?.body?.slice(0, 240),
+      exception: transferError?.data?.exception,
+    });
     // Clean up partial file on failure
     try {
       const fileName = `${sanitize(title)}_${mediaId.slice(0, 8)}`;
@@ -191,6 +226,9 @@ export async function downloadStream(
       }
     } catch {
       // ignore cleanup errors
+    }
+    if (transferError?.data?.httpStatus) {
+      throw new Error(`Server rejected the download (${transferError.data.httpStatus})`);
     }
     throw e;
   } finally {

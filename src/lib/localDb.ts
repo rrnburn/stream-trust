@@ -98,11 +98,10 @@ export async function initLocalDb() {
   `);
 
   // Migrations for existing databases
-  try {
-    // Add tvg_id column if it doesn't exist (for existing databases)
+  const columns = await db.query('PRAGMA table_info(parsed_media)');
+  const hasTvgId = (columns.values || []).some((column: { name?: string }) => column.name === 'tvg_id');
+  if (!hasTvgId) {
     await db.execute('ALTER TABLE parsed_media ADD COLUMN tvg_id TEXT');
-  } catch (e) {
-    // Column already exists or other error (sqlite throws on duplicate column)
   }
 
   return db;

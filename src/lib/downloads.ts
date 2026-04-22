@@ -1,7 +1,7 @@
 /**
  * Native download manager for VOD content.
- * Streams a remote URL into local app storage using Capacitor Filesystem,
- * with progress callbacks and pause/cancel support.
+ * Streams a remote URL into local app storage using native file transfer,
+ * with progress callbacks and full-file persistence.
  *
  * Web is intentionally a no-op — downloads only work on native (Android).
  */
@@ -24,6 +24,25 @@ export interface ActiveDownload {
 }
 
 const active = new Map<string, ActiveDownload>();
+
+const DOWNLOAD_HEADERS = {
+  'User-Agent': 'MediaPlayer/1.0 (Linux;Android) ExoPlayerLib/2.19.1',
+  Accept: '*/*',
+};
+
+type TransferError = {
+  code?: string;
+  data?: {
+    httpStatus?: number;
+    body?: string;
+    exception?: string;
+  };
+};
+
+const getTransferError = (error: unknown): TransferError | null => {
+  if (!error || typeof error !== 'object') return null;
+  return error as TransferError;
+};
 
 const sanitize = (s: string) => s.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 80);
 

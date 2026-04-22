@@ -563,12 +563,67 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
     }
   };
 
+  const computeTimeFromClientX = useCallback(
+    (clientX: number): number | null => {
+      const bar = progressBarRef.current;
+      if (!bar || !duration || !isFinite(duration)) return null;
+      const rect = bar.getBoundingClientRect();
+      const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+      return pct * duration;
+    },
+    [duration],
+  );
+
   const seekTo = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!videoRef.current || !duration) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const pct = (e.clientX - rect.left) / rect.width;
-    videoRef.current.currentTime = pct * duration;
+    const t = computeTimeFromClientX(e.clientX);
+    if (t == null || !videoRef.current) return;
+    videoRef.current.currentTime = t;
   };
+
+  // Pointer-based scrubbing (works for mouse + touch)
+  const handleScrubStart = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      const t = computeTimeFromClientX(e.clientX);
+      if (t == null) return;
+      e.currentTarget.setPointerCapture(e.pointerId);
+      setScrubbing(true);
+      setScrubTime(t);
+    },
+    [computeTimeFromClientX],
+  );
+
+  const handleScrubMove = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      const t = computeTimeFromClientX(e.clientX);
+      if (t == null) return;
+      const bar = progressBarRef.current;
+      if (bar) {
+        const rect = bar.getBoundingClientRect();
+        setHoverX(Math.max(0, Math.min(rect.width, e.clientX - rect.left)));
+        setHoverTime(t);
+      }
+      if (scrubbing) setScrubTime(t);
+    },
+    [computeTimeFromClientX, scrubbing],
+  );
+
+  const handleScrubEnd = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (!scrubbing) return;
+      try {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      } catch {
+        /* ignore */
+      }
+      const t = scrubTime;
+      setScrubbing(false);
+      setScrubTime(null);
+      if (t != null && videoRef.current) {
+        videoRef.current.currentTime = t;
+      }
+    },
+    [scrubbing, scrubTime],
+  );
 
   const showControlsTemporarily = () => {
     setShowControls(true);

@@ -152,24 +152,55 @@ const TVGuide = ({ channels, programs, loading, onChannelSelect }: TVGuideProps)
                     const pEnd = new Date(prog.end_time);
                     const left = Math.max(0, (differenceInMinutes(pStart, timelineStart) / 60) * HOUR_WIDTH);
                     const duration = differenceInMinutes(pEnd, pStart);
-                    const width = Math.max(30, (duration / 60) * HOUR_WIDTH - 2);
+                    // Enforce a minimum width large enough to render at least a few characters
+                    // without overlapping the next slot. Boxes are absolutely positioned so a
+                    // wider min width may cause adjacent shorts to overlap visually — we accept
+                    // that trade-off in favour of legible text and clip with overflow-hidden.
+                    const MIN_WIDTH = 80;
+                    const width = Math.max(MIN_WIDTH, (duration / 60) * HOUR_WIDTH - 4);
                     const isNow = now >= pStart && now < pEnd;
 
                     return (
                       <div
                         key={prog.id ?? `${ch.id}-${progIdx}`}
-                        className={`absolute top-1 rounded px-2 py-1 text-xs overflow-hidden cursor-default transition-colors box-border ${
+                        className={`absolute top-1 rounded px-2 py-1 text-xs cursor-default transition-colors box-border flex flex-col justify-center ${
                           isNow
                             ? 'bg-primary/20 border border-primary/40 text-primary'
                             : 'bg-secondary/60 border border-border text-foreground hover:bg-secondary'
                         }`}
-                        style={{ left: `${left}px`, width: `${width}px`, height: ROW_HEIGHT - 8, maxWidth: `${width}px` }}
+                        style={{
+                          left: `${left}px`,
+                          width: `${width}px`,
+                          height: ROW_HEIGHT - 8,
+                          maxWidth: `${width}px`,
+                          minWidth: 0,
+                          overflow: 'hidden',
+                          contain: 'paint',
+                        }}
                         title={`${prog.title}\n${format(pStart, 'HH:mm')} - ${format(pEnd, 'HH:mm')}${prog.description ? '\n' + prog.description : ''}`}
                       >
-                        <div className="font-medium leading-tight overflow-hidden text-ellipsis whitespace-nowrap">
+                        <div
+                          className="font-medium leading-tight"
+                          style={{
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                            minWidth: 0,
+                            maxWidth: '100%',
+                          }}
+                        >
                           {prog.title}
                         </div>
-                        <div className="text-[10px] text-muted-foreground overflow-hidden text-ellipsis whitespace-nowrap">
+                        <div
+                          className="text-[10px] text-muted-foreground"
+                          style={{
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                            minWidth: 0,
+                            maxWidth: '100%',
+                          }}
+                        >
                           {format(pStart, 'HH:mm')} - {format(pEnd, 'HH:mm')}
                         </div>
                       </div>

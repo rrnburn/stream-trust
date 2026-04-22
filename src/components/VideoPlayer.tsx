@@ -85,6 +85,8 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
   const [hlsFallback, setHlsFallback] = useState(false);
   const [casting, setCasting] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [scaleMode, setScaleMode] = useState<'fit' | 'fill' | 'stretch' | 'zoom' | '16:9' | '16:10' | '4:3'>('fit');
+  const [showScaleMenu, setShowScaleMenu] = useState(false);
 
   const MAX_RETRIES = 3;
   const isNative = isNativePlatform();

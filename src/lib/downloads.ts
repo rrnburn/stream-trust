@@ -6,6 +6,7 @@
  * Web is intentionally a no-op — downloads only work on native (Android).
  */
 
+import { FileTransfer } from '@capacitor/file-transfer';
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import { isNativePlatform } from '@/lib/platform';
 import { logger } from '@/lib/logger';

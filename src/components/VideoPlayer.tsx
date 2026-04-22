@@ -16,6 +16,7 @@ import {
   Share2,
   Copy,
   Check,
+  Ratio,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '@/integrations/supabase/client';
@@ -84,6 +85,8 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
   const [hlsFallback, setHlsFallback] = useState(false);
   const [casting, setCasting] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [scaleMode, setScaleMode] = useState<'fit' | 'fill' | 'stretch' | 'zoom' | '16:9' | '16:10' | '4:3'>('fit');
+  const [showScaleMenu, setShowScaleMenu] = useState(false);
 
   const MAX_RETRIES = 3;
   const isNative = isNativePlatform();
@@ -715,7 +718,31 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
         if (playing) setShowControls(false);
       }}
     >
-      <video ref={videoRef} className="w-full h-full object-contain" playsInline onClick={togglePlay} />
+      <video
+        ref={videoRef}
+        className="w-full h-full"
+        style={(() => {
+          switch (scaleMode) {
+            case 'fill':
+              return { objectFit: 'cover' as const };
+            case 'stretch':
+              return { objectFit: 'fill' as const };
+            case 'zoom':
+              return { objectFit: 'cover' as const, transform: 'scale(1.15)' };
+            case '16:9':
+              return { objectFit: 'contain' as const, aspectRatio: '16 / 9' };
+            case '16:10':
+              return { objectFit: 'contain' as const, aspectRatio: '16 / 10' };
+            case '4:3':
+              return { objectFit: 'contain' as const, aspectRatio: '4 / 3' };
+            case 'fit':
+            default:
+              return { objectFit: 'contain' as const };
+          }
+        })()}
+        playsInline
+        onClick={togglePlay}
+      />
 
       {/* Tap to unmute banner */}
       {autoplayMuted && playing && !error && (
@@ -830,6 +857,45 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
                   </span>
                 </div>
                 <div className="flex items-center gap-1">
+                  <div className="relative">
+                    <button
+                      onClick={() => setShowScaleMenu((v) => !v)}
+                      className={`hover:text-primary transition-colors p-1 ${showScaleMenu ? 'text-primary' : ''}`}
+                      title="Aspect ratio / scale"
+                    >
+                      <Ratio className="w-5 h-5" />
+                    </button>
+                    {showScaleMenu && (
+                      <div className="absolute bottom-full right-0 mb-2 min-w-[140px] rounded-lg bg-black/90 border border-white/10 backdrop-blur-md shadow-xl p-1 z-20">
+                        {(
+                          [
+                            { id: 'fit', label: 'Fit (default)' },
+                            { id: 'fill', label: 'Fill (crop)' },
+                            { id: 'stretch', label: 'Stretch' },
+                            { id: 'zoom', label: 'Zoom' },
+                            { id: '16:9', label: '16:9' },
+                            { id: '16:10', label: '16:10' },
+                            { id: '4:3', label: '4:3' },
+                          ] as const
+                        ).map((opt) => (
+                          <button
+                            key={opt.id}
+                            onClick={() => {
+                              setScaleMode(opt.id);
+                              setShowScaleMenu(false);
+                            }}
+                            className={`w-full text-left px-3 py-1.5 text-xs rounded-md transition-colors ${
+                              scaleMode === opt.id
+                                ? 'bg-primary text-primary-foreground'
+                                : 'text-white hover:bg-white/10'
+                            }`}
+                          >
+                            {opt.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                   <button
                     onClick={handleCopyStreamUrl}
                     className="hover:text-primary transition-colors p-1"

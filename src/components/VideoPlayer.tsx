@@ -16,6 +16,7 @@ import {
   Share2,
   Copy,
   Check,
+  Ratio,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '@/integrations/supabase/client';

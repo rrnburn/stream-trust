@@ -194,8 +194,14 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
         hls.attachMedia(video);
         hls.on(Hls.Events.MANIFEST_PARSED, (_, data) => {
           log('INFO', `HLS manifest parsed: ${data.levels.length} quality levels`);
+          syncAudioTracks();
           setBuffering(false);
           onReady();
+        });
+        hls.on(Hls.Events.AUDIO_TRACKS_UPDATED, syncAudioTracks);
+        hls.on(Hls.Events.AUDIO_TRACK_SWITCHED, (_, data) => {
+          setSelectedAudioTrack(String(data.id));
+          syncAudioTracks();
         });
         hls.on(Hls.Events.ERROR, (_, data) => {
           if (data.fatal) {
@@ -638,15 +644,19 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
     [],
   );
 
+  const displayDuration = timelineDuration || duration;
+  const displayTime = scrubTime ?? currentTime;
+  const sliderValue = displayDuration > 0 ? Math.min(displayDuration, Math.max(0, displayTime)) : 0;
+
   const computeTimeFromClientX = useCallback(
     (clientX: number): number | null => {
       const bar = progressBarRef.current;
-      if (!bar || !duration || !isFinite(duration)) return null;
+      if (!bar || !displayDuration || !isFinite(displayDuration)) return null;
       const rect = bar.getBoundingClientRect();
       const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-      return pct * duration;
+      return pct * displayDuration;
     },
-    [duration],
+    [displayDuration],
   );
 
   const seekTo = (e: React.MouseEvent<HTMLDivElement>) => {

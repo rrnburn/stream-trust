@@ -562,7 +562,7 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
       video.removeEventListener('canplay', onCanPlay);
       video.removeEventListener('error', onError);
     };
-  }, [onProgress, resolveTimelineDuration, syncAudioTracks]);
+  }, [onProgress]);
 
   const togglePlay = useCallback(() => {
     const video = videoRef.current;
@@ -991,45 +991,26 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
               </div>
             )}
 
-            <div className="bg-gradient-to-t from-black/80 to-transparent p-3 pb-[env(safe-area-inset-bottom,8px)] pt-8 space-y-1.5 pointer-events-auto">
-              {duration > 0 && isFinite(duration) && (
-                <div
-                  ref={progressBarRef}
-                  className="relative w-full py-3 -my-3 cursor-pointer group/bar touch-none select-none"
-                  onClick={seekTo}
-                  onPointerDown={handleScrubStart}
-                  onPointerMove={handleScrubMove}
-                  onPointerUp={handleScrubEnd}
-                  onPointerCancel={handleScrubEnd}
-                  onPointerLeave={() => setHoverTime(null)}
-                  role="slider"
-                  aria-label="Seek"
-                  aria-valuemin={0}
-                  aria-valuemax={duration}
-                  aria-valuenow={scrubTime ?? currentTime}
-                >
-                  <div className="relative w-full h-1.5 bg-white/20 rounded-full">
-                    <div
-                      className="h-full bg-primary rounded-full relative"
-                      style={{
-                        width: `${((scrubTime ?? currentTime) / duration) * 100}%`,
-                        transition: scrubbing ? 'none' : 'width 0.1s linear',
-                      }}
-                    >
-                      <div
-                        className={`absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 w-3.5 h-3.5 bg-primary rounded-full shadow-md transition-opacity ${
-                          scrubbing ? 'opacity-100 scale-125' : 'opacity-0 group-hover/bar:opacity-100'
-                        }`}
-                      />
-                    </div>
-                    {hoverTime != null && (
-                      <div
-                        className="absolute -top-7 -translate-x-1/2 px-1.5 py-0.5 rounded bg-black/80 text-white text-[10px] font-medium pointer-events-none whitespace-nowrap"
-                        style={{ left: `${hoverX}px` }}
-                      >
-                        {formatTime(hoverTime)}
-                      </div>
-                    )}
+            <div className="bg-gradient-to-t from-black/80 to-transparent p-3 pb-[env(safe-area-inset-bottom,8px)] pt-8 space-y-2 pointer-events-auto">
+              {displayDuration > 0 && isFinite(displayDuration) && (
+                <div className="space-y-1">
+                  <Slider
+                    value={[sliderValue]}
+                    min={0}
+                    max={displayDuration}
+                    step={1}
+                    onValueChange={(value) => setScrubTime(value[0] ?? 0)}
+                    onValueCommit={(value) => {
+                      const next = value[0] ?? 0;
+                      setScrubTime(null);
+                      if (videoRef.current) videoRef.current.currentTime = next;
+                    }}
+                    aria-label="Seek"
+                    className="py-1"
+                  />
+                  <div className="flex items-center justify-between text-[10px] text-white/60 tabular-nums">
+                    <span>{formatTime(sliderValue)}</span>
+                    <span>{formatTime(displayDuration)}</span>
                   </div>
                 </div>
               )}
@@ -1049,10 +1030,36 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
                     {muted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
                   </button>
                   <span className="text-xs text-white/70 tabular-nums">
-                    {formatTime(scrubTime ?? currentTime)} / {formatTime(duration)}
+                    {formatTime(displayTime)} / {formatTime(displayDuration)}
                   </span>
                 </div>
                 <div className="flex items-center gap-1">
+                  {audioTracks.length > 1 && (
+                    <div className="relative">
+                      <button
+                        onClick={() => setShowLanguageMenu((v) => !v)}
+                        className={`hover:text-primary transition-colors p-1 ${showLanguageMenu ? 'text-primary' : ''}`}
+                        title="Audio language"
+                      >
+                        <Languages className="w-5 h-5" />
+                      </button>
+                      {showLanguageMenu && (
+                        <div className="absolute bottom-full right-0 mb-2 min-w-[140px] rounded-lg bg-black/90 border border-white/10 backdrop-blur-md shadow-xl p-1 z-20 max-h-56 overflow-y-auto">
+                          {audioTracks.map((track) => (
+                            <button
+                              key={track.id}
+                              onClick={() => handleSelectAudioTrack(track.id)}
+                              className={`w-full text-left px-3 py-1.5 text-xs rounded-md transition-colors ${
+                                selectedAudioTrack === track.id ? 'bg-primary text-primary-foreground' : 'text-white hover:bg-white/10'
+                              }`}
+                            >
+                              {track.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                   <div className="relative">
                     <button
                       onClick={() => setShowScaleMenu((v) => !v)}

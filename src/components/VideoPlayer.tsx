@@ -25,6 +25,7 @@ import { isNativePlatform } from '@/lib/platform';
 import { logger } from '@/lib/logger';
 import { playInVlc, playInMxPlayer, playInSystemChooser, stopNative } from '@/lib/nativePlayer';
 import { loadCastSDK, startCasting, isCasting, stopCasting } from '@/lib/castSender';
+import { Slider } from '@/components/ui/slider';
 import { toast } from 'sonner';
 
 interface VideoPlayerProps {
@@ -75,6 +76,7 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
   const [fullscreen, setFullscreen] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [timelineDuration, setTimelineDuration] = useState(0);
   const [buffering, setBuffering] = useState(true);
   const [showControls, setShowControls] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -116,6 +118,72 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
     },
     [getProxiedUrl],
   );
+
+  const resolveTimelineDuration = useCallback((video: HTMLVideoElement) => {
+    if (Number.isFinite(video.duration) && video.duration > 0) return video.duration;
+    if (video.seekable.length > 0) {
+      const seekableEnd = video.seekable.end(video.seekable.length - 1);
+      if (Number.isFinite(seekableEnd) && seekableEnd > 0) return seekableEnd;
+    }
+    return 0;
+  }, []);
+
+  const syncAudioTracks = useCallback(() => {
+    const hls = hlsRef.current;
+    if (hls && hls.audioTracks.length > 0) {
+      const nextTracks = hls.audioTracks.map((track, index) => ({
+        id: String(index),
+        label: track.name || track.lang || `Track ${index + 1}`,
+      }));
+      setAudioTracks(nextTracks);
+      setSelectedAudioTrack(hls.audioTrack >= 0 ? String(hls.audioTrack) : nextTracks[0]?.id ?? null);
+      return;
+    }
+
+    const video = videoRef.current as (HTMLVideoElement & {
+      audioTracks?: ArrayLike<{ enabled?: boolean; id?: string; label?: string; language?: string }>;
+    }) | null;
+    const nativeTracks = video?.audioTracks;
+    if (nativeTracks && nativeTracks.length > 0) {
+      const nextTracks = Array.from({ length: nativeTracks.length }, (_, index) => {
+        const track = nativeTracks[index];
+        return {
+          id: String(track.id ?? index),
+          label: track.label || track.language || `Track ${index + 1}`,
+        };
+      });
+      setAudioTracks(nextTracks);
+      const activeTrack = Array.from({ length: nativeTracks.length }, (_, index) => nativeTracks[index]).find((track) => track.enabled);
+      setSelectedAudioTrack(activeTrack ? String(activeTrack.id ?? nextTracks[0]?.id) : nextTracks[0]?.id ?? null);
+      return;
+    }
+
+    setAudioTracks([]);
+    setSelectedAudioTrack(null);
+  }, []);
+
+  const handleSelectAudioTrack = useCallback((trackId: string) => {
+    const hls = hlsRef.current;
+    if (hls && hls.audioTracks.length > 0) {
+      hls.audioTrack = Number(trackId);
+      setSelectedAudioTrack(trackId);
+      setShowLanguageMenu(false);
+      return;
+    }
+
+    const video = videoRef.current as (HTMLVideoElement & {
+      audioTracks?: ArrayLike<{ enabled?: boolean; id?: string }>;
+    }) | null;
+    const nativeTracks = video?.audioTracks;
+    if (nativeTracks) {
+      for (let index = 0; index < nativeTracks.length; index += 1) {
+        const track = nativeTracks[index];
+        track.enabled = String(track.id ?? index) === trackId;
+      }
+      setSelectedAudioTrack(trackId);
+    }
+    setShowLanguageMenu(false);
+  }, []);
 
   // Normalize stream URLs: convert .ts to .m3u8 for live streams.
   // For movies, try .mp4 first; if hlsFallback is set, convert to .m3u8.

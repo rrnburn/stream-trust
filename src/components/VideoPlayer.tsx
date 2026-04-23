@@ -105,7 +105,7 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
   const getProxiedUrl = useCallback((streamUrl: string) => {
     // Native apps don't need the proxy — direct playback with residential IP
     if (isNativePlatform()) return streamUrl;
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const supabaseUrl = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env?.VITE_SUPABASE_URL;
     if (!supabaseUrl || !streamUrl) return streamUrl;
     return `${supabaseUrl}/functions/v1/stream-proxy?url=${encodeURIComponent(streamUrl)}`;
   }, []);

@@ -101,7 +101,12 @@ export async function initLocalDb() {
   const columns = await db.query('PRAGMA table_info(parsed_media)');
   const hasTvgId = (columns.values || []).some((column: { name?: string }) => column.name === 'tvg_id');
   if (!hasTvgId) {
-    await db.execute('ALTER TABLE parsed_media ADD COLUMN tvg_id TEXT');
+    try {
+      await db.execute('ALTER TABLE parsed_media ADD COLUMN tvg_id TEXT');
+    } catch (error) {
+      const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+      if (!message.includes('duplicate column')) throw error;
+    }
   }
 
   return db;

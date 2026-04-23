@@ -477,6 +477,11 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
     setRetrying(false);
     setError(null);
     setAutoplayMuted(false);
+    setTimelineDuration(0);
+    setAudioTracks([]);
+    setSelectedAudioTrack(null);
+    setShowLanguageMenu(false);
+    setShowScaleMenu(false);
   }, [src]);
 
   const handleRetry = useCallback(() => {
@@ -499,13 +504,20 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
     const video = videoRef.current;
     if (!video) return;
 
+    const updateTimeline = () => {
+      const nextDuration = resolveTimelineDuration(video);
+      setDuration(video.duration || 0);
+      setTimelineDuration(nextDuration);
+    };
+
     const onTimeUpdate = () => {
       setCurrentTime(video.currentTime);
+      updateTimeline();
       if (video.duration && isFinite(video.duration) && onProgress) {
         onProgress(video.currentTime / video.duration);
       }
     };
-    const onDurationChange = () => setDuration(video.duration || 0);
+    const onDurationChange = () => updateTimeline();
     const onPlay = () => {
       setPlaying(true);
       setBuffering(false);
@@ -518,13 +530,19 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
       setBuffering(false);
       setPreBuffering(false);
     };
-    const onCanPlay = () => setBuffering(false);
+    const onCanPlay = () => {
+      updateTimeline();
+      syncAudioTracks();
+      setBuffering(false);
+    };
     const onError = () => {
       log('ERROR', `Video element error: code=${video.error?.code} msg=${video.error?.message}`);
     };
 
     video.addEventListener('timeupdate', onTimeUpdate);
     video.addEventListener('durationchange', onDurationChange);
+    video.addEventListener('loadedmetadata', onDurationChange);
+    video.addEventListener('progress', onDurationChange);
     video.addEventListener('play', onPlay);
     video.addEventListener('pause', onPause);
     video.addEventListener('waiting', onWaiting);
@@ -535,6 +553,8 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
     return () => {
       video.removeEventListener('timeupdate', onTimeUpdate);
       video.removeEventListener('durationchange', onDurationChange);
+      video.removeEventListener('loadedmetadata', onDurationChange);
+      video.removeEventListener('progress', onDurationChange);
       video.removeEventListener('play', onPlay);
       video.removeEventListener('pause', onPause);
       video.removeEventListener('waiting', onWaiting);
@@ -542,7 +562,7 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
       video.removeEventListener('canplay', onCanPlay);
       video.removeEventListener('error', onError);
     };
-  }, [onProgress]);
+  }, [onProgress, resolveTimelineDuration, syncAudioTracks]);
 
   const togglePlay = useCallback(() => {
     const video = videoRef.current;

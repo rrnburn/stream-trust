@@ -11,6 +11,8 @@ import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import { isNativePlatform } from '@/lib/platform';
 import { logger } from '@/lib/logger';
 
+const appEnv = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env;
+
 export interface DownloadProgress {
   loaded: number; // bytes downloaded so far
   total: number; // total bytes (0 if unknown)
@@ -54,6 +56,15 @@ const inferExtension = (url: string, contentType?: string | null): string => {
   if (contentType?.includes('matroska')) return 'mkv';
   if (contentType?.includes('webm')) return 'webm';
   return 'mp4';
+};
+
+const getCandidateUrls = (url: string): string[] => {
+  const urls = [url];
+  const backendUrl = appEnv?.VITE_SUPABASE_URL;
+  if (backendUrl) {
+    urls.push(`${backendUrl}/functions/v1/stream-proxy?url=${encodeURIComponent(url)}`);
+  }
+  return Array.from(new Set(urls));
 };
 
 export interface DownloadResult {
@@ -153,22 +164,47 @@ export async function downloadStream(
 
     let resultPath: string | undefined;
     try {
-      logger.info('Downloads', `Invoking native downloadFile`, { mediaId, relPath, targetUri });
-      const dl = await FileTransfer.downloadFile({
-        url,
-        path: targetUri,
-        headers: DOWNLOAD_HEADERS,
-        connectTimeout: 30000,
-        readTimeout: 120000,
-        progress: true,
-      });
-      resultPath = dl.path || targetUri;
-      logger.info('Downloads', `Native downloadFile returned`, {
-        mediaId,
-        path: resultPath,
-        progressEvents: progressEventsReceived,
-        loaded,
-      });
+      let lastError: unknown;
+      for (const candidateUrl of getCandidateUrls(url)) {
+        loaded = 0;
+        progressEventsReceived = 0;
+        try {
+          logger.info('Downloads', `Invoking native downloadFile`, {
+            mediaId,
+            relPath,
+            targetUri,
+            proxied: candidateUrl !== url,
+          });
+          const dl = await FileTransfer.downloadFile({
+            url: candidateUrl,
+            path: targetUri,
+            headers: DOWNLOAD_HEADERS,
+            connectTimeout: 30000,
+            readTimeout: 120000,
+            progress: true,
+          });
+          resultPath = dl.path || targetUri;
+          logger.info('Downloads', `Native downloadFile returned`, {
+            mediaId,
+            path: resultPath,
+            progressEvents: progressEventsReceived,
+            loaded,
+            proxied: candidateUrl !== url,
+          });
+
+          try {
+            const stat = await Filesystem.stat({ path: relPath, directory: Directory.Data });
+            if ((stat.size || 0) > 0) break;
+          } catch {
+          }
+
+          lastError = new Error('Downloaded file is empty — the server may have rejected the request');
+        } catch (error) {
+          lastError = error;
+        }
+      }
+
+      if (!resultPath) throw lastError instanceof Error ? lastError : new Error('Download failed');
     } finally {
       await progressListener.remove();
     }

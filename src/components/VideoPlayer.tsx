@@ -16,6 +16,7 @@ import {
   Share2,
   Copy,
   Check,
+  Languages,
   Ratio,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -24,6 +25,7 @@ import { isNativePlatform } from '@/lib/platform';
 import { logger } from '@/lib/logger';
 import { playInVlc, playInMxPlayer, playInSystemChooser, stopNative } from '@/lib/nativePlayer';
 import { loadCastSDK, startCasting, isCasting, stopCasting } from '@/lib/castSender';
+import { Slider } from '@/components/ui/slider';
 import { toast } from 'sonner';
 
 interface VideoPlayerProps {
@@ -74,6 +76,7 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
   const [fullscreen, setFullscreen] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [timelineDuration, setTimelineDuration] = useState(0);
   const [buffering, setBuffering] = useState(true);
   const [showControls, setShowControls] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -87,6 +90,9 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
   const [copied, setCopied] = useState(false);
   const [scaleMode, setScaleMode] = useState<'fit' | 'fill' | 'stretch' | 'zoom' | '16:9' | '16:10' | '4:3'>('fit');
   const [showScaleMenu, setShowScaleMenu] = useState(false);
+  const [audioTracks, setAudioTracks] = useState<Array<{ id: string; label: string }>>([]);
+  const [selectedAudioTrack, setSelectedAudioTrack] = useState<string | null>(null);
+  const [showLanguageMenu, setShowLanguageMenu] = useState(false);
   const [scrubbing, setScrubbing] = useState(false);
   const [scrubTime, setScrubTime] = useState<number | null>(null);
   const [hoverTime, setHoverTime] = useState<number | null>(null);
@@ -99,7 +105,7 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
   const getProxiedUrl = useCallback((streamUrl: string) => {
     // Native apps don't need the proxy — direct playback with residential IP
     if (isNativePlatform()) return streamUrl;
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const supabaseUrl = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env?.VITE_SUPABASE_URL;
     if (!supabaseUrl || !streamUrl) return streamUrl;
     return `${supabaseUrl}/functions/v1/stream-proxy?url=${encodeURIComponent(streamUrl)}`;
   }, []);
@@ -188,8 +194,14 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
         hls.attachMedia(video);
         hls.on(Hls.Events.MANIFEST_PARSED, (_, data) => {
           log('INFO', `HLS manifest parsed: ${data.levels.length} quality levels`);
+          syncAudioTracks();
           setBuffering(false);
           onReady();
+        });
+        hls.on(Hls.Events.AUDIO_TRACKS_UPDATED, syncAudioTracks);
+        hls.on(Hls.Events.AUDIO_TRACK_SWITCHED, (_, data) => {
+          setSelectedAudioTrack(String(data.id));
+          syncAudioTracks();
         });
         hls.on(Hls.Events.ERROR, (_, data) => {
           if (data.fatal) {
@@ -465,6 +477,11 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
     setRetrying(false);
     setError(null);
     setAutoplayMuted(false);
+    setTimelineDuration(0);
+    setAudioTracks([]);
+    setSelectedAudioTrack(null);
+    setShowLanguageMenu(false);
+    setShowScaleMenu(false);
   }, [src]);
 
   const handleRetry = useCallback(() => {
@@ -487,13 +504,20 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
     const video = videoRef.current;
     if (!video) return;
 
+    const updateTimeline = () => {
+      const nextDuration = resolveTimelineDuration(video);
+      setDuration(video.duration || 0);
+      setTimelineDuration(nextDuration);
+    };
+
     const onTimeUpdate = () => {
       setCurrentTime(video.currentTime);
+      updateTimeline();
       if (video.duration && isFinite(video.duration) && onProgress) {
         onProgress(video.currentTime / video.duration);
       }
     };
-    const onDurationChange = () => setDuration(video.duration || 0);
+    const onDurationChange = () => updateTimeline();
     const onPlay = () => {
       setPlaying(true);
       setBuffering(false);
@@ -506,13 +530,19 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
       setBuffering(false);
       setPreBuffering(false);
     };
-    const onCanPlay = () => setBuffering(false);
+    const onCanPlay = () => {
+      updateTimeline();
+      syncAudioTracks();
+      setBuffering(false);
+    };
     const onError = () => {
       log('ERROR', `Video element error: code=${video.error?.code} msg=${video.error?.message}`);
     };
 
     video.addEventListener('timeupdate', onTimeUpdate);
     video.addEventListener('durationchange', onDurationChange);
+    video.addEventListener('loadedmetadata', onDurationChange);
+    video.addEventListener('progress', onDurationChange);
     video.addEventListener('play', onPlay);
     video.addEventListener('pause', onPause);
     video.addEventListener('waiting', onWaiting);
@@ -523,6 +553,8 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
     return () => {
       video.removeEventListener('timeupdate', onTimeUpdate);
       video.removeEventListener('durationchange', onDurationChange);
+      video.removeEventListener('loadedmetadata', onDurationChange);
+      video.removeEventListener('progress', onDurationChange);
       video.removeEventListener('play', onPlay);
       video.removeEventListener('pause', onPause);
       video.removeEventListener('waiting', onWaiting);
@@ -563,15 +595,88 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
     }
   };
 
+  const resolveTimelineDuration = useCallback((video: HTMLVideoElement) => {
+    if (Number.isFinite(video.duration) && video.duration > 0) return video.duration;
+    if (video.seekable.length > 0) {
+      const seekableEnd = video.seekable.end(video.seekable.length - 1);
+      if (Number.isFinite(seekableEnd) && seekableEnd > 0) return seekableEnd;
+    }
+    return 0;
+  }, []);
+
+  const syncAudioTracks = useCallback(() => {
+    const hls = hlsRef.current;
+    if (hls && hls.audioTracks.length > 0) {
+      const nextTracks = hls.audioTracks.map((track, index) => ({
+        id: String(index),
+        label: track.name || track.lang || `Track ${index + 1}`,
+      }));
+      setAudioTracks(nextTracks);
+      setSelectedAudioTrack(hls.audioTrack >= 0 ? String(hls.audioTrack) : nextTracks[0]?.id ?? null);
+      return;
+    }
+
+    const video = videoRef.current as (HTMLVideoElement & {
+      audioTracks?: ArrayLike<{ enabled?: boolean; id?: string; label?: string; language?: string }>;
+    }) | null;
+    const nativeTracks = video?.audioTracks;
+    if (nativeTracks && nativeTracks.length > 0) {
+      const nextTracks = Array.from({ length: nativeTracks.length }, (_, index) => {
+        const track = nativeTracks[index];
+        return {
+          id: String(track.id ?? index),
+          label: track.label || track.language || `Track ${index + 1}`,
+        };
+      });
+      setAudioTracks(nextTracks);
+      const activeTrack = Array.from({ length: nativeTracks.length }, (_, index) => nativeTracks[index]).find((track) => track.enabled);
+      setSelectedAudioTrack(activeTrack ? String(activeTrack.id ?? nextTracks[0]?.id) : nextTracks[0]?.id ?? null);
+      return;
+    }
+
+    setAudioTracks([]);
+    setSelectedAudioTrack(null);
+  }, []);
+
+  const handleSelectAudioTrack = useCallback(
+    (trackId: string) => {
+      const hls = hlsRef.current;
+      if (hls && hls.audioTracks.length > 0) {
+        hls.audioTrack = Number(trackId);
+        setSelectedAudioTrack(trackId);
+        setShowLanguageMenu(false);
+        return;
+      }
+
+      const video = videoRef.current as (HTMLVideoElement & {
+        audioTracks?: ArrayLike<{ enabled?: boolean; id?: string }>;
+      }) | null;
+      const nativeTracks = video?.audioTracks;
+      if (nativeTracks) {
+        for (let index = 0; index < nativeTracks.length; index += 1) {
+          const track = nativeTracks[index];
+          track.enabled = String(track.id ?? index) === trackId;
+        }
+        setSelectedAudioTrack(trackId);
+      }
+      setShowLanguageMenu(false);
+    },
+    [],
+  );
+
+  const displayDuration = timelineDuration || duration;
+  const displayTime = scrubTime ?? currentTime;
+  const sliderValue = displayDuration > 0 ? Math.min(displayDuration, Math.max(0, displayTime)) : 0;
+
   const computeTimeFromClientX = useCallback(
     (clientX: number): number | null => {
       const bar = progressBarRef.current;
-      if (!bar || !duration || !isFinite(duration)) return null;
+      if (!bar || !displayDuration || !isFinite(displayDuration)) return null;
       const rect = bar.getBoundingClientRect();
       const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-      return pct * duration;
+      return pct * displayDuration;
     },
-    [duration],
+    [displayDuration],
   );
 
   const seekTo = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -886,45 +991,26 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
               </div>
             )}
 
-            <div className="bg-gradient-to-t from-black/80 to-transparent p-3 pb-[env(safe-area-inset-bottom,8px)] pt-8 space-y-1.5 pointer-events-auto">
-              {duration > 0 && isFinite(duration) && (
-                <div
-                  ref={progressBarRef}
-                  className="relative w-full py-3 -my-3 cursor-pointer group/bar touch-none select-none"
-                  onClick={seekTo}
-                  onPointerDown={handleScrubStart}
-                  onPointerMove={handleScrubMove}
-                  onPointerUp={handleScrubEnd}
-                  onPointerCancel={handleScrubEnd}
-                  onPointerLeave={() => setHoverTime(null)}
-                  role="slider"
-                  aria-label="Seek"
-                  aria-valuemin={0}
-                  aria-valuemax={duration}
-                  aria-valuenow={scrubTime ?? currentTime}
-                >
-                  <div className="relative w-full h-1.5 bg-white/20 rounded-full">
-                    <div
-                      className="h-full bg-primary rounded-full relative"
-                      style={{
-                        width: `${((scrubTime ?? currentTime) / duration) * 100}%`,
-                        transition: scrubbing ? 'none' : 'width 0.1s linear',
-                      }}
-                    >
-                      <div
-                        className={`absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 w-3.5 h-3.5 bg-primary rounded-full shadow-md transition-opacity ${
-                          scrubbing ? 'opacity-100 scale-125' : 'opacity-0 group-hover/bar:opacity-100'
-                        }`}
-                      />
-                    </div>
-                    {hoverTime != null && (
-                      <div
-                        className="absolute -top-7 -translate-x-1/2 px-1.5 py-0.5 rounded bg-black/80 text-white text-[10px] font-medium pointer-events-none whitespace-nowrap"
-                        style={{ left: `${hoverX}px` }}
-                      >
-                        {formatTime(hoverTime)}
-                      </div>
-                    )}
+            <div className="bg-gradient-to-t from-black/80 to-transparent p-3 pb-[env(safe-area-inset-bottom,8px)] pt-8 space-y-2 pointer-events-auto">
+              {displayDuration > 0 && isFinite(displayDuration) && (
+                <div className="space-y-1">
+                  <Slider
+                    value={[sliderValue]}
+                    min={0}
+                    max={displayDuration}
+                    step={1}
+                    onValueChange={(value) => setScrubTime(value[0] ?? 0)}
+                    onValueCommit={(value) => {
+                      const next = value[0] ?? 0;
+                      setScrubTime(null);
+                      if (videoRef.current) videoRef.current.currentTime = next;
+                    }}
+                    aria-label="Seek"
+                    className="py-1"
+                  />
+                  <div className="flex items-center justify-between text-[10px] text-white/60 tabular-nums">
+                    <span>{formatTime(sliderValue)}</span>
+                    <span>{formatTime(displayDuration)}</span>
                   </div>
                 </div>
               )}
@@ -944,10 +1030,36 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
                     {muted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
                   </button>
                   <span className="text-xs text-white/70 tabular-nums">
-                    {formatTime(scrubTime ?? currentTime)} / {formatTime(duration)}
+                    {formatTime(displayTime)} / {formatTime(displayDuration)}
                   </span>
                 </div>
                 <div className="flex items-center gap-1">
+                  {audioTracks.length > 1 && (
+                    <div className="relative">
+                      <button
+                        onClick={() => setShowLanguageMenu((v) => !v)}
+                        className={`hover:text-primary transition-colors p-1 ${showLanguageMenu ? 'text-primary' : ''}`}
+                        title="Audio language"
+                      >
+                        <Languages className="w-5 h-5" />
+                      </button>
+                      {showLanguageMenu && (
+                        <div className="absolute bottom-full right-0 mb-2 min-w-[140px] rounded-lg bg-black/90 border border-white/10 backdrop-blur-md shadow-xl p-1 z-20 max-h-56 overflow-y-auto">
+                          {audioTracks.map((track) => (
+                            <button
+                              key={track.id}
+                              onClick={() => handleSelectAudioTrack(track.id)}
+                              className={`w-full text-left px-3 py-1.5 text-xs rounded-md transition-colors ${
+                                selectedAudioTrack === track.id ? 'bg-primary text-primary-foreground' : 'text-white hover:bg-white/10'
+                              }`}
+                            >
+                              {track.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                   <div className="relative">
                     <button
                       onClick={() => setShowScaleMenu((v) => !v)}

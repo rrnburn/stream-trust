@@ -32,7 +32,15 @@ interface VideoPlayerProps {
   src: string;
   title?: string;
   poster?: string;
-  onProgress?: (progress: number) => void;
+  /** Resume position in seconds — applied once on first play */
+  resumeFrom?: number;
+  /**
+   * Reports playback progress.
+   * @param progress 0..1 fraction
+   * @param positionSeconds Current playhead in seconds
+   * @param durationSeconds Total length in seconds (0 if unknown)
+   */
+  onProgress?: (progress: number, positionSeconds?: number, durationSeconds?: number) => void;
   onClose?: () => void;
 }
 

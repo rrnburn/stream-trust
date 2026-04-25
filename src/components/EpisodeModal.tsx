@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Play, Loader2, CheckCircle2, RotateCcw } from 'lucide-react';
+import { Play, Loader2, CheckCircle2, RotateCcw, PlayCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import DownloadButton from '@/components/DownloadButton';
 import { isNativePlatform } from '@/lib/platform';
 import { useAppContext } from '@/context/AppContext';
+import { cn } from '@/lib/utils';
 
 interface Episode {
   id: string;
@@ -54,10 +55,14 @@ const EpisodeModal = ({
   sourcePassword,
   onPlay,
 }: EpisodeModalProps) => {
+  const { getResume, watchHistory } = useAppContext();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [seriesInfo, setSeriesInfo] = useState<SeriesInfo | null>(null);
   const [selectedSeason, setSelectedSeason] = useState<string>('');
+
+  // Which episode was last played for this series?
+  const lastEpisodeId = getResume(seriesId)?.lastEpisodeId;
 
   useEffect(() => {
     if (!open || !streamUrl || !sourceUsername || !sourcePassword) return;
@@ -152,12 +157,22 @@ const EpisodeModal = ({
                 )}
                 {currentEpisodes.map((ep) => {
                   const epLabel = `${seriesTitle} - S${selectedSeason}E${ep.episodeNum}`;
-                  // Stable per-episode id so downloads are tracked separately per episode.
+                  // Stable per-episode id so downloads + history are tracked separately per episode.
                   const epDownloadId = `${seriesId}:s${selectedSeason}e${ep.episodeNum}:${ep.id}`;
+                  const epHistory = watchHistory.find((h) => h.id === epDownloadId);
+                  const isFinished = !!epHistory?.finished;
+                  const inProgress = !isFinished && !!epHistory && epHistory.progress > 0.02;
+                  const isLastPlayed = lastEpisodeId === epDownloadId;
+                  const progressPct = Math.round((epHistory?.progress ?? 0) * 100);
                   return (
                     <div
                       key={ep.id}
-                      className="w-full flex items-start gap-3 p-3 rounded-lg hover:bg-secondary/80 transition-colors group"
+                      className={cn(
+                        'w-full flex items-start gap-3 p-3 rounded-lg transition-colors group border',
+                        isLastPlayed
+                          ? 'bg-primary/10 border-primary/40 hover:bg-primary/15'
+                          : 'border-transparent hover:bg-secondary/80',
+                      )}
                     >
                       <button
                         onClick={() => {
@@ -166,15 +181,55 @@ const EpisodeModal = ({
                         }}
                         className="flex items-start gap-3 flex-1 min-w-0 text-left"
                       >
-                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0 group-hover:bg-primary/20 transition-colors">
-                          <Play className="w-4 h-4 text-primary" />
+                        <div
+                          className={cn(
+                            'w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-colors',
+                            isFinished
+                              ? 'bg-muted group-hover:bg-muted/80'
+                              : isLastPlayed
+                                ? 'bg-primary/25 group-hover:bg-primary/35'
+                                : 'bg-primary/10 group-hover:bg-primary/20',
+                          )}
+                        >
+                          {isFinished ? (
+                            <CheckCircle2 className="w-4 h-4 text-muted-foreground" aria-label="Watched" />
+                          ) : inProgress ? (
+                            <RotateCcw className="w-4 h-4 text-primary" aria-label="Resume" />
+                          ) : (
+                            <Play className="w-4 h-4 text-primary" />
+                          )}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <span className="text-xs font-mono text-muted-foreground">E{ep.episodeNum}</span>
-                            <span className="text-sm font-medium text-foreground truncate">{ep.title}</span>
+                            <span
+                              className={cn(
+                                'text-sm font-medium truncate',
+                                isFinished ? 'text-muted-foreground' : 'text-foreground',
+                              )}
+                            >
+                              {ep.title}
+                            </span>
+                            {isLastPlayed && (
+                              <span className="text-[10px] uppercase tracking-wide font-semibold px-1.5 py-0.5 rounded bg-primary/20 text-primary inline-flex items-center gap-1">
+                                <PlayCircle className="w-3 h-3" /> Last played
+                              </span>
+                            )}
+                            {isFinished && (
+                              <span className="text-[10px] uppercase tracking-wide font-semibold px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+                                Watched
+                              </span>
+                            )}
                           </div>
                           {ep.plot && <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{ep.plot}</p>}
+                          {inProgress && (
+                            <div className="mt-2 h-1 w-full bg-secondary rounded-full overflow-hidden">
+                              <div
+                                className="h-full bg-primary"
+                                style={{ width: `${Math.min(100, Math.max(2, progressPct))}%` }}
+                              />
+                            </div>
+                          )}
                         </div>
                         {ep.duration && <span className="text-xs text-muted-foreground shrink-0">{ep.duration}</span>}
                       </button>

@@ -1,6 +1,6 @@
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Play, Heart, Star, Clock, Calendar, Tv } from 'lucide-react';
+import { ArrowLeft, Play, Heart, Star, Clock, Calendar, Tv, RotateCcw, CheckCircle2 } from 'lucide-react';
 import { useMedia, useAppContext } from '@/context/AppContext';
 import AppLayout from '@/components/AppLayout';
 import MediaGrid from '@/components/MediaGrid';
@@ -10,16 +10,29 @@ import DownloadButton from '@/components/DownloadButton';
 import { Button } from '@/components/ui/button';
 import { motion } from 'framer-motion';
 
+const formatPos = (s: number) => {
+  if (!s || s < 1) return '';
+  const m = Math.floor(s / 60);
+  const sec = Math.floor(s % 60);
+  if (m >= 60) {
+    const h = Math.floor(m / 60);
+    return `${h}h ${m % 60}m`;
+  }
+  return `${m}:${sec.toString().padStart(2, '0')}`;
+};
+
 const MediaDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const media = useMedia();
-  const { toggleFavorite, isFavorite, addToHistory, sources } = useAppContext();
+  const { toggleFavorite, isFavorite, addToHistory, clearResume, getResume, sources } = useAppContext();
   const item = media.find((m) => m.id === id);
   const [showPlayer, setShowPlayer] = useState(false);
   const [showEpisodeModal, setShowEpisodeModal] = useState(false);
   const [playingUrl, setPlayingUrl] = useState('');
   const [playingTitle, setPlayingTitle] = useState('');
+  const [playingMediaId, setPlayingMediaId] = useState('');
+  const [resumeFrom, setResumeFrom] = useState(0);
 
   if (!item) {
     return (

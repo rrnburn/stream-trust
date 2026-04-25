@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Play, Loader2, CheckCircle2, RotateCcw } from 'lucide-react';
+import { Play, Loader2, CheckCircle2, RotateCcw, PlayCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import DownloadButton from '@/components/DownloadButton';

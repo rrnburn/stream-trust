@@ -405,7 +405,8 @@ const CloudAppProvider = ({ children }: { children: ReactNode }) => {
   const { user } = useAuth();
   const [sources, setSources] = useState<IPTVSource[]>([]);
   const [favorites, setFavorites] = useState<string[]>([]);
-  const [watchHistory, setWatchHistory] = useState<{ id: string; progress: number; timestamp: string }[]>([]);
+  const [watchHistory, setWatchHistory] = useState<WatchHistoryEntry[]>([]);
+  const [seriesLastEpisode, setSeriesLastEpisode] = useState<Record<string, string>>({});
   const [loadingSources, setLoadingSources] = useState(false);
   const [parsedMedia, setParsedMedia] = useState<MediaItem[]>([]);
   const [parsingPlaylist, setParsingPlaylist] = useState(false);

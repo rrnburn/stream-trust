@@ -216,7 +216,7 @@ const EpisodeModal = ({
                               </span>
                             )}
                             {isFinished && (
-                              <span className="text-[10px] uppercase tracking-wide font-semibold px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-500">
+                              <span className="text-[10px] uppercase tracking-wide font-semibold px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
                                 Watched
                               </span>
                             )}

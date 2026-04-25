@@ -50,23 +50,38 @@ const MediaDetail = () => {
   // Find the source for this item to get credentials
   const source = sources.find((s) => s.id === item.sourceId);
 
-  const handlePlay = () => {
-    if (!hasStream) return;
-    if (isSeries) {
-      setShowEpisodeModal(true);
-      return;
-    }
-    addToHistory(item.id, 0);
-    setPlayingUrl(item.streamUrl || '');
-    setPlayingTitle(item.title);
+  // For movies/VOD: resume info on the item itself.
+  // For series: resume info points at the LAST episode played (lastEpisodeId).
+  const resume = getResume(item.id);
+  const lastEpisodeResume = isSeries && resume?.lastEpisodeId ? getResume(resume.lastEpisodeId) : null;
+  const movieResumeSeconds = !isSeries && resume && !resume.finished ? Math.floor(resume.position) : 0;
+  const hasMovieResume = movieResumeSeconds > 5;
+  const movieFinished = !isSeries && (resume?.finished ?? false);
+
+  const startPlayback = (url: string, mediaId: string, title: string, fromSeconds: number) => {
+    setPlayingUrl(url);
+    setPlayingMediaId(mediaId);
+    setPlayingTitle(title);
+    setResumeFrom(fromSeconds);
     setShowPlayer(true);
   };
 
-  const handleEpisodePlay = (url: string, title: string) => {
-    addToHistory(item.id, 0);
-    setPlayingUrl(url);
-    setPlayingTitle(title);
-    setShowPlayer(true);
+  const handlePlayMovie = (fromStart: boolean) => {
+    if (!hasStream || isSeries) return;
+    startPlayback(item.streamUrl || '', item.id, item.title, fromStart ? 0 : movieResumeSeconds);
+  };
+
+  const handleEpisodePlay = (url: string, title: string, episodeMediaId?: string) => {
+    const epId = episodeMediaId || `${item.id}:ep:${title}`;
+    // Track that this episode is the most recent for the series
+    addToHistory(epId, 0, 0, 0, item.id);
+    startPlayback(url, epId, title, 0);
+  };
+
+  const handleResumeLastEpisode = () => {
+    if (!resume?.lastEpisodeId || !lastEpisodeResume) return;
+    // We don't have a direct stream URL stored; open the episode modal so user can confirm
+    setShowEpisodeModal(true);
   };
 
   return (
@@ -85,7 +100,10 @@ const MediaDetail = () => {
             <VideoPlayer
               src={playingUrl}
               title={playingTitle}
-              onProgress={(p) => addToHistory(item.id, p)}
+              resumeFrom={resumeFrom}
+              onProgress={(p, pos, dur) =>
+                addToHistory(playingMediaId || item.id, p, pos ?? 0, dur ?? 0, isSeries ? item.id : undefined)
+              }
               onClose={() => setShowPlayer(false)}
             />
           </div>

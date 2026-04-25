@@ -72,7 +72,7 @@ const log = (level: 'INFO' | 'DEBUG' | 'WARN' | 'ERROR', msg: string, meta?: Rec
   }
 };
 
-const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerProps) => {
+const VideoPlayer = ({ src, title, poster, resumeFrom, onProgress, onClose }: VideoPlayerProps) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const hlsRef = useRef<Hls | null>(null);

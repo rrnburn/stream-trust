@@ -32,7 +32,15 @@ interface VideoPlayerProps {
   src: string;
   title?: string;
   poster?: string;
-  onProgress?: (progress: number) => void;
+  /** Resume position in seconds — applied once on first play */
+  resumeFrom?: number;
+  /**
+   * Reports playback progress.
+   * @param progress 0..1 fraction
+   * @param positionSeconds Current playhead in seconds
+   * @param durationSeconds Total length in seconds (0 if unknown)
+   */
+  onProgress?: (progress: number, positionSeconds?: number, durationSeconds?: number) => void;
   onClose?: () => void;
 }
 
@@ -64,7 +72,7 @@ const log = (level: 'INFO' | 'DEBUG' | 'WARN' | 'ERROR', msg: string, meta?: Rec
   }
 };
 
-const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerProps) => {
+const VideoPlayer = ({ src, title, poster, resumeFrom, onProgress, onClose }: VideoPlayerProps) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const hlsRef = useRef<Hls | null>(null);
@@ -513,8 +521,11 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
     const onTimeUpdate = () => {
       setCurrentTime(video.currentTime);
       updateTimeline();
-      if (video.duration && isFinite(video.duration) && onProgress) {
-        onProgress(video.currentTime / video.duration);
+      const dur = video.duration;
+      const hasDur = dur && isFinite(dur);
+      if (onProgress) {
+        const fraction = hasDur ? video.currentTime / dur : 0;
+        onProgress(fraction, video.currentTime, hasDur ? dur : 0);
       }
     };
     const onDurationChange = () => updateTimeline();
@@ -563,6 +574,38 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
       video.removeEventListener('error', onError);
     };
   }, [onProgress]);
+
+  // Apply resume position once metadata is ready
+  const resumeAppliedRef = useRef<string | null>(null);
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !resumeFrom || resumeFrom < 1) return;
+    const key = `${src}:${resumeFrom}`;
+    if (resumeAppliedRef.current === key) return;
+
+    const apply = () => {
+      try {
+        if (video.duration && isFinite(video.duration) && resumeFrom < video.duration - 5) {
+          video.currentTime = resumeFrom;
+          resumeAppliedRef.current = key;
+          log('INFO', `Resumed playback at ${Math.floor(resumeFrom)}s`);
+        }
+      } catch {
+        /* ignore */
+      }
+    };
+
+    if (video.readyState >= 1 && video.duration && isFinite(video.duration)) {
+      apply();
+    } else {
+      video.addEventListener('loadedmetadata', apply, { once: true });
+      video.addEventListener('canplay', apply, { once: true });
+      return () => {
+        video.removeEventListener('loadedmetadata', apply);
+        video.removeEventListener('canplay', apply);
+      };
+    }
+  }, [src, resumeFrom]);
 
   const togglePlay = useCallback(() => {
     const video = videoRef.current;

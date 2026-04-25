@@ -58,3 +58,12 @@ export interface MediaRow {
   group_name?: string | null;
   tvg_id?: string | null;
 }
+
+export interface WatchHistoryEntry {
+  id: string;             // media_id
+  progress: number;       // 0..1 fraction
+  position: number;       // seconds
+  duration: number;       // seconds (0 if unknown)
+  finished: boolean;      // true when watched ≥ 95%
+  timestamp: string;      // last watched timestamp
+}

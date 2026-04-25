@@ -173,22 +173,28 @@ export type Database = {
       }
       watch_history: {
         Row: {
+          duration_seconds: number
           id: string
           media_id: string
+          position_seconds: number
           progress: number
           user_id: string
           watched_at: string
         }
         Insert: {
+          duration_seconds?: number
           id?: string
           media_id: string
+          position_seconds?: number
           progress?: number
           user_id: string
           watched_at?: string
         }
         Update: {
+          duration_seconds?: number
           id?: string
           media_id?: string
+          position_seconds?: number
           progress?: number
           user_id?: string
           watched_at?: string

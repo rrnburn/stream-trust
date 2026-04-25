@@ -66,8 +66,10 @@ export async function initLocalDb() {
 
     CREATE TABLE IF NOT EXISTS watch_history (
       id TEXT PRIMARY KEY,
-      media_id TEXT NOT NULL,
+      media_id TEXT NOT NULL UNIQUE,
       progress REAL DEFAULT 0,
+      position_seconds REAL DEFAULT 0,
+      duration_seconds REAL DEFAULT 0,
       watched_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
@@ -107,6 +109,38 @@ export async function initLocalDb() {
       const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
       if (!message.includes('duplicate column')) throw error;
     }
+  }
+
+  // Migrate watch_history: add position/duration columns + dedupe + unique index
+  const whCols = await db.query('PRAGMA table_info(watch_history)');
+  const whColNames = (whCols.values || []).map((c: { name?: string }) => c.name);
+  if (!whColNames.includes('position_seconds')) {
+    try {
+      await db.execute('ALTER TABLE watch_history ADD COLUMN position_seconds REAL DEFAULT 0');
+    } catch (e) {
+      const m = e instanceof Error ? e.message.toLowerCase() : String(e).toLowerCase();
+      if (!m.includes('duplicate column')) throw e;
+    }
+  }
+  if (!whColNames.includes('duration_seconds')) {
+    try {
+      await db.execute('ALTER TABLE watch_history ADD COLUMN duration_seconds REAL DEFAULT 0');
+    } catch (e) {
+      const m = e instanceof Error ? e.message.toLowerCase() : String(e).toLowerCase();
+      if (!m.includes('duplicate column')) throw e;
+    }
+  }
+  // Dedupe pre-existing rows then enforce uniqueness on media_id
+  try {
+    await db.execute(
+      `DELETE FROM watch_history
+       WHERE rowid NOT IN (
+         SELECT MAX(rowid) FROM watch_history GROUP BY media_id
+       )`,
+    );
+    await db.execute('CREATE UNIQUE INDEX IF NOT EXISTS watch_history_media_unique ON watch_history(media_id)');
+  } catch (e) {
+    // Index creation can fail if duplicates remain; ignore.
   }
 
   return db;
@@ -258,14 +292,44 @@ export async function toggleFavoriteLocal(mediaId: string) {
 export async function getWatchHistory() {
   const d = await initLocalDb();
   const res = await d.query(
-    'SELECT media_id, progress, watched_at FROM watch_history ORDER BY watched_at DESC LIMIT 50',
+    'SELECT media_id, progress, position_seconds, duration_seconds, watched_at FROM watch_history ORDER BY watched_at DESC LIMIT 100',
   );
-  return (res.values || []).map((r: { media_id: string; progress: number; watched_at: string }) => ({ id: r.media_id, progress: r.progress, timestamp: r.watched_at }));
+  return (res.values || []).map(
+    (r: {
+      media_id: string;
+      progress: number;
+      position_seconds?: number;
+      duration_seconds?: number;
+      watched_at: string;
+    }) => ({
+      id: r.media_id,
+      progress: r.progress || 0,
+      position: r.position_seconds || 0,
+      duration: r.duration_seconds || 0,
+      finished: (r.progress || 0) >= 0.95,
+      timestamp: r.watched_at,
+    }),
+  );
 }
 
-export async function addToHistoryLocal(mediaId: string, progress: number) {
+export async function addToHistoryLocal(
+  mediaId: string,
+  progress: number,
+  positionSeconds = 0,
+  durationSeconds = 0,
+) {
   const d = await initLocalDb();
-  await d.run('INSERT INTO watch_history (id, media_id, progress) VALUES (?, ?, ?)', [uuid(), mediaId, progress]);
+  // UPSERT keyed on media_id (unique index above)
+  await d.run(
+    `INSERT INTO watch_history (id, media_id, progress, position_seconds, duration_seconds, watched_at)
+     VALUES (?, ?, ?, ?, ?, datetime('now'))
+     ON CONFLICT(media_id) DO UPDATE SET
+       progress = excluded.progress,
+       position_seconds = excluded.position_seconds,
+       duration_seconds = CASE WHEN excluded.duration_seconds > 0 THEN excluded.duration_seconds ELSE watch_history.duration_seconds END,
+       watched_at = datetime('now')`,
+    [uuid(), mediaId, progress, positionSeconds, durationSeconds],
+  );
 }
 
 // ── EPG Programs ───────────────────────────────────────────

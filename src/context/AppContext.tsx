@@ -7,24 +7,48 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './AuthContext';
 import { toast } from 'sonner';
 import { logger } from '@/lib/logger';
-import type { IPTVSource, MediaItem, EpgProgram, SourceRow, MediaRow } from './AppContext.types';
+import type { IPTVSource, MediaItem, EpgProgram, SourceRow, MediaRow, WatchHistoryEntry } from './AppContext.types';
 // Lazy imports for native-only modules (SQLite crashes on web at module load)
 const getLocalDb = () => import('@/lib/localDb');
 const getEpgParser = () => import('@/lib/epgParser');
 const getPlaylistParser = () => import('@/lib/playlistParser');
 
-export type { IPTVSource, MediaItem };
+export type { IPTVSource, MediaItem, WatchHistoryEntry };
+
+export interface ResumeInfo {
+  position: number;     // seconds
+  duration: number;     // seconds (0 if unknown)
+  progress: number;     // 0..1
+  finished: boolean;
+  lastEpisodeId?: string; // for series — id used to play the last episode
+}
 
 interface AppState {
   sources: IPTVSource[];
   favorites: string[];
-  watchHistory: { id: string; progress: number; timestamp: string }[];
+  watchHistory: WatchHistoryEntry[];
   addSource: (source: Omit<IPTVSource, 'id' | 'created_at'>) => Promise<void>;
   updateSource: (id: string, fields: Partial<Omit<IPTVSource, 'id' | 'created_at'>>) => Promise<void>;
   removeSource: (id: string) => Promise<void>;
   toggleFavorite: (id: string) => Promise<void>;
   isFavorite: (id: string) => boolean;
-  addToHistory: (id: string, progress: number) => Promise<void>;
+  /**
+   * Save playback progress.
+   * @param mediaId  Stable media id (for series episodes use the episode id, not the parent series id)
+   * @param progress 0..1 fraction watched
+   * @param positionSeconds Current playhead in seconds
+   * @param durationSeconds Total length in seconds (0 when unknown / live)
+   * @param parentSeriesId Optional parent series id, so we can remember "last episode of this series"
+   */
+  addToHistory: (
+    mediaId: string,
+    progress: number,
+    positionSeconds?: number,
+    durationSeconds?: number,
+    parentSeriesId?: string,
+  ) => Promise<void>;
+  getResume: (mediaId: string) => ResumeInfo | null;
+  clearResume: (mediaId: string) => Promise<void>;
   loadingSources: boolean;
   parsedMedia: MediaItem[];
   parsePlaylist: (source: IPTVSource) => Promise<void>;
@@ -54,7 +78,9 @@ export const useMedia = () => {
 const LocalAppProvider = ({ children }: { children: ReactNode }) => {
   const [sources, setSources] = useState<IPTVSource[]>([]);
   const [favorites, setFavorites] = useState<string[]>([]);
-  const [watchHistory, setWatchHistory] = useState<{ id: string; progress: number; timestamp: string }[]>([]);
+  const [watchHistory, setWatchHistory] = useState<WatchHistoryEntry[]>([]);
+  // Map of seriesId -> last episode media_id played
+  const [seriesLastEpisode, setSeriesLastEpisode] = useState<Record<string, string>>({});
   const [loadingSources, setLoadingSources] = useState(true);
   const [parsedMedia, setParsedMedia] = useState<MediaItem[]>([]);
   const [parsingPlaylist, setParsingPlaylist] = useState(false);
@@ -140,9 +166,57 @@ const LocalAppProvider = ({ children }: { children: ReactNode }) => {
 
   const isFavorite = (id: string) => favorites.includes(id);
 
-  const addToHistory = async (mediaId: string, progress: number) => {
+  // Persisted "last episode of series" map (lives in localStorage on native)
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('series_last_episode');
+      if (raw) setSeriesLastEpisode(JSON.parse(raw));
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const persistSeriesLastEp = (next: Record<string, string>) => {
+    setSeriesLastEpisode(next);
+    try {
+      localStorage.setItem('series_last_episode', JSON.stringify(next));
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const addToHistory = async (
+    mediaId: string,
+    progress: number,
+    positionSeconds = 0,
+    durationSeconds = 0,
+    parentSeriesId?: string,
+  ) => {
     const db = await getLocalDb();
-    await db.addToHistoryLocal(mediaId, progress);
+    await db.addToHistoryLocal(mediaId, progress, positionSeconds, durationSeconds);
+    if (parentSeriesId) {
+      persistSeriesLastEp({ ...seriesLastEpisode, [parentSeriesId]: mediaId });
+    }
+    const h = await db.getWatchHistory();
+    setWatchHistory(h);
+  };
+
+  const getResume = (mediaId: string): ResumeInfo | null => {
+    const entry = watchHistory.find((h) => h.id === mediaId);
+    const lastEpisodeId = seriesLastEpisode[mediaId];
+    if (!entry && !lastEpisodeId) return null;
+    return {
+      position: entry?.position ?? 0,
+      duration: entry?.duration ?? 0,
+      progress: entry?.progress ?? 0,
+      finished: entry?.finished ?? false,
+      lastEpisodeId,
+    };
+  };
+
+  const clearResume = async (mediaId: string) => {
+    const db = await getLocalDb();
+    await db.addToHistoryLocal(mediaId, 0, 0, 0);
     const h = await db.getWatchHistory();
     setWatchHistory(h);
   };
@@ -307,6 +381,8 @@ const LocalAppProvider = ({ children }: { children: ReactNode }) => {
         toggleFavorite,
         isFavorite,
         addToHistory,
+        getResume,
+        clearResume,
         loadingSources,
         parsedMedia,
         parsePlaylist,
@@ -329,7 +405,8 @@ const CloudAppProvider = ({ children }: { children: ReactNode }) => {
   const { user } = useAuth();
   const [sources, setSources] = useState<IPTVSource[]>([]);
   const [favorites, setFavorites] = useState<string[]>([]);
-  const [watchHistory, setWatchHistory] = useState<{ id: string; progress: number; timestamp: string }[]>([]);
+  const [watchHistory, setWatchHistory] = useState<WatchHistoryEntry[]>([]);
+  const [seriesLastEpisode, setSeriesLastEpisode] = useState<Record<string, string>>({});
   const [loadingSources, setLoadingSources] = useState(false);
   const [parsedMedia, setParsedMedia] = useState<MediaItem[]>([]);
   const [parsingPlaylist, setParsingPlaylist] = useState(false);
@@ -363,10 +440,19 @@ const CloudAppProvider = ({ children }: { children: ReactNode }) => {
     }
     const { data } = await supabase
       .from('watch_history')
-      .select('media_id, progress, watched_at')
+      .select('media_id, progress, position_seconds, duration_seconds, watched_at')
       .order('watched_at', { ascending: false })
-      .limit(50);
-    setWatchHistory(data?.map((h) => ({ id: h.media_id, progress: h.progress, timestamp: h.watched_at })) || []);
+      .limit(100);
+    setWatchHistory(
+      data?.map((h) => ({
+        id: h.media_id,
+        progress: h.progress || 0,
+        position: h.position_seconds || 0,
+        duration: h.duration_seconds || 0,
+        finished: (h.progress || 0) >= 0.95,
+        timestamp: h.watched_at,
+      })) || [],
+    );
   }, [user]);
 
   const loadParsedMedia = useCallback(async () => {
@@ -460,9 +546,72 @@ const CloudAppProvider = ({ children }: { children: ReactNode }) => {
 
   const isFavorite = (id: string) => favorites.includes(id);
 
-  const addToHistory = async (mediaId: string, progress: number) => {
+  // Persisted "last episode of series" map
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(`series_last_episode:${user?.id || 'anon'}`);
+      if (raw) setSeriesLastEpisode(JSON.parse(raw));
+      else setSeriesLastEpisode({});
+    } catch {
+      /* ignore */
+    }
+  }, [user?.id]);
+
+  const persistSeriesLastEp = (next: Record<string, string>) => {
+    setSeriesLastEpisode(next);
+    try {
+      localStorage.setItem(`series_last_episode:${user?.id || 'anon'}`, JSON.stringify(next));
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const addToHistory = async (
+    mediaId: string,
+    progress: number,
+    positionSeconds = 0,
+    durationSeconds = 0,
+    parentSeriesId?: string,
+  ) => {
     if (!user) return;
-    await supabase.from('watch_history').insert({ user_id: user.id, media_id: mediaId, progress });
+    // Upsert keyed on (user_id, media_id)
+    await supabase.from('watch_history').upsert(
+      {
+        user_id: user.id,
+        media_id: mediaId,
+        progress,
+        position_seconds: positionSeconds,
+        duration_seconds: durationSeconds,
+      },
+      { onConflict: 'user_id,media_id' },
+    );
+    if (parentSeriesId) {
+      persistSeriesLastEp({ ...seriesLastEpisode, [parentSeriesId]: mediaId });
+    }
+    await loadHistory();
+  };
+
+  const getResume = (mediaId: string): ResumeInfo | null => {
+    const entry = watchHistory.find((h) => h.id === mediaId);
+    const lastEpisodeId = seriesLastEpisode[mediaId];
+    if (!entry && !lastEpisodeId) return null;
+    return {
+      position: entry?.position ?? 0,
+      duration: entry?.duration ?? 0,
+      progress: entry?.progress ?? 0,
+      finished: entry?.finished ?? false,
+      lastEpisodeId,
+    };
+  };
+
+  const clearResume = async (mediaId: string) => {
+    if (!user) return;
+    await supabase
+      .from('watch_history')
+      .upsert(
+        { user_id: user.id, media_id: mediaId, progress: 0, position_seconds: 0, duration_seconds: 0 },
+        { onConflict: 'user_id,media_id' },
+      );
     await loadHistory();
   };
 
@@ -551,6 +700,8 @@ const CloudAppProvider = ({ children }: { children: ReactNode }) => {
         toggleFavorite,
         isFavorite,
         addToHistory,
+        getResume,
+        clearResume,
         loadingSources,
         parsedMedia,
         parsePlaylist,

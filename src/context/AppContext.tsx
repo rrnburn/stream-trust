@@ -440,10 +440,19 @@ const CloudAppProvider = ({ children }: { children: ReactNode }) => {
     }
     const { data } = await supabase
       .from('watch_history')
-      .select('media_id, progress, watched_at')
+      .select('media_id, progress, position_seconds, duration_seconds, watched_at')
       .order('watched_at', { ascending: false })
-      .limit(50);
-    setWatchHistory(data?.map((h) => ({ id: h.media_id, progress: h.progress, timestamp: h.watched_at })) || []);
+      .limit(100);
+    setWatchHistory(
+      data?.map((h) => ({
+        id: h.media_id,
+        progress: h.progress || 0,
+        position: h.position_seconds || 0,
+        duration: h.duration_seconds || 0,
+        finished: (h.progress || 0) >= 0.95,
+        timestamp: h.watched_at,
+      })) || [],
+    );
   }, [user]);
 
   const loadParsedMedia = useCallback(async () => {

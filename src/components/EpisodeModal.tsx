@@ -185,14 +185,14 @@ const EpisodeModal = ({
                           className={cn(
                             'w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-colors',
                             isFinished
-                              ? 'bg-emerald-500/15 group-hover:bg-emerald-500/25'
+                              ? 'bg-muted group-hover:bg-muted/80'
                               : isLastPlayed
                                 ? 'bg-primary/25 group-hover:bg-primary/35'
                                 : 'bg-primary/10 group-hover:bg-primary/20',
                           )}
                         >
                           {isFinished ? (
-                            <CheckCircle2 className="w-4 h-4 text-emerald-500" aria-label="Watched" />
+                            <CheckCircle2 className="w-4 h-4 text-muted-foreground" aria-label="Watched" />
                           ) : inProgress ? (
                             <RotateCcw className="w-4 h-4 text-primary" aria-label="Resume" />
                           ) : (

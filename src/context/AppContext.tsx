@@ -7,24 +7,48 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './AuthContext';
 import { toast } from 'sonner';
 import { logger } from '@/lib/logger';
-import type { IPTVSource, MediaItem, EpgProgram, SourceRow, MediaRow } from './AppContext.types';
+import type { IPTVSource, MediaItem, EpgProgram, SourceRow, MediaRow, WatchHistoryEntry } from './AppContext.types';
 // Lazy imports for native-only modules (SQLite crashes on web at module load)
 const getLocalDb = () => import('@/lib/localDb');
 const getEpgParser = () => import('@/lib/epgParser');
 const getPlaylistParser = () => import('@/lib/playlistParser');
 
-export type { IPTVSource, MediaItem };
+export type { IPTVSource, MediaItem, WatchHistoryEntry };
+
+export interface ResumeInfo {
+  position: number;     // seconds
+  duration: number;     // seconds (0 if unknown)
+  progress: number;     // 0..1
+  finished: boolean;
+  lastEpisodeId?: string; // for series — id used to play the last episode
+}
 
 interface AppState {
   sources: IPTVSource[];
   favorites: string[];
-  watchHistory: { id: string; progress: number; timestamp: string }[];
+  watchHistory: WatchHistoryEntry[];
   addSource: (source: Omit<IPTVSource, 'id' | 'created_at'>) => Promise<void>;
   updateSource: (id: string, fields: Partial<Omit<IPTVSource, 'id' | 'created_at'>>) => Promise<void>;
   removeSource: (id: string) => Promise<void>;
   toggleFavorite: (id: string) => Promise<void>;
   isFavorite: (id: string) => boolean;
-  addToHistory: (id: string, progress: number) => Promise<void>;
+  /**
+   * Save playback progress.
+   * @param mediaId  Stable media id (for series episodes use the episode id, not the parent series id)
+   * @param progress 0..1 fraction watched
+   * @param positionSeconds Current playhead in seconds
+   * @param durationSeconds Total length in seconds (0 when unknown / live)
+   * @param parentSeriesId Optional parent series id, so we can remember "last episode of this series"
+   */
+  addToHistory: (
+    mediaId: string,
+    progress: number,
+    positionSeconds?: number,
+    durationSeconds?: number,
+    parentSeriesId?: string,
+  ) => Promise<void>;
+  getResume: (mediaId: string) => ResumeInfo | null;
+  clearResume: (mediaId: string) => Promise<void>;
   loadingSources: boolean;
   parsedMedia: MediaItem[];
   parsePlaylist: (source: IPTVSource) => Promise<void>;

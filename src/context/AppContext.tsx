@@ -381,6 +381,8 @@ const LocalAppProvider = ({ children }: { children: ReactNode }) => {
         toggleFavorite,
         isFavorite,
         addToHistory,
+        getResume,
+        clearResume,
         loadingSources,
         parsedMedia,
         parsePlaylist,

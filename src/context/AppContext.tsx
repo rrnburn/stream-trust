@@ -546,9 +546,72 @@ const CloudAppProvider = ({ children }: { children: ReactNode }) => {
 
   const isFavorite = (id: string) => favorites.includes(id);
 
-  const addToHistory = async (mediaId: string, progress: number) => {
+  // Persisted "last episode of series" map
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(`series_last_episode:${user?.id || 'anon'}`);
+      if (raw) setSeriesLastEpisode(JSON.parse(raw));
+      else setSeriesLastEpisode({});
+    } catch {
+      /* ignore */
+    }
+  }, [user?.id]);
+
+  const persistSeriesLastEp = (next: Record<string, string>) => {
+    setSeriesLastEpisode(next);
+    try {
+      localStorage.setItem(`series_last_episode:${user?.id || 'anon'}`, JSON.stringify(next));
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const addToHistory = async (
+    mediaId: string,
+    progress: number,
+    positionSeconds = 0,
+    durationSeconds = 0,
+    parentSeriesId?: string,
+  ) => {
     if (!user) return;
-    await supabase.from('watch_history').insert({ user_id: user.id, media_id: mediaId, progress });
+    // Upsert keyed on (user_id, media_id)
+    await supabase.from('watch_history').upsert(
+      {
+        user_id: user.id,
+        media_id: mediaId,
+        progress,
+        position_seconds: positionSeconds,
+        duration_seconds: durationSeconds,
+      },
+      { onConflict: 'user_id,media_id' },
+    );
+    if (parentSeriesId) {
+      persistSeriesLastEp({ ...seriesLastEpisode, [parentSeriesId]: mediaId });
+    }
+    await loadHistory();
+  };
+
+  const getResume = (mediaId: string): ResumeInfo | null => {
+    const entry = watchHistory.find((h) => h.id === mediaId);
+    const lastEpisodeId = seriesLastEpisode[mediaId];
+    if (!entry && !lastEpisodeId) return null;
+    return {
+      position: entry?.position ?? 0,
+      duration: entry?.duration ?? 0,
+      progress: entry?.progress ?? 0,
+      finished: entry?.finished ?? false,
+      lastEpisodeId,
+    };
+  };
+
+  const clearResume = async (mediaId: string) => {
+    if (!user) return;
+    await supabase
+      .from('watch_history')
+      .upsert(
+        { user_id: user.id, media_id: mediaId, progress: 0, position_seconds: 0, duration_seconds: 0 },
+        { onConflict: 'user_id,media_id' },
+      );
     await loadHistory();
   };
 

@@ -664,9 +664,14 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
     [],
   );
 
-  const displayDuration = timelineDuration || duration;
+  // Compute a usable duration. For live/unknown streams (Infinity/0), expose at least
+  // currentTime so the slider remains visible & the position thumb tracks playback.
+  const rawDuration = timelineDuration || duration;
+  const knownDuration = Number.isFinite(rawDuration) && rawDuration > 0 ? rawDuration : 0;
+  const displayDuration = knownDuration > 0 ? knownDuration : Math.max(currentTime + 1, 1);
+  const isLiveTimeline = knownDuration === 0;
   const displayTime = scrubTime ?? currentTime;
-  const sliderValue = displayDuration > 0 ? Math.min(displayDuration, Math.max(0, displayTime)) : 0;
+  const sliderValue = Math.min(displayDuration, Math.max(0, displayTime));
 
   const computeTimeFromClientX = useCallback(
     (clientX: number): number | null => {

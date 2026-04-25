@@ -997,28 +997,31 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
             )}
 
             <div className="bg-gradient-to-t from-black/80 to-transparent p-3 pb-[env(safe-area-inset-bottom,8px)] pt-8 space-y-2 pointer-events-auto">
-              {displayDuration > 0 && isFinite(displayDuration) && (
-                <div className="space-y-1">
-                  <Slider
-                    value={[sliderValue]}
-                    min={0}
-                    max={displayDuration}
-                    step={1}
-                    onValueChange={(value) => setScrubTime(value[0] ?? 0)}
-                    onValueCommit={(value) => {
-                      const next = value[0] ?? 0;
-                      setScrubTime(null);
-                      if (videoRef.current) videoRef.current.currentTime = next;
-                    }}
-                    aria-label="Seek"
-                    className="py-1"
-                  />
-                  <div className="flex items-center justify-between text-[10px] text-white/60 tabular-nums">
-                    <span>{formatTime(sliderValue)}</span>
-                    <span>{formatTime(displayDuration)}</span>
-                  </div>
+              <div className="space-y-1">
+                <Slider
+                  value={[sliderValue]}
+                  min={0}
+                  max={displayDuration}
+                  step={1}
+                  disabled={isLiveTimeline}
+                  onValueChange={(value) => {
+                    if (isLiveTimeline) return;
+                    setScrubTime(value[0] ?? 0);
+                  }}
+                  onValueCommit={(value) => {
+                    if (isLiveTimeline) return;
+                    const next = value[0] ?? 0;
+                    setScrubTime(null);
+                    if (videoRef.current) videoRef.current.currentTime = next;
+                  }}
+                  aria-label="Seek"
+                  className={`py-1 ${isLiveTimeline ? 'opacity-60' : ''}`}
+                />
+                <div className="flex items-center justify-between text-[10px] text-white/60 tabular-nums">
+                  <span>{formatTime(sliderValue)}</span>
+                  <span>{isLiveTimeline ? 'LIVE' : formatTime(displayDuration)}</span>
                 </div>
-              )}
+              </div>
 
               <div className="flex items-center justify-between text-white">
                 <div className="flex items-center gap-2">

@@ -7,6 +7,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import DownloadButton from '@/components/DownloadButton';
 import { isNativePlatform } from '@/lib/platform';
 import { useAppContext } from '@/context/AppContext';
+import { cn } from '@/lib/utils';
 
 interface Episode {
   id: string;

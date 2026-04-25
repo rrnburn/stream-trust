@@ -153,23 +153,68 @@ const MediaDetail = () => {
 
             <p className="text-muted-foreground leading-relaxed mb-8 max-w-2xl">{item.description}</p>
 
-            <div className="flex gap-3">
-              <Button
-                onClick={handlePlay}
-                disabled={!hasStream}
-                className="bg-primary text-primary-foreground hover:bg-primary/90 gap-2 px-6"
-              >
-                {isSeries ? (
-                  <>
+            {/* Resume hint */}
+            {!isSeries && hasMovieResume && !movieFinished && (
+              <p className="mb-3 text-xs text-muted-foreground">
+                Continue from <span className="text-foreground font-medium">{formatPos(movieResumeSeconds)}</span>
+                {resume?.duration ? ` of ${formatPos(resume.duration)}` : ''}
+              </p>
+            )}
+            {!isSeries && movieFinished && (
+              <p className="mb-3 text-xs text-primary inline-flex items-center gap-1">
+                <CheckCircle2 className="w-3.5 h-3.5" /> Watched
+              </p>
+            )}
+            {isSeries && lastEpisodeResume && (
+              <p className="mb-3 text-xs text-muted-foreground">
+                Last episode: {lastEpisodeResume.finished ? 'finished' : `${formatPos(lastEpisodeResume.position)} watched`}
+              </p>
+            )}
+
+            <div className="flex gap-3 flex-wrap">
+              {isSeries ? (
+                <>
+                  <Button
+                    onClick={() => setShowEpisodeModal(true)}
+                    disabled={!hasStream}
+                    className="bg-primary text-primary-foreground hover:bg-primary/90 gap-2 px-6"
+                  >
                     <Tv className="w-4 h-4" /> Browse Episodes
-                  </>
-                ) : (
-                  <>
-                    <Play className="w-4 h-4 fill-current" />{' '}
-                    {showPlayer ? 'Playing' : hasStream ? 'Play' : 'No Stream'}
-                  </>
-                )}
-              </Button>
+                  </Button>
+                  {lastEpisodeResume && !lastEpisodeResume.finished && (
+                    <Button
+                      variant="outline"
+                      onClick={handleResumeLastEpisode}
+                      className="border-border gap-2 text-foreground hover:bg-secondary"
+                    >
+                      <Play className="w-4 h-4 fill-current" /> Continue Episode
+                    </Button>
+                  )}
+                </>
+              ) : (
+                <>
+                  <Button
+                    onClick={() => handlePlayMovie(!hasMovieResume)}
+                    disabled={!hasStream}
+                    className="bg-primary text-primary-foreground hover:bg-primary/90 gap-2 px-6"
+                  >
+                    <Play className="w-4 h-4 fill-current" />
+                    {showPlayer ? 'Playing' : hasMovieResume ? `Resume ${formatPos(movieResumeSeconds)}` : 'Play'}
+                  </Button>
+                  {hasMovieResume && (
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        clearResume(item.id);
+                        handlePlayMovie(true);
+                      }}
+                      className="border-border gap-2 text-foreground hover:bg-secondary"
+                    >
+                      <RotateCcw className="w-4 h-4" /> Restart
+                    </Button>
+                  )}
+                </>
+              )}
               <Button
                 variant="outline"
                 onClick={() => toggleFavorite(item.id)}

@@ -664,9 +664,14 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
     [],
   );
 
-  const displayDuration = timelineDuration || duration;
+  // Compute a usable duration. For live/unknown streams (Infinity/0), expose at least
+  // currentTime so the slider remains visible & the position thumb tracks playback.
+  const rawDuration = timelineDuration || duration;
+  const knownDuration = Number.isFinite(rawDuration) && rawDuration > 0 ? rawDuration : 0;
+  const displayDuration = knownDuration > 0 ? knownDuration : Math.max(currentTime + 1, 1);
+  const isLiveTimeline = knownDuration === 0;
   const displayTime = scrubTime ?? currentTime;
-  const sliderValue = displayDuration > 0 ? Math.min(displayDuration, Math.max(0, displayTime)) : 0;
+  const sliderValue = Math.min(displayDuration, Math.max(0, displayTime));
 
   const computeTimeFromClientX = useCallback(
     (clientX: number): number | null => {
@@ -734,9 +739,18 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
     setShowControls(true);
     clearTimeout(controlsTimerRef.current);
     controlsTimerRef.current = setTimeout(() => {
-      if (playing) setShowControls(false);
+      // Only auto-hide while actively playing — keep visible when paused/buffering
+      if (videoRef.current && !videoRef.current.paused) setShowControls(false);
     }, 3000);
   };
+
+  // Always show controls when paused so the play button is visible
+  useEffect(() => {
+    if (!playing) {
+      setShowControls(true);
+      clearTimeout(controlsTimerRef.current);
+    }
+  }, [playing]);
 
   const formatTime = (s: number) => {
     if (!isFinite(s)) return '--:--';
@@ -992,28 +1006,31 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
             )}
 
             <div className="bg-gradient-to-t from-black/80 to-transparent p-3 pb-[env(safe-area-inset-bottom,8px)] pt-8 space-y-2 pointer-events-auto">
-              {displayDuration > 0 && isFinite(displayDuration) && (
-                <div className="space-y-1">
-                  <Slider
-                    value={[sliderValue]}
-                    min={0}
-                    max={displayDuration}
-                    step={1}
-                    onValueChange={(value) => setScrubTime(value[0] ?? 0)}
-                    onValueCommit={(value) => {
-                      const next = value[0] ?? 0;
-                      setScrubTime(null);
-                      if (videoRef.current) videoRef.current.currentTime = next;
-                    }}
-                    aria-label="Seek"
-                    className="py-1"
-                  />
-                  <div className="flex items-center justify-between text-[10px] text-white/60 tabular-nums">
-                    <span>{formatTime(sliderValue)}</span>
-                    <span>{formatTime(displayDuration)}</span>
-                  </div>
+              <div className="space-y-1">
+                <Slider
+                  value={[sliderValue]}
+                  min={0}
+                  max={displayDuration}
+                  step={1}
+                  disabled={isLiveTimeline}
+                  onValueChange={(value) => {
+                    if (isLiveTimeline) return;
+                    setScrubTime(value[0] ?? 0);
+                  }}
+                  onValueCommit={(value) => {
+                    if (isLiveTimeline) return;
+                    const next = value[0] ?? 0;
+                    setScrubTime(null);
+                    if (videoRef.current) videoRef.current.currentTime = next;
+                  }}
+                  aria-label="Seek"
+                  className={`py-1 ${isLiveTimeline ? 'opacity-60' : ''}`}
+                />
+                <div className="flex items-center justify-between text-[10px] text-white/60 tabular-nums">
+                  <span>{formatTime(sliderValue)}</span>
+                  <span>{isLiveTimeline ? 'LIVE' : formatTime(displayDuration)}</span>
                 </div>
-              )}
+              </div>
 
               <div className="flex items-center justify-between text-white">
                 <div className="flex items-center gap-2">

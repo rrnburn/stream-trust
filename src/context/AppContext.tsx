@@ -166,9 +166,57 @@ const LocalAppProvider = ({ children }: { children: ReactNode }) => {
 
   const isFavorite = (id: string) => favorites.includes(id);
 
-  const addToHistory = async (mediaId: string, progress: number) => {
+  // Persisted "last episode of series" map (lives in localStorage on native)
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('series_last_episode');
+      if (raw) setSeriesLastEpisode(JSON.parse(raw));
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const persistSeriesLastEp = (next: Record<string, string>) => {
+    setSeriesLastEpisode(next);
+    try {
+      localStorage.setItem('series_last_episode', JSON.stringify(next));
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const addToHistory = async (
+    mediaId: string,
+    progress: number,
+    positionSeconds = 0,
+    durationSeconds = 0,
+    parentSeriesId?: string,
+  ) => {
     const db = await getLocalDb();
-    await db.addToHistoryLocal(mediaId, progress);
+    await db.addToHistoryLocal(mediaId, progress, positionSeconds, durationSeconds);
+    if (parentSeriesId) {
+      persistSeriesLastEp({ ...seriesLastEpisode, [parentSeriesId]: mediaId });
+    }
+    const h = await db.getWatchHistory();
+    setWatchHistory(h);
+  };
+
+  const getResume = (mediaId: string): ResumeInfo | null => {
+    const entry = watchHistory.find((h) => h.id === mediaId);
+    const lastEpisodeId = seriesLastEpisode[mediaId];
+    if (!entry && !lastEpisodeId) return null;
+    return {
+      position: entry?.position ?? 0,
+      duration: entry?.duration ?? 0,
+      progress: entry?.progress ?? 0,
+      finished: entry?.finished ?? false,
+      lastEpisodeId,
+    };
+  };
+
+  const clearResume = async (mediaId: string) => {
+    const db = await getLocalDb();
+    await db.addToHistoryLocal(mediaId, 0, 0, 0);
     const h = await db.getWatchHistory();
     setWatchHistory(h);
   };

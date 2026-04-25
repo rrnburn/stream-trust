@@ -739,9 +739,18 @@ const VideoPlayer = ({ src, title, poster, onProgress, onClose }: VideoPlayerPro
     setShowControls(true);
     clearTimeout(controlsTimerRef.current);
     controlsTimerRef.current = setTimeout(() => {
-      if (playing) setShowControls(false);
+      // Only auto-hide while actively playing — keep visible when paused/buffering
+      if (videoRef.current && !videoRef.current.paused) setShowControls(false);
     }, 3000);
   };
+
+  // Always show controls when paused so the play button is visible
+  useEffect(() => {
+    if (!playing) {
+      setShowControls(true);
+      clearTimeout(controlsTimerRef.current);
+    }
+  }, [playing]);
 
   const formatTime = (s: number) => {
     if (!isFinite(s)) return '--:--';

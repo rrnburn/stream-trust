@@ -55,10 +55,14 @@ const EpisodeModal = ({
   sourcePassword,
   onPlay,
 }: EpisodeModalProps) => {
+  const { getResume, watchHistory } = useAppContext();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [seriesInfo, setSeriesInfo] = useState<SeriesInfo | null>(null);
   const [selectedSeason, setSelectedSeason] = useState<string>('');
+
+  // Which episode was last played for this series?
+  const lastEpisodeId = getResume(seriesId)?.lastEpisodeId;
 
   useEffect(() => {
     if (!open || !streamUrl || !sourceUsername || !sourcePassword) return;

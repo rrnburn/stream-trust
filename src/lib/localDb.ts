@@ -66,8 +66,10 @@ export async function initLocalDb() {
 
     CREATE TABLE IF NOT EXISTS watch_history (
       id TEXT PRIMARY KEY,
-      media_id TEXT NOT NULL,
+      media_id TEXT NOT NULL UNIQUE,
       progress REAL DEFAULT 0,
+      position_seconds REAL DEFAULT 0,
+      duration_seconds REAL DEFAULT 0,
       watched_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 

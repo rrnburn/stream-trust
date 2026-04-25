@@ -575,6 +575,38 @@ const VideoPlayer = ({ src, title, poster, resumeFrom, onProgress, onClose }: Vi
     };
   }, [onProgress]);
 
+  // Apply resume position once metadata is ready
+  const resumeAppliedRef = useRef<string | null>(null);
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !resumeFrom || resumeFrom < 1) return;
+    const key = `${src}:${resumeFrom}`;
+    if (resumeAppliedRef.current === key) return;
+
+    const apply = () => {
+      try {
+        if (video.duration && isFinite(video.duration) && resumeFrom < video.duration - 5) {
+          video.currentTime = resumeFrom;
+          resumeAppliedRef.current = key;
+          log('INFO', `Resumed playback at ${Math.floor(resumeFrom)}s`);
+        }
+      } catch {
+        /* ignore */
+      }
+    };
+
+    if (video.readyState >= 1 && video.duration && isFinite(video.duration)) {
+      apply();
+    } else {
+      video.addEventListener('loadedmetadata', apply, { once: true });
+      video.addEventListener('canplay', apply, { once: true });
+      return () => {
+        video.removeEventListener('loadedmetadata', apply);
+        video.removeEventListener('canplay', apply);
+      };
+    }
+  }, [src, resumeFrom]);
+
   const togglePlay = useCallback(() => {
     const video = videoRef.current;
     if (!video) return;

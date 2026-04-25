@@ -78,7 +78,9 @@ export const useMedia = () => {
 const LocalAppProvider = ({ children }: { children: ReactNode }) => {
   const [sources, setSources] = useState<IPTVSource[]>([]);
   const [favorites, setFavorites] = useState<string[]>([]);
-  const [watchHistory, setWatchHistory] = useState<{ id: string; progress: number; timestamp: string }[]>([]);
+  const [watchHistory, setWatchHistory] = useState<WatchHistoryEntry[]>([]);
+  // Map of seriesId -> last episode media_id played
+  const [seriesLastEpisode, setSeriesLastEpisode] = useState<Record<string, string>>({});
   const [loadingSources, setLoadingSources] = useState(true);
   const [parsedMedia, setParsedMedia] = useState<MediaItem[]>([]);
   const [parsingPlaylist, setParsingPlaylist] = useState(false);

@@ -521,8 +521,11 @@ const VideoPlayer = ({ src, title, poster, resumeFrom, onProgress, onClose }: Vi
     const onTimeUpdate = () => {
       setCurrentTime(video.currentTime);
       updateTimeline();
-      if (video.duration && isFinite(video.duration) && onProgress) {
-        onProgress(video.currentTime / video.duration);
+      const dur = video.duration;
+      const hasDur = dur && isFinite(dur);
+      if (onProgress) {
+        const fraction = hasDur ? video.currentTime / dur : 0;
+        onProgress(fraction, video.currentTime, hasDur ? dur : 0);
       }
     };
     const onDurationChange = () => updateTimeline();

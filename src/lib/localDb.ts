@@ -111,6 +111,38 @@ export async function initLocalDb() {
     }
   }
 
+  // Migrate watch_history: add position/duration columns + dedupe + unique index
+  const whCols = await db.query('PRAGMA table_info(watch_history)');
+  const whColNames = (whCols.values || []).map((c: { name?: string }) => c.name);
+  if (!whColNames.includes('position_seconds')) {
+    try {
+      await db.execute('ALTER TABLE watch_history ADD COLUMN position_seconds REAL DEFAULT 0');
+    } catch (e) {
+      const m = e instanceof Error ? e.message.toLowerCase() : String(e).toLowerCase();
+      if (!m.includes('duplicate column')) throw e;
+    }
+  }
+  if (!whColNames.includes('duration_seconds')) {
+    try {
+      await db.execute('ALTER TABLE watch_history ADD COLUMN duration_seconds REAL DEFAULT 0');
+    } catch (e) {
+      const m = e instanceof Error ? e.message.toLowerCase() : String(e).toLowerCase();
+      if (!m.includes('duplicate column')) throw e;
+    }
+  }
+  // Dedupe pre-existing rows then enforce uniqueness on media_id
+  try {
+    await db.execute(
+      `DELETE FROM watch_history
+       WHERE rowid NOT IN (
+         SELECT MAX(rowid) FROM watch_history GROUP BY media_id
+       )`,
+    );
+    await db.execute('CREATE UNIQUE INDEX IF NOT EXISTS watch_history_media_unique ON watch_history(media_id)');
+  } catch (e) {
+    // Index creation can fail if duplicates remain; ignore.
+  }
+
   return db;
 }
 

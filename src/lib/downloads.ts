@@ -118,20 +118,9 @@ export async function downloadStream(
     logger.info('Downloads', `Starting download: ${title}`, { mediaId, url: url.substring(0, 120) });
 
     let total = 0;
-    let contentType: string | null = null;
-    try {
-      const headResponse = await fetch(url, {
-        method: 'HEAD',
-        signal: controller.signal,
-        headers: DOWNLOAD_HEADERS,
-      });
-      contentType = headResponse.headers.get('content-type');
-      const contentLength = headResponse.headers.get('content-length');
-      if (contentLength) total = parseInt(contentLength, 10);
-      logger.info('Downloads', `HEAD ok`, { mediaId, status: headResponse.status, contentType, total });
-    } catch (e) {
-      logger.warn('Downloads', `HEAD request failed, proceeding without metadata`, { error: String(e) });
-    }
+    const contentType: string | null = null;
+    // Skip HEAD entirely — many IPTV/Xtream panels reject HEAD or flag the client
+    // (the panel that fails here returns 405/403 and then blocks the GET).
 
     const ext = inferExtension(url, contentType);
     const fileName = `${sanitize(title)}_${mediaId.slice(0, 8)}.${ext}`;

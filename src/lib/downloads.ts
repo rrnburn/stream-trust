@@ -27,9 +27,27 @@ export interface ActiveDownload {
 
 const active = new Map<string, ActiveDownload>();
 
-const DOWNLOAD_HEADERS = {
-  'User-Agent': 'MediaPlayer/1.0 (Linux;Android) ExoPlayerLib/2.19.1',
-  Accept: '*/*',
+// User-Agents to try, in order. Xtream panels are picky — okhttp works for
+// the stream-proxy edge function, so we try it first here too.
+const USER_AGENTS = [
+  'okhttp/4.9.2',
+  'VLC/3.0.20 LibVLC/3.0.20',
+  'Lavf/60.16.100',
+  'Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
+];
+
+const buildHeaders = (url: string, ua: string): Record<string, string> => {
+  const headers: Record<string, string> = {
+    'User-Agent': ua,
+    Accept: '*/*',
+  };
+  try {
+    const origin = new URL(url).origin;
+    headers.Referer = origin + '/';
+  } catch {
+    // ignore invalid URL
+  }
+  return headers;
 };
 
 type TransferError = {

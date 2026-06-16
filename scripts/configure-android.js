@@ -21,15 +21,59 @@ if (!fs.existsSync(ANDROID_DIR)) {
 
 console.log('🔧 Configuring Android for memory optimization...\n');
 
-// 1. Update AndroidManifest.xml to add largeHeap
+// 1. Update AndroidManifest.xml: largeHeap + Android TV / Google TV support
 const manifestPath = path.join(ANDROID_DIR, 'app', 'src', 'main', 'AndroidManifest.xml');
 if (fs.existsSync(manifestPath)) {
   let manifest = fs.readFileSync(manifestPath, 'utf8');
+
+  // largeHeap
   if (!manifest.includes('android:largeHeap')) {
     console.log('✓ Adding largeHeap to AndroidManifest.xml');
     manifest = manifest.replace(/<application([^>]*)>/, '<application$1\n        android:largeHeap="true">');
-    fs.writeFileSync(manifestPath, manifest, 'utf8');
   }
+
+  // TV banner (referenced from /res/drawable/tv_banner.png — copied below)
+  if (!manifest.includes('android:banner')) {
+    console.log('✓ Adding android:banner for TV launcher');
+    manifest = manifest.replace(
+      /<application([^>]*)>/,
+      '<application$1\n        android:banner="@drawable/tv_banner">',
+    );
+  }
+
+  // Declare touchscreen as not required so the app is installable on Android TV
+  if (!manifest.includes('android.hardware.touchscreen')) {
+    console.log('✓ Marking touchscreen + telephony as not required (TV-compatible)');
+    const featureBlock = `
+    <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+    <uses-feature android:name="android.hardware.faketouch" android:required="false" />
+    <uses-feature android:name="android.hardware.telephony" android:required="false" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
+    <uses-feature android:name="android.software.leanback" android:required="false" />
+`;
+    manifest = manifest.replace(/<application/, `${featureBlock}    <application`);
+  }
+
+  // Add LEANBACK_LAUNCHER intent filter so the app appears on the Android TV / Google TV home screen.
+  if (!manifest.includes('android.intent.category.LEANBACK_LAUNCHER')) {
+    console.log('✓ Adding LEANBACK_LAUNCHER intent filter to MainActivity');
+    manifest = manifest.replace(
+      /(<action android:name="android\.intent\.action\.MAIN"\s*\/>\s*<category android:name="android\.intent\.category\.LAUNCHER"\s*\/>)/,
+      `$1\n                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />`,
+    );
+  }
+
+  fs.writeFileSync(manifestPath, manifest, 'utf8');
+}
+
+// 1b. Copy TV launcher banner into the Android drawable resources.
+const bannerSrc = path.join(__dirname, '..', 'public', 'android', 'tv-banner.png');
+const drawableDir = path.join(ANDROID_DIR, 'app', 'src', 'main', 'res', 'drawable');
+if (fs.existsSync(bannerSrc) && fs.existsSync(drawableDir)) {
+  const bannerDest = path.join(drawableDir, 'tv_banner.png');
+  fs.copyFileSync(bannerSrc, bannerDest);
+  console.log('✓ Copied TV banner → res/drawable/tv_banner.png');
 }
 
 // 2. Update gradle.properties

@@ -98,6 +98,43 @@
   ::-webkit-scrollbar-thumb:hover {
     background: hsl(var(--muted-foreground) / 0.5);
   }
+
+  /* ------------------------------------------------------------------
+   * TV / D-pad focus ring
+   * Makes every interactive element clearly visible when navigated with
+   * an Android TV / Google TV remote. Hidden for mouse users via
+   * :focus-visible so it doesn't disrupt the touch UI.
+   * ------------------------------------------------------------------ */
+  :focus {
+    outline: none;
+  }
+  a:focus-visible,
+  button:focus-visible,
+  [role='button']:focus-visible,
+  [role='link']:focus-visible,
+  [role='menuitem']:focus-visible,
+  [role='option']:focus-visible,
+  [role='tab']:focus-visible,
+  [tabindex]:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible,
+  summary:focus-visible {
+    outline: 3px solid hsl(var(--ring));
+    outline-offset: 3px;
+    border-radius: 6px;
+    box-shadow: 0 0 0 6px hsl(var(--ring) / 0.25);
+    transition:
+      outline-color 120ms ease,
+      box-shadow 120ms ease;
+  }
+
+  /* Scroll focused element into view on TV/keyboard nav */
+  @media (pointer: none), (pointer: coarse) and (hover: none) {
+    :focus-visible {
+      scroll-margin: 96px;
+    }
+  }
 }
 
 @layer utilities {

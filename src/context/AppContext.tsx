@@ -93,11 +93,12 @@ const LocalAppProvider = ({ children }: { children: ReactNode }) => {
     try {
       const db = await getLocalDb();
       await db.initLocalDb();
-      const [s, f, h, m, epg] = await Promise.all([
+      // NOTE: parsed media (often 40k+ rows) is NOT loaded into memory here —
+      // pages query the local DB directly. Loading it all froze phones.
+      const [s, f, h, epg] = await Promise.all([
         db.getSources(),
         db.getFavorites(),
         db.getWatchHistory(),
-        db.getParsedMedia(),
         db.getEpgPrograms(),
       ]);
       setSources(
@@ -114,20 +115,6 @@ const LocalAppProvider = ({ children }: { children: ReactNode }) => {
       );
       setFavorites(f);
       setWatchHistory(h);
-      setParsedMedia(
-        m.map((r: MediaRow) => ({
-          id: r.id,
-          title: r.title,
-          poster: r.poster || '',
-          category: r.category as MediaItem['category'],
-          genre: r.genre || 'Uncategorized',
-          description: r.description || '',
-          sourceId: r.source_id,
-          streamUrl: r.stream_url || '',
-          group: r.group_name || undefined,
-          tvgId: r.tvg_id || undefined,
-        })),
-      );
       setEpgPrograms(epg);
     } catch (e) {
       logger.error('AppContext', 'Local DB load error', { error: String(e) });
@@ -336,21 +323,6 @@ const LocalAppProvider = ({ children }: { children: ReactNode }) => {
         }));
         logger.info('EPG', '📺 Sample programs', { samples: samplePrograms });
 
-        // Debug: Log parsed media tvg_ids for comparison
-        const media = await db.getParsedMedia();
-        logger.info('EPG', `📺 Total parsed media items: ${media.length}`);
-        const channelMedia = (media as MediaRow[]).filter((m) => m.category === 'channel');
-        logger.info('EPG', `📺 Channel media items: ${channelMedia.length}`);
-        const tvgIds = [...new Set(channelMedia.map((m) => m.tvg_id).filter(Boolean))].slice(0, 10);
-        logger.info('EPG', '📺 Playlist TVG-IDs (first 10)', { tvgIds });
-        
-        // Debug: Sample a few channel media to see their structure
-        const sampleChannels = channelMedia.slice(0, 3).map((m) => ({
-          id: m.id,
-          title: m.title,
-          tvg_id: m.tvg_id,
-        }));
-        logger.info('EPG', '📺 Sample channels', { samples: sampleChannels });
 
         toast.success(`Loaded ${programs.length} programs for ${channels} channels`);
       } else {

@@ -507,6 +507,11 @@ const VideoPlayer = ({ src, title, poster, resumeFrom, onProgress, onClose }: Vi
     }, delay);
   }, [retrying, retryCount, title, src]);
 
+  // Keep latest onProgress in a ref so listeners aren't re-attached every render
+  const onProgressRef = useRef(onProgress);
+  onProgressRef.current = onProgress;
+  const lastProgressSaveRef = useRef(0);
+
   // Video event listeners
   useEffect(() => {
     const video = videoRef.current;
@@ -518,15 +523,23 @@ const VideoPlayer = ({ src, title, poster, resumeFrom, onProgress, onClose }: Vi
       setTimelineDuration(nextDuration);
     };
 
+    const reportProgress = (force = false) => {
+      const cb = onProgressRef.current;
+      if (!cb) return;
+      const now = Date.now();
+      // Throttle saves to once every 10s — saving 4x/sec freezes low-end phones
+      if (!force && now - lastProgressSaveRef.current < 10000) return;
+      lastProgressSaveRef.current = now;
+      const dur = video.duration;
+      const hasDur = dur && isFinite(dur);
+      const fraction = hasDur ? video.currentTime / dur : 0;
+      cb(fraction, video.currentTime, hasDur ? dur : 0);
+    };
+
     const onTimeUpdate = () => {
       setCurrentTime(video.currentTime);
       updateTimeline();
-      const dur = video.duration;
-      const hasDur = dur && isFinite(dur);
-      if (onProgress) {
-        const fraction = hasDur ? video.currentTime / dur : 0;
-        onProgress(fraction, video.currentTime, hasDur ? dur : 0);
-      }
+      reportProgress();
     };
     const onDurationChange = () => updateTimeline();
     const onPlay = () => {
@@ -534,7 +547,10 @@ const VideoPlayer = ({ src, title, poster, resumeFrom, onProgress, onClose }: Vi
       setBuffering(false);
       log('DEBUG', 'Playback started');
     };
-    const onPause = () => setPlaying(false);
+    const onPause = () => {
+      setPlaying(false);
+      if (video.currentTime > 0) reportProgress(true);
+    };
     const onWaiting = () => setBuffering(true);
     const onPlaying = () => {
       setPlaying(true); // ensure playing state is set even if 'play' event was missed
@@ -573,7 +589,7 @@ const VideoPlayer = ({ src, title, poster, resumeFrom, onProgress, onClose }: Vi
       video.removeEventListener('canplay', onCanPlay);
       video.removeEventListener('error', onError);
     };
-  }, [onProgress]);
+  }, []);
 
   // Apply resume position once metadata is ready
   const resumeAppliedRef = useRef<string | null>(null);

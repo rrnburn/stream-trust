@@ -266,6 +266,8 @@ export async function insertParsedMedia(
       ],
     }));
     await d.executeSet(statements);
+    // Yield so the UI stays responsive during 40k+ row inserts
+    await new Promise((resolve) => setTimeout(resolve, 0));
   }
 }
 

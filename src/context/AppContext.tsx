@@ -120,6 +120,30 @@ const LocalAppProvider = ({ children }: { children: ReactNode }) => {
       logger.error('AppContext', 'Local DB load error', { error: String(e) });
     }
     setLoadingSources(false);
+
+    // Load media after the UI is ready so startup doesn't freeze.
+    try {
+      await new Promise((r) => setTimeout(r, 50));
+      const db = await getLocalDb();
+      const rows = (await db.getParsedMedia()) as MediaRow[];
+      setParsedMedia(
+        rows.map((row) => ({
+          id: row.id,
+          title: row.title,
+          poster: row.poster || '',
+          category: row.category as MediaItem['category'],
+          genre: row.genre || 'Uncategorized',
+          description: '',
+          sourceId: row.source_id,
+          streamUrl: row.stream_url || '',
+          group: row.group_name || undefined,
+          tvgId: row.tvg_id || undefined,
+        })),
+      );
+      logger.info('AppContext', `Loaded ${rows.length} media items from local DB`);
+    } catch (e) {
+      logger.error('AppContext', 'Local media load error', { error: String(e) });
+    }
   }, []);
 
   useEffect(() => {

@@ -225,7 +225,9 @@ export async function removeSourceLocal(id: string) {
 
 export async function getParsedMedia() {
   const d = await initLocalDb();
-  const res = await d.query('SELECT * FROM parsed_media ORDER BY title ASC');
+  const res = await d.query(
+    "SELECT id, title, poster, category, genre, source_id, stream_url, group_name, tvg_id, '' AS description FROM parsed_media ORDER BY title ASC",
+  );
   return res.values || [];
 }
 

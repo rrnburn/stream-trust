@@ -1,5 +1,6 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { getAuthUserId, safeFetch, assertPublicUrl, redactSecrets } from '../_shared/security.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -59,9 +60,17 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const { url, type, username, password, sourceId, userId, sourceName } = await req.json();
+    const userId = await getAuthUserId(req);
+    if (!userId) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
-    if (!url) {
+    const { url, type, username, password, sourceId, sourceName } = await req.json();
+
+    if (!url || typeof url !== 'string') {
       return new Response(JSON.stringify({ error: 'URL is required' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -72,6 +81,17 @@ Deno.serve(async (req: Request) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
+
+    if (sourceId) {
+      const { data: owned } = await supabase
+        .from('iptv_sources').select('id').eq('id', sourceId).eq('user_id', userId).maybeSingle();
+      if (!owned) {
+        return new Response(JSON.stringify({ error: 'Source not found' }), {
+          status: 403,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+    }
 
     let items: M3UItem[] = [];
 
@@ -89,17 +109,17 @@ Deno.serve(async (req: Request) => {
       // Use original protocol for stream URLs instead of forcing HTTPS
       const streamBase = base.replace(/^http:\/\//i, originalProtocol);
 
-      console.log('[XTREAM] API base:', apiBase);
-      console.log('[XTREAM] Stream base (HTTPS):', streamBase);
+      await assertPublicUrl(base);
+      console.log('[XTREAM] API base:', redactSecrets(apiBase));
 
       const fetchOpts = { headers: { 'User-Agent': 'okhttp/4.9.2', 'Accept': '*/*' } };
       const [liveRes, vodRes, seriesRes, liveCatRes, vodCatRes, seriesCatRes] = await Promise.all([
-        fetch(`${apiBase}&action=get_live_streams`, fetchOpts),
-        fetch(`${apiBase}&action=get_vod_streams`, fetchOpts),
-        fetch(`${apiBase}&action=get_series`, fetchOpts),
-        fetch(`${apiBase}&action=get_live_categories`, fetchOpts),
-        fetch(`${apiBase}&action=get_vod_categories`, fetchOpts),
-        fetch(`${apiBase}&action=get_series_categories`, fetchOpts),
+        safeFetch(`${apiBase}&action=get_live_streams`, fetchOpts),
+        safeFetch(`${apiBase}&action=get_vod_streams`, fetchOpts),
+        safeFetch(`${apiBase}&action=get_series`, fetchOpts),
+        safeFetch(`${apiBase}&action=get_live_categories`, fetchOpts),
+        safeFetch(`${apiBase}&action=get_vod_categories`, fetchOpts),
+        safeFetch(`${apiBase}&action=get_series_categories`, fetchOpts),
       ]);
 
       const parseSafe = async (res: Response) => {
@@ -153,8 +173,8 @@ Deno.serve(async (req: Request) => {
         })),
       ];
     } else {
-      console.log('[FETCH] Requesting playlist from:', url);
-      const response = await fetch(url, {
+      console.log('[FETCH] Requesting playlist from:', redactSecrets(url));
+      const response = await safeFetch(url, {
         headers: { 'User-Agent': 'okhttp/4.9.2', 'Accept': '*/*' },
       });
       if (!response.ok) {
@@ -171,7 +191,7 @@ Deno.serve(async (req: Request) => {
       console.log(`[DB] Inserting ${items.length} items for source ${sourceId}`);
 
       // Delete old records
-      const { error: delErr } = await supabase.from('parsed_media').delete().eq('source_id', sourceId);
+      const { error: delErr } = await supabase.from('parsed_media').delete().eq('source_id', sourceId).eq('user_id', userId);
       if (delErr) console.error('[DB] Delete error:', delErr.message);
 
       // Batch insert 500 at a time
@@ -222,7 +242,7 @@ Deno.serve(async (req: Request) => {
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : 'Unknown error';
     console.error('[PARSE] Error:', msg);
-    return new Response(JSON.stringify({ error: msg }), {
+    return new Response(JSON.stringify({ error: 'Failed to process playlist' }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

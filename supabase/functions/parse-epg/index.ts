@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getAuthUserId, safeFetch, redactSecrets } from "../_shared/security.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -23,11 +24,18 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { epgUrl, sourceId, userId } = await req.json();
+    const userId = await getAuthUserId(req);
+    if (!userId) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
-    if (!epgUrl || !sourceId || !userId) {
+    const { epgUrl, sourceId } = await req.json();
+
+    if (typeof epgUrl !== "string" || typeof sourceId !== "string" || !epgUrl || !sourceId) {
       return new Response(
-        JSON.stringify({ error: "Missing epgUrl, sourceId, or userId" }),
+        JSON.stringify({ error: "Missing epgUrl or sourceId" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -36,9 +44,18 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
+    // Verify the source belongs to the caller
+    const { data: owned } = await supabase
+      .from("iptv_sources").select("id").eq("id", sourceId).eq("user_id", userId).maybeSingle();
+    if (!owned) {
+      return new Response(JSON.stringify({ error: "Source not found" }), {
+        status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // Download XMLTV data
-    console.log(`Fetching EPG from: ${epgUrl}`);
-    const res = await fetch(epgUrl, {
+    console.log(`Fetching EPG from: ${redactSecrets(epgUrl)}`);
+    const res = await safeFetch(epgUrl, {
       headers: { "User-Agent": "okhttp/4.9.2", Accept: "*/*" },
     });
 
@@ -97,7 +114,7 @@ Deno.serve(async (req) => {
   } catch (e: any) {
     console.error("EPG parse error:", e.message);
     return new Response(
-      JSON.stringify({ error: e.message || "Unknown error" }),
+      JSON.stringify({ error: "Failed to process EPG" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

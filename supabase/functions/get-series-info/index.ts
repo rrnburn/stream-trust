@@ -1,3 +1,4 @@
+import { safeFetch, assertPublicUrl, redactSecrets } from '../_shared/security.ts';
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
@@ -11,7 +12,8 @@ Deno.serve(async (req) => {
   try {
     const { baseUrl, username, password, seriesId } = await req.json();
 
-    if (!baseUrl || !username || !password || !seriesId) {
+    if (!baseUrl || !username || !password || !seriesId ||
+        typeof baseUrl !== 'string' || !/^\d+$/.test(String(seriesId))) {
       return new Response(JSON.stringify({ error: 'Missing required fields' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -28,9 +30,10 @@ Deno.serve(async (req) => {
 
     const apiUrl = `${base}/player_api.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}&action=get_series_info&series_id=${seriesId}`;
     
-    console.log('[SERIES-INFO] Fetching:', apiUrl);
+    await assertPublicUrl(base);
+    console.log('[SERIES-INFO] Fetching:', redactSecrets(apiUrl));
 
-    const res = await fetch(apiUrl, {
+    const res = await safeFetch(apiUrl, {
       headers: { 'User-Agent': 'okhttp/4.9.2', 'Accept': '*/*' },
     });
 
@@ -83,7 +86,7 @@ Deno.serve(async (req) => {
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : 'Unknown error';
     console.error('[SERIES-INFO] Error:', msg);
-    return new Response(JSON.stringify({ error: msg }), {
+    return new Response(JSON.stringify({ error: 'Failed to load series info' }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

@@ -1,3 +1,4 @@
+import { safeFetch, assertPublicUrl, redactSecrets } from '../_shared/security.ts';
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, range, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
@@ -25,10 +26,19 @@ Deno.serve(async (req) => {
       });
     }
 
+    try {
+      await assertPublicUrl(streamUrl);
+    } catch {
+      return new Response(JSON.stringify({ error: 'Destination not allowed' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     // Extract origin domain for Referer header
     const streamOrigin = new URL(streamUrl).origin;
     
-    console.log(`[stream-proxy] [INFO] [${reqId}] Incoming request | url=${streamUrl.substring(0, 120)}`);
+    console.log(`[stream-proxy] [INFO] [${reqId}] Incoming request | url=${redactSecrets(streamUrl).substring(0, 120)}`);
 
     // Use minimal headers — Xtream panels are sensitive to extra headers
     const headers: Record<string, string> = {
@@ -61,7 +71,7 @@ Deno.serve(async (req) => {
       const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
       try {
         const stratHeaders = { ...headers, 'User-Agent': strategy.ua };
-        const res = await fetch(strategy.url, { headers: stratHeaders, signal: controller.signal, redirect: 'follow' });
+        const res = await safeFetch(strategy.url, { headers: stratHeaders, signal: controller.signal });
         clearTimeout(timeoutId);
         
         if (res.ok || res.status === 206) {

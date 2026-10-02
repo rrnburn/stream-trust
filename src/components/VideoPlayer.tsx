@@ -50,7 +50,15 @@ let flushTimer: ReturnType<typeof setTimeout> | null = null;
 
 const flushLogs = () => {
   if (logBuffer.length === 0) return;
-  const batch = logBuffer.splice(0, logBuffer.length);
+  const redact = (v: string) =>
+    v
+      .replace(/\/(live|movie|series|timeshift)\/[^/\s]+\/[^/\s]+\//gi, '/$1/***/***/')
+      .replace(/([?&](?:username|password|user|pass|token)=)[^&\s]*/gi, '$1***');
+  const batch = logBuffer.splice(0, logBuffer.length).map((e) => ({
+    ...e,
+    message: redact(e.message),
+    meta: e.meta ? JSON.parse(redact(JSON.stringify(e.meta))) : undefined,
+  }));
   supabase.functions.invoke('log-event', { body: batch }).catch(() => {});
 };
 

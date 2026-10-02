@@ -1,3 +1,4 @@
+import { redactSecrets } from '../_shared/security.ts';
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
@@ -17,7 +18,7 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json();
-    const events: LogEvent[] = Array.isArray(body) ? body : [body];
+    const events: LogEvent[] = (Array.isArray(body) ? body : [body]).slice(0, 200);
 
     for (const event of events) {
       const { level = 'INFO', component = 'unknown', message = '', meta = {} } = event;
@@ -25,7 +26,7 @@ Deno.serve(async (req) => {
         ? ' | ' + Object.entries(meta).map(([k, v]) => `${k}=${typeof v === 'string' ? v : JSON.stringify(v)}`).join(' ')
         : '';
 
-      const line = `[${component}] [${level}] ${message}${metaStr}`;
+      const line = redactSecrets(`[${component}] [${level}] ${message}${metaStr}`).slice(0, 4000);
 
       if (level === 'ERROR') console.error(line);
       else if (level === 'WARN') console.warn(line);

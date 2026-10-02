@@ -1,130 +1,221 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef, memo } from 'react';
 import { useMedia, useAppContext } from '@/context/AppContext';
 import { useSearchParams } from 'react-router-dom';
 import AppLayout from '@/components/AppLayout';
 import VideoPlayer from '@/components/VideoPlayer';
-import { Radio, ChevronDown, ChevronRight, Search, Calendar, Filter, X } from 'lucide-react';
+import { Radio, Search, X, Clock, Tv } from 'lucide-react';
 import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
-import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
 import { format } from 'date-fns';
+import { cn } from '@/lib/utils';
+
+type Channel = ReturnType<typeof useMedia>[number];
+type Program = ReturnType<typeof useAppContext>['epgPrograms'][number];
+
+const PAGE = 30;
+const RECENT_KEY = 'livetv:recent';
+const ALL = '__all__';
+const RECENT = '__recent__';
+
+const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+const readRecent = (): string[] => {
+  try {
+    const v = JSON.parse(localStorage.getItem(RECENT_KEY) || '[]');
+    return Array.isArray(v) ? v : [];
+  } catch {
+    return [];
+  }
+};
+
+/** Re-render every 30s so live progress bars advance. */
+const useNow = () => {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(t);
+  }, []);
+  return now;
+};
+
+const programsFor = (index: Map<string, Program[]>, c: Channel): Program[] => {
+  for (const key of [c.tvgId, c.title, c.id]) {
+    if (!key) continue;
+    const hit = index.get(normalize(key));
+    if (hit) return hit;
+  }
+  return [];
+};
+
+const nowNext = (progs: Program[], now: number) => {
+  const i = progs.findIndex((p) => new Date(p.end_time).getTime() > now);
+  if (i < 0) return { current: undefined, next: undefined };
+  const p = progs[i];
+  const isCurrent = new Date(p.start_time).getTime() <= now;
+  return isCurrent ? { current: p, next: progs[i + 1] } : { current: undefined, next: p };
+};
+
+const pct = (p: Program, now: number) => {
+  const s = new Date(p.start_time).getTime();
+  const e = new Date(p.end_time).getTime();
+  return Math.min(100, Math.max(0, ((now - s) / (e - s)) * 100));
+};
+
+const ChannelRow = memo(
+  ({
+    channel,
+    current,
+    next,
+    progress,
+    active,
+    onSelect,
+  }: {
+    channel: Channel;
+    current?: Program;
+    next?: Program;
+    progress: number;
+    active: boolean;
+    onSelect: (c: Channel) => void;
+  }) => (
+    <button
+      onClick={() => onSelect(channel)}
+      className={cn(
+        'w-full flex items-center gap-3 px-4 py-3 text-left transition-colors border-l-2',
+        active ? 'bg-primary/10 border-primary' : 'border-transparent active:bg-secondary/60 hover:bg-secondary/40',
+      )}
+    >
+      <div className="w-14 h-14 shrink-0 rounded-lg bg-secondary/70 flex items-center justify-center overflow-hidden">
+        {channel.poster ? (
+          <img src={channel.poster} alt="" loading="lazy" className="w-full h-full object-contain p-1" />
+        ) : (
+          <span className="font-display font-bold text-muted-foreground">{channel.title.slice(0, 2).toUpperCase()}</span>
+        )}
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <p className={cn('font-semibold text-sm truncate', active ? 'text-primary' : 'text-foreground')}>
+            {channel.title}
+          </p>
+          {active && (
+            <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide bg-primary text-primary-foreground px-1.5 py-0.5 rounded">
+              Live
+            </span>
+          )}
+        </div>
+        {current ? (
+          <>
+            <p className="text-xs text-foreground/80 truncate mt-0.5">{current.title}</p>
+            <div className="flex items-center gap-2 mt-1.5">
+              <div className="flex-1 h-1 rounded-full bg-secondary overflow-hidden">
+                <div className="h-full bg-primary rounded-full" style={{ width: `${progress}%` }} />
+              </div>
+              <span className="text-[10px] text-muted-foreground font-mono shrink-0">
+                {format(new Date(current.end_time), 'HH:mm')}
+              </span>
+            </div>
+            {next && (
+              <p className="text-[11px] text-muted-foreground truncate mt-1">
+                Next {format(new Date(next.start_time), 'HH:mm')} · {next.title}
+              </p>
+            )}
+          </>
+        ) : (
+          <p className="text-xs text-muted-foreground truncate mt-0.5">{channel.group || 'Live channel'}</p>
+        )}
+      </div>
+    </button>
+  ),
+);
+ChannelRow.displayName = 'ChannelRow';
 
 const LiveTV = () => {
   const media = useMedia();
   const { epgPrograms } = useAppContext();
   const [searchParams, setSearchParams] = useSearchParams();
-  const channels = media.filter((m) => m.category === 'channel');
-  const [activeChannel, setActiveChannel] = useState<(typeof channels)[0] | null>(null);
-  const [search, setSearch] = useState('');
-  const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
-  const [filterSearch, setFilterSearch] = useState('');
+  const now = useNow();
 
-  // All available groups (sorted)
-  const allGroups = useMemo(() => {
-    return [...new Set(channels.map((c) => c.group || 'Uncategorized'))].sort();
+  const channels = useMemo(() => media.filter((m) => m.category === 'channel'), [media]);
+  const [active, setActive] = useState<Channel | null>(null);
+  const [search, setSearch] = useState('');
+  const [showSearch, setShowSearch] = useState(false);
+  const [recent, setRecent] = useState<string[]>(readRecent);
+  const [category, setCategory] = useState<string>(() => searchParams.get('group') || ALL);
+  const [limit, setLimit] = useState(PAGE);
+  const sentinel = useRef<HTMLDivElement>(null);
+
+  const groups = useMemo(() => {
+    const counts = new Map<string, number>();
+    channels.forEach((c) => {
+      const g = c.group || 'Uncategorized';
+      counts.set(g, (counts.get(g) || 0) + 1);
+    });
+    return [...counts.keys()].sort((a, b) => a.localeCompare(b));
   }, [channels]);
 
-  // Multi-select groups: empty Set = show all.
-  // Persisted to localStorage so the user's selection survives navigation/reload.
-  const STORAGE_KEY = 'livetv:selectedGroups';
-  const [selectedGroups, setSelectedGroups] = useState<Set<string>>(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const arr = JSON.parse(stored);
-        if (Array.isArray(arr)) return new Set(arr);
-      }
-    } catch {
-      /* ignore */
+  // Index EPG once: normalized channel id -> programmes sorted by start.
+  const epgIndex = useMemo(() => {
+    const map = new Map<string, Program[]>();
+    for (const p of epgPrograms) {
+      const k = normalize(p.channel_id || '');
+      if (!k) continue;
+      if (!map.has(k)) map.set(k, []);
+      map.get(k)!.push(p);
     }
-    const initial = searchParams.get('group');
-    return initial ? new Set([initial]) : new Set();
-  });
-
-  // Persist selection to localStorage and keep URL in sync
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify([...selectedGroups]));
-    } catch {
-      /* ignore quota errors */
-    }
-    if (selectedGroups.size === 1) {
-      const only = [...selectedGroups][0];
-      setSearchParams({ group: only }, { replace: true });
-    } else {
-      setSearchParams({}, { replace: true });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedGroups]);
-
-  const toggleSelectedGroup = (g: string) => {
-    setSelectedGroups((prev) => {
-      const next = new Set(prev);
-      if (next.has(g)) next.delete(g);
-      else next.add(g);
-      return next;
-    });
-  };
-
-  const clearSelectedGroups = () => setSelectedGroups(new Set());
-  const selectAllGroups = () => setSelectedGroups(new Set(allGroups));
+    map.forEach((list) => list.sort((a, b) => a.start_time.localeCompare(b.start_time)));
+    return map;
+  }, [epgPrograms]);
 
   const filtered = useMemo(() => {
-    let items = channels;
-    if (selectedGroups.size > 0) {
-      items = items.filter((c) => selectedGroups.has(c.group || 'Uncategorized'));
+    let items: Channel[];
+    if (category === RECENT) {
+      const byId = new Map(channels.map((c) => [c.id, c]));
+      items = recent.map((id) => byId.get(id)).filter(Boolean) as Channel[];
+    } else if (category === ALL) {
+      items = channels;
+    } else {
+      items = channels.filter((c) => (c.group || 'Uncategorized') === category);
     }
     if (search) {
       const q = search.toLowerCase();
       items = items.filter((c) => c.title.toLowerCase().includes(q));
     }
     return items;
-  }, [channels, search, selectedGroups]);
+  }, [channels, category, recent, search]);
 
-  const visibleFilterGroups = useMemo(() => {
-    if (!filterSearch) return allGroups;
-    const q = filterSearch.toLowerCase();
-    return allGroups.filter((g) => g.toLowerCase().includes(q));
-  }, [allGroups, filterSearch]);
+  useEffect(() => {
+    setLimit(PAGE);
+    if (category !== ALL && category !== RECENT) setSearchParams({ group: category }, { replace: true });
+    else setSearchParams({}, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [category, search]);
 
-  const grouped = useMemo(() => {
-    const map = new Map<string, typeof channels>();
-    filtered.forEach((c) => {
-      const g = c.group || 'Uncategorized';
-      if (!map.has(g)) map.set(g, []);
-      map.get(g)!.push(c);
-    });
-    return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]));
-  }, [filtered]);
+  useEffect(() => {
+    const el = sentinel.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      (entries) => entries[0].isIntersecting && setLimit((l) => Math.min(l + PAGE, filtered.length)),
+      { rootMargin: '400px' },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [filtered.length]);
 
-  const toggleGroup = (g: string) => {
-    setOpenGroups((prev) => {
-      const next = new Set(prev);
-      if (next.has(g)) next.delete(g);
-      else next.add(g);
+  const select = (c: Channel) => {
+    setActive(c);
+    setRecent((prev) => {
+      const next = [c.id, ...prev.filter((id) => id !== c.id)].slice(0, 20);
+      try {
+        localStorage.setItem(RECENT_KEY, JSON.stringify(next));
+      } catch {
+        /* ignore */
+      }
       return next;
     });
   };
 
-  // Match EPG programs for the active channel using normalized identifiers.
-  // EPG channel IDs vary widely between providers (e.g. "BBC.One.uk", "bbc1",
-  // "BBC One"), so we normalize to alphanumerics-only lowercase before comparing.
-  const channelPrograms = useMemo(() => {
-    if (!activeChannel || epgPrograms.length === 0) return [];
-    const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
-
-    const matchIds = new Set<string>();
-    if (activeChannel.tvgId) matchIds.add(normalize(activeChannel.tvgId));
-    if (activeChannel.id) matchIds.add(normalize(activeChannel.id));
-    if (activeChannel.title) matchIds.add(normalize(activeChannel.title));
-    matchIds.delete('');
-
-    return epgPrograms
-      .filter((p) => matchIds.has(normalize(p.channel_id || '')))
-      .sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
-  }, [activeChannel, epgPrograms]);
+  const activeInfo = useMemo(
+    () => (active ? nowNext(programsFor(epgIndex, active), now) : { current: undefined, next: undefined }),
+    [active, epgIndex, now],
+  );
 
   if (channels.length === 0) {
     return (
@@ -132,214 +223,182 @@ const LiveTV = () => {
         <div className="flex flex-col items-center justify-center py-20 text-center p-4">
           <Radio className="w-16 h-16 text-muted-foreground/30 mb-4" />
           <p className="text-lg text-muted-foreground">No live channels</p>
-          <p className="text-sm text-muted-foreground/60 mt-1">Parse an IPTV source to see live channels here</p>
+          <p className="text-sm text-muted-foreground/60 mt-1">Add an IPTV source to see live channels here</p>
         </div>
       </AppLayout>
     );
   }
 
+  const chips: { id: string; label: string }[] = [
+    { id: ALL, label: 'All' },
+    ...(recent.length ? [{ id: RECENT, label: 'Recent' }] : []),
+    ...groups.map((g) => ({ id: g, label: g })),
+  ];
+
   return (
     <AppLayout>
-      <div className="flex flex-col h-[calc(100vh-0px)]">
-        {/* Video Player - Always at top */}
-        <div className="w-full p-4 lg:p-6 border-b border-border bg-card">
-          {activeChannel ? (
-            <>
-              <VideoPlayer
-                src={activeChannel.streamUrl || ''}
-                title={activeChannel.title}
-                poster={activeChannel.poster}
-              />
-              <div className="mt-3">
-                <h2 className="text-lg font-display font-bold text-foreground">{activeChannel.title}</h2>
-                <p className="text-sm text-muted-foreground">{activeChannel.group}</p>
-              </div>
-            </>
+      <div className="md:flex md:h-screen">
+        {/* Player column — sticky on phones */}
+        <div className="sticky top-[calc(3.5rem+env(safe-area-inset-top))] md:static z-30 bg-background md:flex-1 md:overflow-y-auto md:p-6">
+          {active ? (
+            <VideoPlayer key={active.id} src={active.streamUrl || ''} title={active.title} poster={active.poster} />
           ) : (
-            <div className="aspect-video flex items-center justify-center bg-muted/30 rounded-xl">
+            <div className="aspect-video flex items-center justify-center bg-gradient-to-br from-secondary to-background md:rounded-xl">
               <div className="text-center">
-                <Radio className="w-12 h-12 text-muted-foreground/40 mx-auto mb-3" />
-                <p className="text-muted-foreground">Select a channel to start watching</p>
+                <Tv className="w-10 h-10 text-primary/60 mx-auto mb-2" />
+                <p className="text-sm text-muted-foreground">Pick a channel to start watching</p>
               </div>
             </div>
           )}
+          {active && (
+            <div className="px-4 py-3 md:px-0 border-b border-border/50 md:border-0">
+              <h2 className="font-display font-bold text-foreground truncate">{active.title}</h2>
+              {activeInfo.current ? (
+                <>
+                  <p className="text-sm text-foreground/80 truncate">
+                    {activeInfo.current.title}{' '}
+                    <span className="text-muted-foreground font-mono text-xs">
+                      {format(new Date(activeInfo.current.start_time), 'HH:mm')}–
+                      {format(new Date(activeInfo.current.end_time), 'HH:mm')}
+                    </span>
+                  </p>
+                  <div className="h-1 mt-2 rounded-full bg-secondary overflow-hidden">
+                    <div className="h-full bg-primary" style={{ width: `${pct(activeInfo.current, now)}%` }} />
+                  </div>
+                  {activeInfo.current.description && (
+                    <p className="hidden md:block text-sm text-muted-foreground mt-3">
+                      {activeInfo.current.description}
+                    </p>
+                  )}
+                </>
+              ) : (
+                <p className="text-xs text-muted-foreground">{active.group}</p>
+              )}
+            </div>
+          )}
+
+          {/* Category chips + search */}
+          <div className="bg-background/95 backdrop-blur-xl border-b border-border/50 md:hidden">
+            <ChipBar
+              chips={chips}
+              value={category}
+              onChange={setCategory}
+              showSearch={showSearch}
+              setShowSearch={setShowSearch}
+              search={search}
+              setSearch={setSearch}
+            />
+          </div>
         </div>
 
-        {/* EPG Program Guide - Between player and channel list */}
-        {activeChannel && (
-          <div className="border-b border-border bg-card/50 p-4">
-            {channelPrograms.length > 0 ? (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 mb-3">
-                  <Calendar className="w-4 h-4 text-muted-foreground" />
-                  <h3 className="text-sm font-semibold text-foreground">Program Guide</h3>
-                  <span className="text-xs text-muted-foreground">({channelPrograms.length} programs)</span>
-                </div>
-                <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin">
-                  {channelPrograms.map((program) => {
-                    const startTime = new Date(program.start_time);
-                    const endTime = new Date(program.end_time);
-                    const now = new Date();
-                    const isNow = now >= startTime && now < endTime;
-                    const isPast = now > endTime;
-
-                    return (
-                      <div
-                        key={program.id || `${program.channel_id}-${program.start_time}`}
-                        className={`shrink-0 w-56 p-3 rounded-lg border transition-colors ${
-                          isNow
-                            ? 'bg-primary/10 border-primary/40'
-                            : isPast
-                              ? 'bg-muted/30 border-muted-foreground/20 opacity-60'
-                              : 'bg-card border-border'
-                        }`}
-                      >
-                        <h4
-                          className={`font-semibold text-xs mb-1 truncate ${isNow ? 'text-primary' : 'text-foreground'}`}
-                        >
-                          {program.title}
-                          {isNow && (
-                            <span className="ml-1.5 text-[10px] font-normal bg-primary/20 text-primary px-1.5 py-0.5 rounded">
-                              Live
-                            </span>
-                          )}
-                        </h4>
-                        <p className="text-[10px] text-muted-foreground font-mono">
-                          {format(startTime, 'HH:mm')} - {format(endTime, 'HH:mm')}
-                        </p>
-                        {program.description && (
-                          <p className="text-[10px] text-muted-foreground mt-1 line-clamp-2">{program.description}</p>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2 py-2 text-center">
-                <Calendar className="w-4 h-4 text-muted-foreground/40" />
-                <p className="text-xs text-muted-foreground">No EPG data for this channel</p>
-              </div>
-            )}
+        {/* Channel list */}
+        <div className="md:w-[420px] md:border-l md:border-border md:overflow-y-auto md:h-screen">
+          <div className="hidden md:block sticky top-0 z-10 bg-background/95 backdrop-blur-xl border-b border-border/50">
+            <ChipBar
+              chips={chips}
+              value={category}
+              onChange={setCategory}
+              showSearch={showSearch}
+              setShowSearch={setShowSearch}
+              search={search}
+              setSearch={setSearch}
+            />
           </div>
-        )}
-
-        {/* Channel List */}
-        <div className="flex-1 min-h-0 bg-card/50 flex flex-col">
-          <div className="p-3 border-b border-border space-y-2">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                placeholder="Search channels..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-9 bg-background"
-              />
-            </div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" size="sm" className="h-8 gap-1.5">
-                    <Filter className="w-3.5 h-3.5" />
-                    <span className="text-xs">
-                      {selectedGroups.size === 0
-                        ? 'All groups'
-                        : `${selectedGroups.size} group${selectedGroups.size === 1 ? '' : 's'}`}
-                    </span>
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent align="start" className="w-72 p-0">
-                  <div className="p-2 border-b border-border space-y-2">
-                    <div className="relative">
-                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-                      <Input
-                        placeholder="Filter groups..."
-                        value={filterSearch}
-                        onChange={(e) => setFilterSearch(e.target.value)}
-                        className="pl-8 h-8 text-xs"
-                      />
-                    </div>
-                    <div className="flex gap-2">
-                      <Button variant="ghost" size="sm" className="h-7 text-xs flex-1" onClick={selectAllGroups}>
-                        Select all
-                      </Button>
-                      <Button variant="ghost" size="sm" className="h-7 text-xs flex-1" onClick={clearSelectedGroups}>
-                        Clear
-                      </Button>
-                    </div>
-                  </div>
-                  <div className="max-h-64 overflow-y-auto p-1">
-                    {visibleFilterGroups.length === 0 ? (
-                      <p className="text-xs text-muted-foreground text-center py-4">No groups match</p>
-                    ) : (
-                      visibleFilterGroups.map((g) => {
-                        const checked = selectedGroups.has(g);
-                        return (
-                          <button
-                            key={g}
-                            onClick={() => toggleSelectedGroup(g)}
-                            className="flex items-center gap-2 w-full px-2 py-1.5 rounded text-left text-xs hover:bg-secondary/60 transition-colors"
-                          >
-                            <Checkbox checked={checked} className="pointer-events-none" />
-                            <span className="truncate flex-1">{g}</span>
-                          </button>
-                        );
-                      })
-                    )}
-                  </div>
-                </PopoverContent>
-              </Popover>
-              {selectedGroups.size > 0 && (
-                <Button variant="ghost" size="sm" className="h-8 px-2 gap-1" onClick={clearSelectedGroups}>
-                  <X className="w-3.5 h-3.5" />
-                  <span className="text-xs">Reset</span>
-                </Button>
-              )}
-              <p className="text-xs text-muted-foreground ml-auto">{filtered.length} channels</p>
-            </div>
+          <div className="px-4 pt-3 pb-1 flex items-center gap-2 text-xs text-muted-foreground">
+            {category === RECENT && <Clock className="w-3.5 h-3.5" />}
+            {filtered.length.toLocaleString()} channels
           </div>
-
-          <div className="flex-1 overflow-y-auto">
-            {grouped.map(([group, items]) => (
-              <Collapsible key={group} open={openGroups.has(group)} onOpenChange={() => toggleGroup(group)}>
-                <CollapsibleTrigger className="flex items-center gap-2 w-full px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors">
-                  {openGroups.has(group) ? (
-                    <ChevronDown className="w-4 h-4 shrink-0" />
-                  ) : (
-                    <ChevronRight className="w-4 h-4 shrink-0" />
-                  )}
-                  <span className="truncate">{group}</span>
-                  <span className="ml-auto text-xs text-muted-foreground/60">{items.length}</span>
-                </CollapsibleTrigger>
-                <CollapsibleContent>
-                  {items.map((ch) => (
-                    <button
-                      key={ch.id}
-                      onClick={() => setActiveChannel(ch)}
-                      className={`flex items-center gap-3 w-full px-4 py-2 text-sm transition-colors ${
-                        activeChannel?.id === ch.id
-                          ? 'bg-primary/15 text-primary'
-                          : 'text-foreground hover:bg-secondary/50'
-                      }`}
-                    >
-                      {ch.poster ? (
-                        <img src={ch.poster} alt="" className="w-8 h-8 rounded object-cover bg-muted shrink-0" />
-                      ) : (
-                        <div className="w-8 h-8 rounded bg-muted flex items-center justify-center shrink-0">
-                          <Radio className="w-4 h-4 text-muted-foreground" />
-                        </div>
-                      )}
-                      <span className="truncate">{ch.title}</span>
-                    </button>
-                  ))}
-                </CollapsibleContent>
-              </Collapsible>
-            ))}
+          <div className="divide-y divide-border/40">
+            {filtered.slice(0, limit).map((c) => {
+              const { current, next } = nowNext(programsFor(epgIndex, c), now);
+              return (
+                <ChannelRow
+                  key={c.id}
+                  channel={c}
+                  current={current}
+                  next={next}
+                  progress={current ? pct(current, now) : 0}
+                  active={active?.id === c.id}
+                  onSelect={select}
+                />
+              );
+            })}
           </div>
+          {filtered.length === 0 && (
+            <p className="text-center text-sm text-muted-foreground py-10">No channels match</p>
+          )}
+          <div ref={sentinel} className="h-8" />
         </div>
       </div>
     </AppLayout>
   );
 };
+
+const ChipBar = ({
+  chips,
+  value,
+  onChange,
+  showSearch,
+  setShowSearch,
+  search,
+  setSearch,
+}: {
+  chips: { id: string; label: string }[];
+  value: string;
+  onChange: (v: string) => void;
+  showSearch: boolean;
+  setShowSearch: (v: boolean) => void;
+  search: string;
+  setSearch: (v: string) => void;
+}) => (
+  <div className="py-2">
+    {showSearch ? (
+      <div className="px-4 relative">
+        <Search className="absolute left-7 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+        <Input
+          autoFocus
+          placeholder="Search channels..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="pl-9 pr-10 bg-secondary border-0 h-10 rounded-full"
+        />
+        <button
+          aria-label="Close search"
+          onClick={() => {
+            setSearch('');
+            setShowSearch(false);
+          }}
+          className="absolute right-6 top-1/2 -translate-y-1/2 w-7 h-7 flex items-center justify-center text-muted-foreground"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+    ) : (
+      <div className="flex items-center gap-2 overflow-x-auto px-4 scrollbar-none">
+        <button
+          aria-label="Search channels"
+          onClick={() => setShowSearch(true)}
+          className="shrink-0 w-9 h-9 rounded-full bg-secondary flex items-center justify-center text-foreground/80"
+        >
+          <Search className="w-4 h-4" />
+        </button>
+        {chips.map((c) => (
+          <button
+            key={c.id}
+            onClick={() => onChange(c.id)}
+            className={cn(
+              'shrink-0 h-9 px-4 rounded-full text-sm font-medium whitespace-nowrap transition-colors',
+              value === c.id
+                ? 'bg-primary text-primary-foreground'
+                : 'bg-secondary text-foreground/80 hover:bg-secondary/80',
+            )}
+          >
+            {c.label}
+          </button>
+        ))}
+      </div>
+    )}
+  </div>
+);
 
 export default LiveTV;

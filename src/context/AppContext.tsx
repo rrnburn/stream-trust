@@ -1,7 +1,8 @@
+import { isHeadingPlaceholder } from '@/lib/headingFilter';
 /* @jsxRuntime classic */
 /* @jsx React.createElement */
 /* eslint-disable react-refresh/only-export-components */
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from 'react';
 import { isNativePlatform } from '@/lib/platform';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './AuthContext';
@@ -68,7 +69,7 @@ export const useAppContext = () => {
 
 export const useMedia = () => {
   const { parsedMedia } = useAppContext();
-  return parsedMedia;
+  return useMemo(() => parsedMedia.filter((m) => !isHeadingPlaceholder(m.title)), [parsedMedia]);
 };
 
 // ══════════════════════════════════════════════

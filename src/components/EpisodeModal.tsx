@@ -8,6 +8,7 @@ import DownloadButton from '@/components/DownloadButton';
 import { isNativePlatform } from '@/lib/platform';
 import { useAppContext } from '@/context/AppContext';
 import { cn } from '@/lib/utils';
+import PlayerMenu from '@/components/PlayerMenu';
 
 interface Episode {
   id: string;

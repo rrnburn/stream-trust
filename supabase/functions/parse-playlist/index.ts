@@ -186,6 +186,8 @@ Deno.serve(async (req: Request) => {
       items = parseM3U(await response.text());
     }
 
+    items = items.filter((it: any) => { const t = (it.title || '').trim(); return !(/^#+.*#+$/.test(t) || /^[-=*~_]{3,}.*[-=*~_]{3,}$/.test(t) || /^[#\-*=_~\s]+$/.test(t)); });
+
     // If sourceId and userId provided, insert directly into DB (server-side)
     if (sourceId && userId && items.length > 0) {
       console.log(`[DB] Inserting ${items.length} items for source ${sourceId}`);

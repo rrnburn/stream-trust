@@ -1,3 +1,4 @@
+import { isHeadingPlaceholder } from '@/lib/headingFilter';
 /* @jsxRuntime classic */
 /* @jsx React.createElement */
 /* eslint-disable react-refresh/only-export-components */
@@ -68,7 +69,7 @@ export const useAppContext = () => {
 
 export const useMedia = () => {
   const { parsedMedia } = useAppContext();
-  return parsedMedia;
+  return useMemo(() => parsedMedia.filter((m) => !isHeadingPlaceholder(m.title)), [parsedMedia]);
 };
 
 // ══════════════════════════════════════════════

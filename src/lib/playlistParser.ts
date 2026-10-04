@@ -1,3 +1,4 @@
+import { isHeadingPlaceholder } from './headingFilter';
 /**
  * Client-side M3U / Xtream playlist parser.
  * Mirrors the logic from the parse-playlist edge function so native builds
@@ -202,6 +203,7 @@ export async function parsePlaylistLocally(
     }
   }
 
+  items = items.filter((it) => !isHeadingPlaceholder(it.title));
   return {
     items,
     total: items.length,

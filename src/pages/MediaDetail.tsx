@@ -9,6 +9,7 @@ import EpisodeModal from '@/components/EpisodeModal';
 import DownloadButton from '@/components/DownloadButton';
 import { Button } from '@/components/ui/button';
 import { motion } from 'framer-motion';
+import { useMetadata } from '@/lib/metadata';
 
 const formatPos = (s: number) => {
   if (!s || s < 1) return '';
@@ -33,6 +34,7 @@ const MediaDetail = () => {
   const [playingTitle, setPlayingTitle] = useState('');
   const [playingMediaId, setPlayingMediaId] = useState('');
   const [resumeFrom, setResumeFrom] = useState(0);
+  const meta = useMetadata(item?.id, item?.title, item?.category);
 
   if (!item) {
     return (
@@ -130,14 +132,14 @@ const MediaDetail = () => {
             <h1 className="text-3xl lg:text-4xl font-display font-bold text-foreground mb-3">{item.title}</h1>
 
             <div className="flex flex-wrap items-center gap-3 mb-4 text-sm text-muted-foreground">
-              {item.rating && (
+              {(item.rating || meta?.rating) && (
                 <span className="flex items-center gap-1 text-primary font-semibold">
-                  <Star className="w-4 h-4 fill-primary" /> {item.rating}
+                  <Star className="w-4 h-4 fill-primary" /> {item.rating || meta?.rating}
                 </span>
               )}
-              {item.year && (
+              {(item.year || meta?.year) && (
                 <span className="flex items-center gap-1">
-                  <Calendar className="w-4 h-4" /> {item.year}
+                  <Calendar className="w-4 h-4" /> {item.year || meta?.year}
                 </span>
               )}
               {item.duration && (
@@ -151,7 +153,41 @@ const MediaDetail = () => {
               </span>
             </div>
 
-            <p className="text-muted-foreground leading-relaxed mb-8 max-w-2xl">{item.description}</p>
+            {meta?.tagline && <p className="text-sm italic text-accent mb-2 max-w-2xl">{meta.tagline}</p>}
+            <p className="text-muted-foreground leading-relaxed mb-6 max-w-2xl">
+              {meta?.overview || (item.description?.startsWith('From ') ? '' : item.description) || (meta === null && item.category !== 'channel' ? 'Loading details…' : '')}
+            </p>
+
+            {meta?.found && ((meta.directors?.length ?? 0) > 0 || (meta.cast?.length ?? 0) > 0) && (
+              <div className="mb-8 max-w-2xl space-y-3">
+                {(meta.directors?.length ?? 0) > 0 && (
+                  <p className="text-sm">
+                    <span className="text-muted-foreground">{meta.directorLabel}: </span>
+                    <span className="text-foreground font-medium">{meta.directors!.join(', ')}</span>
+                  </p>
+                )}
+                {(meta.cast?.length ?? 0) > 0 && (
+                  <div>
+                    <h3 className="text-sm font-semibold text-foreground mb-2">Cast</h3>
+                    <div className="flex gap-3 overflow-x-auto pb-2 snap-x">
+                      {meta.cast!.map((c) => (
+                        <div key={c.name} className="w-20 shrink-0 snap-start text-center">
+                          <div className="w-16 h-16 mx-auto rounded-full overflow-hidden bg-secondary flex items-center justify-center mb-1">
+                            {c.photo ? (
+                              <img src={c.photo} alt={c.name} loading="lazy" className="w-full h-full object-cover" />
+                            ) : (
+                              <span className="text-lg font-bold text-muted-foreground">{c.name.charAt(0)}</span>
+                            )}
+                          </div>
+                          <p className="text-xs font-medium text-foreground truncate">{c.name}</p>
+                          <p className="text-[10px] text-muted-foreground truncate">{c.character}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Resume hint */}
             {!isSeries && hasMovieResume && !movieFinished && (

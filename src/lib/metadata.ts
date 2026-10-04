@@ -62,3 +62,16 @@ export async function getMetadata(mediaId: string, rawTitle: string, type: 'movi
   inflight.set(key, p);
   return p;
 }
+
+import { useEffect, useState } from 'react';
+export function useMetadata(mediaId?: string, title?: string, category?: string) {
+  const [meta, setMeta] = useState<Metadata | null>(null);
+  useEffect(() => {
+    setMeta(null);
+    if (!mediaId || !title || (category !== 'movie' && category !== 'series' && category !== 'vod')) return;
+    let alive = true;
+    getMetadata(mediaId, title, category === 'series' ? 'series' : 'movie').then((m) => alive && setMeta(m));
+    return () => { alive = false; };
+  }, [mediaId, title, category]);
+  return meta;
+}

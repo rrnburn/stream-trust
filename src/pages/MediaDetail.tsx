@@ -9,6 +9,7 @@ import EpisodeModal from '@/components/EpisodeModal';
 import DownloadButton from '@/components/DownloadButton';
 import { Button } from '@/components/ui/button';
 import { motion } from 'framer-motion';
+import PlayerMenu from '@/components/PlayerMenu';
 import { useMetadata } from '@/lib/metadata';
 
 const formatPos = (s: number) => {
@@ -237,6 +238,13 @@ const MediaDetail = () => {
                     <Play className="w-4 h-4 fill-current" />
                     {showPlayer ? 'Playing' : hasMovieResume ? `Resume ${formatPos(movieResumeSeconds)}` : 'Play'}
                   </Button>
+                  <PlayerMenu
+                    url={item.streamUrl || ''}
+                    title={item.title}
+                    disabled={!hasStream}
+                    onPlayInApp={() => handlePlayMovie(!hasMovieResume)}
+                    onExternal={() => addToHistory(item.id, resume?.progress ?? 0.01, resume?.position ?? 0, resume?.duration ?? 0)}
+                  />
                   {hasMovieResume && (
                     <Button
                       variant="outline"

@@ -111,6 +111,7 @@ const VideoPlayer = ({ src, title, poster, resumeFrom, onProgress, onClose }: Vi
   const [showLanguageMenu, setShowLanguageMenu] = useState(false);
   const [scrubbing, setScrubbing] = useState(false);
   const [scrubTime, setScrubTime] = useState<number | null>(null);
+  const scrubbingRef = useRef(false);
   const [hoverTime, setHoverTime] = useState<number | null>(null);
   const [hoverX, setHoverX] = useState(0);
   const progressBarRef = useRef<HTMLDivElement>(null);
@@ -243,7 +244,8 @@ const VideoPlayer = ({ src, title, poster, resumeFrom, onProgress, onClose }: Vi
   );
 
   // Track whether native player chooser is active
-  const [nativeActive, setNativeActive] = useState(isNative);
+  // Default to in-app playback; external players are offered via the ▾ menu.
+  const [nativeActive, setNativeActive] = useState(false);
 
   // Initialize web playback (skip if native player is active)
   useEffect(() => {
@@ -657,9 +659,11 @@ const VideoPlayer = ({ src, title, poster, resumeFrom, onProgress, onClose }: Vi
   };
 
   const seek = (offset: number) => {
-    if (videoRef.current) {
-      videoRef.current.currentTime = Math.max(0, Math.min(videoRef.current.currentTime + offset, duration));
-    }
+    const v = videoRef.current;
+    if (!v) return;
+    const target = Math.max(0, v.currentTime + offset);
+    const max = Number.isFinite(v.duration) && v.duration > 0 ? v.duration : Infinity;
+    v.currentTime = Math.min(target, max);
   };
 
   const resolveTimelineDuration = useCallback((video: HTMLVideoElement) => {
@@ -735,10 +739,12 @@ const VideoPlayer = ({ src, title, poster, resumeFrom, onProgress, onClose }: Vi
   // currentTime so the slider remains visible & the position thumb tracks playback.
   const rawDuration = timelineDuration || duration;
   const knownDuration = Number.isFinite(rawDuration) && rawDuration > 0 ? rawDuration : 0;
-  const displayDuration = knownDuration > 0 ? knownDuration : Math.max(currentTime + 1, 1);
-  const isLiveTimeline = knownDuration === 0;
+  // Only genuine live channels lock the timeline; VOD stays seekable even while duration settles.
+  const isLiveTimeline = isLiveStream(normalizeStreamUrl(src)) && knownDuration === 0;
+  const displayDuration = knownDuration > 0 ? knownDuration : Math.max(currentTime + 600, 1);
   const displayTime = scrubTime ?? currentTime;
   const sliderValue = Math.min(displayDuration, Math.max(0, displayTime));
+  scrubbingRef.current = scrubTime !== null;
 
   const computeTimeFromClientX = useCallback(
     (clientX: number): number | null => {
@@ -806,7 +812,8 @@ const VideoPlayer = ({ src, title, poster, resumeFrom, onProgress, onClose }: Vi
     setShowControls(true);
     clearTimeout(controlsTimerRef.current);
     controlsTimerRef.current = setTimeout(() => {
-      // Only auto-hide while actively playing — keep visible when paused/buffering
+      // Only auto-hide while actively playing — keep visible when paused/buffering/scrubbing
+      if (scrubbingRef.current) return;
       if (videoRef.current && !videoRef.current.paused) setShowControls(false);
     }, 3000);
   };
@@ -1082,13 +1089,20 @@ const VideoPlayer = ({ src, title, poster, resumeFrom, onProgress, onClose }: Vi
                   disabled={isLiveTimeline}
                   onValueChange={(value) => {
                     if (isLiveTimeline) return;
+                    clearTimeout(controlsTimerRef.current);
+                    setShowControls(true);
                     setScrubTime(value[0] ?? 0);
                   }}
                   onValueCommit={(value) => {
                     if (isLiveTimeline) return;
                     const next = value[0] ?? 0;
-                    setScrubTime(null);
-                    if (videoRef.current) videoRef.current.currentTime = next;
+                    const v = videoRef.current;
+                    if (!v) { setScrubTime(null); return; }
+                    // Keep thumb parked at target until the seek actually lands
+                    const done = () => { setScrubTime(null); showControlsTemporarily(); };
+                    v.addEventListener('seeked', done, { once: true });
+                    setTimeout(() => { v.removeEventListener('seeked', done); setScrubTime(null); }, 8000);
+                    v.currentTime = next;
                   }}
                   aria-label="Seek"
                   className={`py-1 ${isLiveTimeline ? 'opacity-60' : ''}`}

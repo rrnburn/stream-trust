@@ -234,7 +234,13 @@ const EpisodeModal = ({
                         </div>
                         {ep.duration && <span className="text-xs text-muted-foreground shrink-0">{ep.duration}</span>}
                       </button>
-                      <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
+                      <div className="shrink-0 flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                        <PlayerMenu
+                          url={ep.streamUrl}
+                          title={epLabel}
+                          className="h-9 w-9"
+                          onPlayInApp={() => onPlay(ep.streamUrl, epLabel)}
+                        />
                         <DownloadButton
                           mediaId={epDownloadId}
                           title={epLabel}

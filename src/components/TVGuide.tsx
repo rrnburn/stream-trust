@@ -150,59 +150,38 @@ const TVGuide = ({ channels, programs, loading, onChannelSelect }: TVGuideProps)
                   {chPrograms.map((prog, progIdx) => {
                     const pStart = new Date(prog.start_time);
                     const pEnd = new Date(prog.end_time);
-                    const left = Math.max(0, (differenceInMinutes(pStart, timelineStart) / 60) * HOUR_WIDTH);
-                    const duration = differenceInMinutes(pEnd, pStart);
-                    // Enforce a minimum width large enough to render at least a few characters
-                    // without overlapping the next slot. Boxes are absolutely positioned so a
-                    // wider min width may cause adjacent shorts to overlap visually — we accept
-                    // that trade-off in favour of legible text and clip with overflow-hidden.
-                    const MIN_WIDTH = 80;
-                    const width = Math.max(MIN_WIDTH, (duration / 60) * HOUR_WIDTH - 4);
+                    // Clip to the visible timeline so blocks never start before 0 or run past the end
+                    const startPx = (differenceInMinutes(pStart, timelineStart) / 60) * HOUR_WIDTH;
+                    const endPx = (differenceInMinutes(pEnd, timelineStart) / 60) * HOUR_WIDTH;
+                    const left = Math.max(0, startPx);
+                    const right = Math.min(totalWidth, endPx);
+                    // Exact width (2px gap) — no minimum, so blocks can never overlap neighbours
+                    const width = right - left - 2;
+                    if (width <= 2) return null;
                     const isNow = now >= pStart && now < pEnd;
+                    const showTitle = width >= 18;
+                    const timeText = width > 100
+                      ? `${format(pStart, 'HH:mm')} - ${format(pEnd, 'HH:mm')}`
+                      : width >= 50 ? format(pStart, 'HH:mm') : '';
+                    const pad = width < 30 ? 'px-0.5' : 'px-2';
 
                     return (
                       <div
                         key={prog.id ?? `${ch.id}-${progIdx}`}
-                        className={`absolute top-1 rounded px-2 py-1 text-xs cursor-default transition-colors box-border flex flex-col justify-center ${
+                        className={`absolute top-1 rounded ${pad} py-1 text-xs cursor-default transition-colors box-border flex flex-col justify-center overflow-hidden min-w-0 ${
                           isNow
                             ? 'bg-primary/20 border border-primary/40 text-primary'
                             : 'bg-secondary/60 border border-border text-foreground hover:bg-secondary'
                         }`}
-                        style={{
-                          left: `${left}px`,
-                          width: `${width}px`,
-                          height: ROW_HEIGHT - 8,
-                          maxWidth: `${width}px`,
-                          minWidth: 0,
-                          overflow: 'hidden',
-                          contain: 'paint',
-                        }}
+                        style={{ left, width, height: ROW_HEIGHT - 8, contain: 'paint' }}
                         title={`${prog.title}\n${format(pStart, 'HH:mm')} - ${format(pEnd, 'HH:mm')}${prog.description ? '\n' + prog.description : ''}`}
                       >
-                        <div
-                          className="font-medium leading-tight"
-                          style={{
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                            minWidth: 0,
-                            maxWidth: '100%',
-                          }}
-                        >
-                          {prog.title}
-                        </div>
-                        <div
-                          className="text-[10px] text-muted-foreground"
-                          style={{
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                            minWidth: 0,
-                            maxWidth: '100%',
-                          }}
-                        >
-                          {format(pStart, 'HH:mm')} - {format(pEnd, 'HH:mm')}
-                        </div>
+                        {showTitle && (
+                          <div className="font-medium leading-tight truncate min-w-0">{prog.title}</div>
+                        )}
+                        {timeText && (
+                          <div className="text-[10px] text-muted-foreground truncate min-w-0">{timeText}</div>
+                        )}
                       </div>
                     );
                   })}

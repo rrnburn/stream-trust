@@ -127,8 +127,7 @@ const LocalAppProvider = ({ children }: { children: ReactNode }) => {
       await new Promise((r) => setTimeout(r, 50));
       const db = await getLocalDb();
       const rows = (await db.getParsedMedia()) as MediaRow[];
-      setParsedMedia(
-        rows.map((row) => ({
+      const toItem = (row: MediaRow): MediaItem => ({
           id: row.id,
           title: row.title,
           poster: row.poster || '',
@@ -139,8 +138,15 @@ const LocalAppProvider = ({ children }: { children: ReactNode }) => {
           streamUrl: row.stream_url || '',
           group: row.group_name || undefined,
           tvgId: row.tvg_id || undefined,
-        })),
-      );
+        });
+      // Show the first slice immediately, then hydrate the rest in idle chunks
+      const FIRST = 300;
+      setParsedMedia(rows.slice(0, FIRST).map(toItem));
+      if (rows.length > FIRST) {
+        const idle = (cb: () => void) =>
+          (window as any).requestIdleCallback ? (window as any).requestIdleCallback(cb, { timeout: 500 }) : setTimeout(cb, 16);
+        await new Promise<void>((resolve) => idle(() => { setParsedMedia(rows.map(toItem)); resolve(); }));
+      }
       logger.info('AppContext', `Loaded ${rows.length} media items from local DB`);
     } catch (e) {
       logger.error('AppContext', 'Local media load error', { error: String(e) });

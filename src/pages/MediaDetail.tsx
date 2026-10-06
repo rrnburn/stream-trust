@@ -77,8 +77,10 @@ const MediaDetail = () => {
   const handleEpisodePlay = (url: string, title: string, episodeMediaId?: string) => {
     const epId = episodeMediaId || `${item.id}:ep:${title}`;
     // Track that this episode is the most recent for the series
-    addToHistory(epId, 0, 0, 0, item.id);
-    startPlayback(url, epId, title, 0);
+    const prev = getResume(epId);
+    const from = prev && !prev.finished && prev.position > 5 ? Math.floor(prev.position) : 0;
+    if (!prev) addToHistory(epId, 0, 0, 0, item.id);
+    startPlayback(url, epId, title, from);
   };
 
   const handleResumeLastEpisode = () => {

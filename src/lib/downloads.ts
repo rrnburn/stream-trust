@@ -8,6 +8,7 @@
 
 import { FileTransfer } from '@capacitor/file-transfer';
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
+import { CapacitorHttp } from '@capacitor/core';
 import { isNativePlatform } from '@/lib/platform';
 import { logger } from '@/lib/logger';
 
@@ -76,8 +77,30 @@ const inferExtension = (url: string, contentType?: string | null): string => {
   return 'mp4';
 };
 
-const getCandidateUrls = (url: string): string[] => {
-  const urls = [url];
+/**
+ * Follow 302 redirects ourselves (keeping our User-Agent) so the native
+ * downloader hits the final storage node directly — Android's downloader
+ * drops custom headers on redirect, which makes panels return 0 bytes.
+ */
+const resolveFinalUrl = async (url: string): Promise<string | null> => {
+  try {
+    const res = await CapacitorHttp.request({
+      method: 'GET',
+      url,
+      headers: { ...buildHeaders(url, USER_AGENTS[0]), Range: 'bytes=0-0' },
+      responseType: 'text',
+      connectTimeout: 15000,
+      readTimeout: 15000,
+    });
+    if (res.url && res.url !== url && res.status < 400) return res.url;
+  } catch (e) {
+    logger.warn('Downloads', 'Redirect resolve failed', { error: String(e).slice(0, 160) });
+  }
+  return null;
+};
+
+const getCandidateUrls = (url: string, resolved?: string | null): string[] => {
+  const urls = resolved ? [resolved, url] : [url];
   const backendUrl = appEnv?.VITE_SUPABASE_URL;
   if (backendUrl) {
     urls.push(`${backendUrl}/functions/v1/stream-proxy?url=${encodeURIComponent(url)}`);
@@ -161,10 +184,12 @@ export async function downloadStream(
     let resultPath: string | undefined;
     try {
       let lastError: unknown;
-      const candidates = getCandidateUrls(url);
+      const resolved = await resolveFinalUrl(url);
+      if (resolved) logger.info('Downloads', 'Resolved redirect', { to: resolved.substring(0, 120) });
+      const candidates = getCandidateUrls(url, resolved);
       outer: for (const candidateUrl of candidates) {
         // For the direct URL try each UA; for the proxied URL one attempt is enough.
-        const uasToTry = candidateUrl === url ? USER_AGENTS : [USER_AGENTS[0]];
+        const uasToTry = candidateUrl.includes('/functions/v1/stream-proxy') ? [USER_AGENTS[0]] : USER_AGENTS;
         for (const ua of uasToTry) {
           loaded = 0;
           progressEventsReceived = 0;

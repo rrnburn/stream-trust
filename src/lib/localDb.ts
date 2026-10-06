@@ -31,6 +31,16 @@ export async function initLocalDb() {
 
   await db.open();
 
+  // Performance tuning — WAL + larger cache makes startup reads much faster.
+  for (const pragma of [
+    'PRAGMA journal_mode = WAL',
+    'PRAGMA synchronous = NORMAL',
+    'PRAGMA cache_size = -16000',
+    'PRAGMA temp_store = MEMORY',
+  ]) {
+    try { await db.query(pragma); } catch { /* unsupported on some platforms */ }
+  }
+
   // Create tables
   await db.execute(`
     CREATE TABLE IF NOT EXISTS iptv_sources (
@@ -141,6 +151,19 @@ export async function initLocalDb() {
     await db.execute('CREATE UNIQUE INDEX IF NOT EXISTS watch_history_media_unique ON watch_history(media_id)');
   } catch (e) {
     // Index creation can fail if duplicates remain; ignore.
+  }
+
+  try {
+    await db.execute(`
+      CREATE INDEX IF NOT EXISTS idx_media_title ON parsed_media(title);
+      CREATE INDEX IF NOT EXISTS idx_media_cat ON parsed_media(category);
+      CREATE INDEX IF NOT EXISTS idx_media_cat_group ON parsed_media(category, group_name);
+      CREATE INDEX IF NOT EXISTS idx_media_source ON parsed_media(source_id);
+      CREATE INDEX IF NOT EXISTS idx_epg_window ON epg_programs(end_time, start_time);
+      CREATE INDEX IF NOT EXISTS idx_epg_channel ON epg_programs(channel_id);
+    `);
+  } catch {
+    // ignore index errors
   }
 
   return db;

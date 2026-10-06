@@ -37,19 +37,13 @@ const USER_AGENTS = [
   'Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
 ];
 
-const buildHeaders = (url: string, ua: string): Record<string, string> => {
-  const headers: Record<string, string> = {
-    'User-Agent': ua,
-    Accept: '*/*',
-  };
-  try {
-    const origin = new URL(url).origin;
-    headers.Referer = origin + '/';
-  } catch {
-    // ignore invalid URL
-  }
-  return headers;
-};
+// No Referer — players that stream successfully send none, and panels with
+// anti-leech rules drop connections carrying an unexpected Referer.
+const buildHeaders = (_url: string, ua: string): Record<string, string> => ({
+  'User-Agent': ua,
+  Accept: '*/*',
+  Connection: 'keep-alive',
+});
 
 type TransferError = {
   code?: string;
@@ -99,13 +93,21 @@ const resolveFinalUrl = async (url: string): Promise<string | null> => {
   return null;
 };
 
+// Native downloads stay direct: providers block cloud IPs, so the proxy only
+// adds a long hang followed by a 502.
 const getCandidateUrls = (url: string, resolved?: string | null): string[] => {
   const urls = resolved ? [resolved, url] : [url];
-  const backendUrl = appEnv?.VITE_SUPABASE_URL;
-  if (backendUrl) {
-    urls.push(`${backendUrl}/functions/v1/stream-proxy?url=${encodeURIComponent(url)}`);
-  }
+  void appEnv;
   return Array.from(new Set(urls));
+};
+
+const statSize = async (relPath: string): Promise<number> => {
+  try {
+    const s = await Filesystem.stat({ path: relPath, directory: Directory.Data });
+    return s.size || 0;
+  } catch {
+    return 0;
+  }
 };
 
 export interface DownloadResult {
@@ -179,7 +181,9 @@ export async function downloadStream(
     let loaded = 0;
     let progressEventsReceived = 0;
     const downloadsDirUri = await Filesystem.getUri({ path: 'downloads', directory: Directory.Data });
-    const targetUri = `${downloadsDirUri.uri.replace(/\/$/, '')}/${fileName}`;
+    // FileTransfer wants a raw OS path, not a file:// URI.
+    const rawBase = decodeURIComponent(downloadsDirUri.uri.replace(/^file:\/\//, '')).replace(/\/$/, '');
+    const targetPath = `${rawBase}/${fileName}`;
 
     let resultPath: string | undefined;
     try {
@@ -188,12 +192,13 @@ export async function downloadStream(
       if (resolved) logger.info('Downloads', 'Resolved redirect', { to: resolved.substring(0, 120) });
       const candidates = getCandidateUrls(url, resolved);
       outer: for (const candidateUrl of candidates) {
-        // For the direct URL try each UA; for the proxied URL one attempt is enough.
-        const uasToTry = candidateUrl.includes('/functions/v1/stream-proxy') ? [USER_AGENTS[0]] : USER_AGENTS;
-        for (const ua of uasToTry) {
+        for (const ua of USER_AGENTS) {
+          if (handle.cancelled) break outer;
           loaded = 0;
           progressEventsReceived = 0;
-          // NOTE: do NOT filter by status.url — providers frequently redirect the request.
+          const headers = buildHeaders(candidateUrl, ua);
+
+          // Engine 1: @capacitor/file-transfer
           const progressListener = await FileTransfer.addListener('progress', (status) => {
             if (status.type !== 'download') return;
             progressEventsReceived++;
@@ -202,54 +207,69 @@ export async function downloadStream(
             const percent = total > 0 ? Math.min(100, Math.round((status.bytes / total) * 100)) : 0;
             onProgress?.({ loaded: status.bytes, total, percent });
           });
-
           try {
-            logger.info('Downloads', `Invoking native downloadFile`, {
-              mediaId,
-              relPath,
-              targetUri,
-              proxied: candidateUrl !== url,
-              ua,
-            });
-            const dl = await FileTransfer.downloadFile({
+            logger.info('Downloads', `Invoking FileTransfer`, { mediaId, targetPath, ua });
+            await FileTransfer.downloadFile({
               url: candidateUrl,
-              path: targetUri,
-              headers: buildHeaders(candidateUrl, ua),
+              path: targetPath,
+              headers,
               connectTimeout: 30000,
               readTimeout: 120000,
               progress: true,
             });
-            resultPath = dl.path || targetUri;
-            logger.info('Downloads', `Native downloadFile returned`, {
-              mediaId,
-              path: resultPath,
-              progressEvents: progressEventsReceived,
-              loaded,
-              proxied: candidateUrl !== url,
-              ua,
-            });
-
-            try {
-              const stat = await Filesystem.stat({ path: relPath, directory: Directory.Data });
-              if ((stat.size || 0) > 0) {
-                break outer;
-              }
-            } catch {
-              // stat failed — treat as empty / failed attempt and try next UA
+            const size = await statSize(relPath);
+            logger.info('Downloads', `FileTransfer returned`, { mediaId, size, progressEvents: progressEventsReceived, ua });
+            if (size > 0) {
+              resultPath = relPath;
+              break outer;
             }
-
             lastError = new Error('Downloaded file is empty — the server may have rejected the request');
-            resultPath = undefined;
           } catch (error) {
             lastError = error;
-            const msg = error instanceof Error ? error.message : String(error);
-            logger.warn('Downloads', `downloadFile attempt failed`, {
-              proxied: candidateUrl !== url,
+            logger.warn('Downloads', `FileTransfer attempt failed`, {
               ua,
-              error: msg.slice(0, 200),
+              error: (error instanceof Error ? error.message : String(error)).slice(0, 200),
             });
           } finally {
             await progressListener.remove();
+          }
+
+          if (handle.cancelled) break outer;
+
+          // Engine 2: @capacitor/filesystem legacy downloader (plain HttpURLConnection)
+          const fsListener = await Filesystem.addListener('progress', (status) => {
+            loaded = status.bytes;
+            if (status.contentLength > 0) total = status.contentLength;
+            const percent = total > 0 ? Math.min(100, Math.round((status.bytes / total) * 100)) : 0;
+            onProgress?.({ loaded: status.bytes, total, percent });
+          });
+          try {
+            logger.info('Downloads', `Invoking Filesystem.downloadFile`, { mediaId, relPath, ua });
+            await Filesystem.downloadFile({
+              url: candidateUrl,
+              path: relPath,
+              directory: Directory.Data,
+              headers,
+              connectTimeout: 30000,
+              readTimeout: 120000,
+              progress: true,
+              recursive: true,
+            });
+            const size = await statSize(relPath);
+            logger.info('Downloads', `Filesystem.downloadFile returned`, { mediaId, size, ua });
+            if (size > 0) {
+              resultPath = relPath;
+              break outer;
+            }
+            lastError = new Error('Downloaded file is empty — the server may have rejected the request');
+          } catch (error) {
+            lastError = error;
+            logger.warn('Downloads', `Filesystem.downloadFile attempt failed`, {
+              ua,
+              error: (error instanceof Error ? error.message : String(error)).slice(0, 200),
+            });
+          } finally {
+            await fsListener.remove();
           }
         }
       }

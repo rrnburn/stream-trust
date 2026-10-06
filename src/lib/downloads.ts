@@ -37,19 +37,13 @@ const USER_AGENTS = [
   'Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
 ];
 
-const buildHeaders = (url: string, ua: string): Record<string, string> => {
-  const headers: Record<string, string> = {
-    'User-Agent': ua,
-    Accept: '*/*',
-  };
-  try {
-    const origin = new URL(url).origin;
-    headers.Referer = origin + '/';
-  } catch {
-    // ignore invalid URL
-  }
-  return headers;
-};
+// No Referer — players that stream successfully send none, and panels with
+// anti-leech rules drop connections carrying an unexpected Referer.
+const buildHeaders = (_url: string, ua: string): Record<string, string> => ({
+  'User-Agent': ua,
+  Accept: '*/*',
+  Connection: 'keep-alive',
+});
 
 type TransferError = {
   code?: string;
@@ -99,13 +93,21 @@ const resolveFinalUrl = async (url: string): Promise<string | null> => {
   return null;
 };
 
+// Native downloads stay direct: providers block cloud IPs, so the proxy only
+// adds a long hang followed by a 502.
 const getCandidateUrls = (url: string, resolved?: string | null): string[] => {
   const urls = resolved ? [resolved, url] : [url];
-  const backendUrl = appEnv?.VITE_SUPABASE_URL;
-  if (backendUrl) {
-    urls.push(`${backendUrl}/functions/v1/stream-proxy?url=${encodeURIComponent(url)}`);
-  }
+  void appEnv;
   return Array.from(new Set(urls));
+};
+
+const statSize = async (relPath: string): Promise<number> => {
+  try {
+    const s = await Filesystem.stat({ path: relPath, directory: Directory.Data });
+    return s.size || 0;
+  } catch {
+    return 0;
+  }
 };
 
 export interface DownloadResult {

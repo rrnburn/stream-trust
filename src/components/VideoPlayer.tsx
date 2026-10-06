@@ -588,6 +588,8 @@ const VideoPlayer = ({ src, title, poster, resumeFrom, onProgress, onClose }: Vi
     video.addEventListener('error', onError);
 
     return () => {
+      // Flush exact position when leaving the player (Back / close)
+      if (video.currentTime > 1) reportProgress(true);
       video.removeEventListener('timeupdate', onTimeUpdate);
       video.removeEventListener('durationchange', onDurationChange);
       video.removeEventListener('loadedmetadata', onDurationChange);
@@ -609,28 +611,26 @@ const VideoPlayer = ({ src, title, poster, resumeFrom, onProgress, onClose }: Vi
     const key = `${src}:${resumeFrom}`;
     if (resumeAppliedRef.current === key) return;
 
-    const apply = () => {
+    const events = ['loadedmetadata', 'durationchange', 'canplay', 'playing', 'timeupdate'] as const;
+    const detach = () => events.forEach((e) => video.removeEventListener(e, apply));
+    function apply() {
+      if (resumeAppliedRef.current === key || video.readyState < 1) return;
+      const d = video.duration;
+      if (d && isFinite(d) && d > 0 && resumeFrom >= d - 5) { resumeAppliedRef.current = key; detach(); return; }
       try {
-        if (video.duration && isFinite(video.duration) && resumeFrom < video.duration - 5) {
-          video.currentTime = resumeFrom;
+        video.currentTime = resumeFrom;
+        if (Math.abs(video.currentTime - resumeFrom) < 3) {
           resumeAppliedRef.current = key;
+          detach();
           log('INFO', `Resumed playback at ${Math.floor(resumeFrom)}s`);
         }
       } catch {
-        /* ignore */
+        /* retry on next event */
       }
-    };
-
-    if (video.readyState >= 1 && video.duration && isFinite(video.duration)) {
-      apply();
-    } else {
-      video.addEventListener('loadedmetadata', apply, { once: true });
-      video.addEventListener('canplay', apply, { once: true });
-      return () => {
-        video.removeEventListener('loadedmetadata', apply);
-        video.removeEventListener('canplay', apply);
-      };
     }
+    events.forEach((e) => video.addEventListener(e, apply));
+    apply();
+    return detach;
   }, [src, resumeFrom]);
 
   const togglePlay = useCallback(() => {

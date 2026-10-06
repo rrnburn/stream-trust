@@ -40,7 +40,7 @@ interface EpisodeModalProps {
   sourceUrl: string; // iptv source base url
   sourceUsername?: string;
   sourcePassword?: string;
-  onPlay: (url: string, title: string) => void;
+  onPlay: (url: string, title: string, episodeId?: string) => void;
 }
 
 const EpisodeModal = ({
@@ -177,7 +177,7 @@ const EpisodeModal = ({
                     >
                       <button
                         onClick={() => {
-                          onPlay(ep.streamUrl, epLabel);
+                          onPlay(ep.streamUrl, epLabel, epDownloadId);
                           onClose();
                         }}
                         className="flex items-start gap-3 flex-1 min-w-0 text-left"
@@ -239,7 +239,7 @@ const EpisodeModal = ({
                           url={ep.streamUrl}
                           title={epLabel}
                           className="h-9 w-9"
-                          onPlayInApp={() => onPlay(ep.streamUrl, epLabel)}
+                          onPlayInApp={() => onPlay(ep.streamUrl, epLabel, epDownloadId)}
                         />
                         <DownloadButton
                           mediaId={epDownloadId}

@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Trash2, Play, Download as DownloadIcon, HardDrive } from 'lucide-react';
+import { Trash2, Play, Download as DownloadIcon, HardDrive, X } from 'lucide-react';
+import { useActiveDownloads, useCompletedVersion, stopDownload } from '@/lib/downloadStore';
 import AppLayout from '@/components/AppLayout';
 import VideoPlayer from '@/components/VideoPlayer';
 import { Button } from '@/components/ui/button';
@@ -44,9 +45,12 @@ const Downloads = () => {
     }
   }, [native]);
 
+  const active = useActiveDownloads();
+  const version = useCompletedVersion();
+
   useEffect(() => {
     load();
-  }, [load]);
+  }, [load, version]);
 
   const handleDelete = async (row: DownloadRow) => {
     try {
@@ -94,9 +98,47 @@ const Downloads = () => {
           </div>
         )}
 
+        {native && active.length > 0 && (
+          <div className="mb-6">
+            <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-2">In progress</h2>
+            <div className="grid gap-3">
+              {active.map((a) => (
+                <div key={a.mediaId} className="flex items-center gap-4 p-3 rounded-xl border border-primary/30 bg-primary/5">
+                  <div className="w-12 h-16 rounded-lg overflow-hidden bg-secondary shrink-0">
+                    {a.poster && <img src={a.poster} alt={a.title} className="w-full h-full object-cover" />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-semibold text-foreground truncate">{a.title}</h3>
+                    <div className="h-1.5 rounded-full bg-secondary mt-2 overflow-hidden">
+                      <div
+                        className={`h-full bg-primary transition-all ${a.progress.percent === 0 ? 'w-1/4 animate-pulse' : ''}`}
+                        style={a.progress.percent > 0 ? { width: `${a.progress.percent}%` } : undefined}
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {a.progress.percent > 0 ? `${a.progress.percent}%` : 'Starting…'}
+                      {a.progress.loaded > 0 && ` · ${formatBytes(a.progress.loaded)}`}
+                      {a.progress.total > 0 && ` of ${formatBytes(a.progress.total)}`}
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => stopDownload(a.mediaId)}
+                    className="border-border text-destructive hover:bg-destructive/10"
+                    aria-label={`Cancel ${a.title}`}
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {native && loading && <div className="text-muted-foreground text-sm">Loading…</div>}
 
-        {native && !loading && items.length === 0 && (
+        {native && !loading && items.length === 0 && active.length === 0 && (
           <div className="rounded-xl border border-border bg-card/40 p-8 text-center text-muted-foreground">
             <DownloadIcon className="w-10 h-10 mx-auto mb-3 opacity-40" />
             <p>No downloads yet. Open a movie and tap Download to save it for offline viewing.</p>

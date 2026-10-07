@@ -2,13 +2,8 @@ import { useEffect, useState, useCallback } from 'react';
 import { Download, X, Check, Loader2, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { isNativePlatform } from '@/lib/platform';
-import {
-  downloadStream,
-  cancelDownload,
-  isDownloading,
-  deleteDownloadedFile,
-  type DownloadProgress,
-} from '@/lib/downloads';
+import { deleteDownloadedFile } from '@/lib/downloads';
+import { startDownload, stopDownload, useActiveDownload, useCompletedVersion } from '@/lib/downloadStore';
 import { toast } from 'sonner';
 
 interface Props {
@@ -22,8 +17,10 @@ interface Props {
 
 const DownloadButton = ({ mediaId, title, poster, category, streamUrl, sourceId }: Props) => {
   const [downloaded, setDownloaded] = useState(false);
-  const [progress, setProgress] = useState<DownloadProgress | null>(null);
-  const [busy, setBusy] = useState(false);
+  const active = useActiveDownload(mediaId);
+  const version = useCompletedVersion();
+  const busy = !!active;
+  const progress = active?.progress;
 
   // Hide entirely on web — downloads are native-only
   const visible = isNativePlatform() && !!streamUrl;
@@ -33,51 +30,20 @@ const DownloadButton = ({ mediaId, title, poster, category, streamUrl, sourceId 
     const { getDownload } = await import('@/lib/localDb');
     const row = await getDownload(mediaId);
     setDownloaded(!!row);
-    setBusy(isDownloading(mediaId));
   }, [mediaId, visible]);
 
   useEffect(() => {
     refreshStatus();
-  }, [refreshStatus]);
+  }, [refreshStatus, version]);
 
   if (!visible) return null;
 
-  const handleDownload = async () => {
+  const handleDownload = () => {
     if (busy) return;
-    setBusy(true);
-    setProgress({ loaded: 0, total: 0, percent: 0 });
-    try {
-      toast.info(`Downloading "${title}"…`);
-      const result = await downloadStream(mediaId, title, streamUrl, (p) => setProgress(p));
-      const { saveDownload } = await import('@/lib/localDb');
-      await saveDownload({
-        media_id: mediaId,
-        title,
-        poster: poster || '',
-        category,
-        file_path: result.filePath,
-        file_uri: result.uri,
-        size: result.size,
-        mime: result.mime,
-        source_id: sourceId || null,
-      });
-      setDownloaded(true);
-      toast.success(`Downloaded "${title}"`);
-    } catch (e) {
-      const message = e instanceof Error ? e.message : 'Unknown';
-      if (!message.toLowerCase().includes('cancel')) {
-        toast.error(`Download failed: ${message}`);
-      }
-    } finally {
-      setBusy(false);
-      setProgress(null);
-    }
+    startDownload({ mediaId, title, poster, category, streamUrl, sourceId });
   };
 
-  const handleCancel = () => {
-    cancelDownload(mediaId);
-    toast.info('Cancelling download…');
-  };
+  const handleCancel = () => stopDownload(mediaId);
 
   const handleDelete = async () => {
     const { getDownload, removeDownload } = await import('@/lib/localDb');

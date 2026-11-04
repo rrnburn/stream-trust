@@ -257,6 +257,7 @@ export async function downloadStream(
     const targetPath = `${rawBase}/${fileName}`;
 
     let resultPath: string | undefined;
+    let dnsFailed = false;
     try {
       let lastError: unknown;
       const resolved = await resolveFinalUrl(url);

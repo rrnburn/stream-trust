@@ -2,7 +2,7 @@ import { isHeadingPlaceholder } from '@/lib/headingFilter';
 /* @jsxRuntime classic */
 /* @jsx React.createElement */
 /* eslint-disable react-refresh/only-export-components */
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef, ReactNode } from 'react';
 import { isNativePlatform } from '@/lib/platform';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './AuthContext';
@@ -88,6 +88,7 @@ const LocalAppProvider = ({ children }: { children: ReactNode }) => {
   const [epgPrograms, setEpgPrograms] = useState<EpgProgram[]>([]);
   const [parsingEpg, setParsingEpg] = useState(false);
   const [autoEpgUrl, setAutoEpgUrl] = useState<string>('');
+  const parseEpgRef = useRef<((s: IPTVSource) => Promise<void>) | null>(null);
 
   const reload = useCallback(async () => {
     setLoadingSources(true);
@@ -252,6 +253,18 @@ const LocalAppProvider = ({ children }: { children: ReactNode }) => {
       );
       if (result.items.length > 0) {
         setAutoEpgUrl(result.epgUrl);
+        if (result.epgUrl && !source.epg_url) {
+          try {
+            await db.updateSourceLocal(source.id, { epg_url: result.epgUrl });
+            source = { ...source, epg_url: result.epgUrl };
+          } catch (err) {
+            logger.warn('EPG', 'Failed to persist auto EPG URL', { error: String(err) });
+          }
+        }
+        if (source.epg_url) {
+          const s = source;
+          setTimeout(() => { void parseEpgRef.current?.(s); }, 1500);
+        }
         await db.insertParsedMedia(
           source.id,
           result.items.map((i) => ({
@@ -298,22 +311,26 @@ const LocalAppProvider = ({ children }: { children: ReactNode }) => {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
 
-      const res = await fetch(url, {
-        signal: controller.signal,
-        headers: { 'Accept-Encoding': 'gzip' },
+      // Native HTTP avoids WebView CORS / cleartext blocks on provider EPG URLs.
+      const { CapacitorHttp } = await import('@capacitor/core');
+      const res = await CapacitorHttp.request({
+        method: 'GET',
+        url,
+        headers: { 'User-Agent': 'okhttp/4.9.2', Accept: '*/*' },
+        responseType: 'text',
+        connectTimeout: 30000,
+        readTimeout: 90000,
       });
       clearTimeout(timeoutId);
+      void controller;
 
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (res.status >= 400) throw new Error(`HTTP ${res.status}`);
 
-      // Check file size before loading into memory
-      const contentLength = res.headers.get('content-length');
-      const maxSize = 20 * 1024 * 1024; // Reduced to 20MB to prevent memory issues
-      if (contentLength && parseInt(contentLength) > maxSize) {
-        throw new Error('EPG file too large (>20MB). Consider using a smaller EPG source.');
+      let xml = typeof res.data === 'string' ? res.data : String(res.data ?? '');
+      const maxSize = 40 * 1024 * 1024;
+      if (xml.length > maxSize) {
+        throw new Error('EPG file too large (>40MB). Consider using a smaller EPG source.');
       }
-
-      let xml = await res.text();
       logger.info('EPG', `Downloaded EPG file: ${(xml.length / 1024).toFixed(1)} KB`);
 
       // Parse in chunks to avoid blocking UI
@@ -371,6 +388,7 @@ const LocalAppProvider = ({ children }: { children: ReactNode }) => {
       setParsingEpg(false);
     }
   };
+  parseEpgRef.current = parseEpg;
 
   return (
     <AppContext.Provider

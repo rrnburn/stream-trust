@@ -32,6 +32,10 @@ if (fs.existsSync(manifestPath)) {
     manifest = manifest.replace(/<application([^>]*)>/, '<application$1\n        android:largeHeap="true">');
   }
 
+  if (!manifest.includes('android:usesCleartextTraffic')) {
+    manifest = manifest.replace(/<application([^>]*)>/, '<application$1\n        android:usesCleartextTraffic="true">');
+  }
+
   // TV banner (referenced from /res/drawable/tv_banner.png — copied below)
   if (!manifest.includes('android:banner')) {
     console.log('✓ Adding android:banner for TV launcher');

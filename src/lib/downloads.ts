@@ -94,9 +94,10 @@ const resolveFinalUrl = async (url: string): Promise<string | null> => {
 };
 
 // Native downloads stay direct: providers block cloud IPs, so the proxy only
-// adds a long hang followed by a 502.
+// adds a long hang followed by a 502. Original URL first — native engines
+// follow redirects themselves and pre-resolved tokens go stale.
 const getCandidateUrls = (url: string, resolved?: string | null): string[] => {
-  const urls = resolved ? [resolved, url] : [url];
+  const urls = resolved ? [url, resolved] : [url];
   void appEnv;
   return Array.from(new Set(urls));
 };

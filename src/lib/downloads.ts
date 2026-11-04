@@ -102,6 +102,76 @@ const getCandidateUrls = (url: string, resolved?: string | null): string[] => {
   return Array.from(new Set(urls));
 };
 
+const isDnsError = (e: unknown) => /resolve host|no address associated|UnknownHost/i.test(String((e as Error)?.message ?? e));
+
+/** Look up a hostname over HTTPS DNS (Google, then Cloudflare) — bypasses phone/ISP DNS blocks. */
+const dohResolve = async (host: string): Promise<string | null> => {
+  if (/^\d+\.\d+\.\d+\.\d+$/.test(host)) return host;
+  const endpoints = [
+    `https://dns.google/resolve?name=${encodeURIComponent(host)}&type=A`,
+    `https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(host)}&type=A`,
+  ];
+  for (const ep of endpoints) {
+    try {
+      const res = await fetch(ep, { headers: { Accept: 'application/dns-json' } });
+      if (!res.ok) continue;
+      const json = (await res.json()) as { Answer?: { type: number; data: string }[] };
+      const a = json.Answer?.find((r) => r.type === 1)?.data;
+      if (a) return a;
+    } catch {
+      // try next resolver
+    }
+  }
+  return null;
+};
+
+/** Rewrite a URL to hit an IP directly, returning the URL plus the Host header to send. */
+const toIpUrl = async (url: string): Promise<{ url: string; host: string } | null> => {
+  const u = new URL(url);
+  const ip = await dohResolve(u.hostname);
+  if (!ip) return null;
+  const host = u.host;
+  u.hostname = ip;
+  return { url: u.toString(), host };
+};
+
+/**
+ * Walk the redirect chain manually via IP + Host header, so DNS-blocked
+ * hostnames still work. Returns the final IP URL and its Host header.
+ */
+const resolveViaDoh = async (url: string, ua: string): Promise<{ url: string; host: string } | null> => {
+  let current = url;
+  for (let hop = 0; hop < 5; hop++) {
+    const target = await toIpUrl(current);
+    if (!target) return null;
+    try {
+      const res = await CapacitorHttp.request({
+        method: 'GET',
+        url: target.url,
+        headers: { ...buildHeaders(current, ua), Host: target.host, Range: 'bytes=0-0' },
+        responseType: 'text',
+        disableRedirects: true,
+        connectTimeout: 15000,
+        readTimeout: 15000,
+      });
+      const loc = res.headers?.Location || res.headers?.location;
+      if (res.status >= 300 && res.status < 400 && loc) {
+        current = new URL(loc, current).toString();
+        continue;
+      }
+      if (res.status >= 400) {
+        logger.warn('Downloads', 'DoH probe rejected', { status: res.status, hop });
+        return null;
+      }
+      return target;
+    } catch (e) {
+      logger.warn('Downloads', 'DoH probe failed', { hop, error: String(e).slice(0, 160) });
+      return null;
+    }
+  }
+  return null;
+};
+
 const statSize = async (relPath: string): Promise<number> => {
   try {
     const s = await Filesystem.stat({ path: relPath, directory: Directory.Data });
@@ -231,6 +301,10 @@ export async function downloadStream(
               ua,
               error: (error instanceof Error ? error.message : String(error)).slice(0, 200),
             });
+            if (isDnsError(error)) {
+              dnsFailed = true;
+              break outer;
+            }
           } finally {
             await progressListener.remove();
           }
@@ -269,8 +343,57 @@ export async function downloadStream(
               ua,
               error: (error instanceof Error ? error.message : String(error)).slice(0, 200),
             });
+            if (isDnsError(error)) {
+              dnsFailed = true;
+              break outer;
+            }
           } finally {
             await fsListener.remove();
+          }
+        }
+      }
+
+      // Fallback: the phone's DNS can't find the provider's servers (common with
+      // Private DNS / ISP blocks). Look them up over HTTPS DNS and connect by IP.
+      if (!resultPath && dnsFailed && !handle.cancelled) {
+        logger.info('Downloads', 'DNS blocked on device — retrying via HTTPS DNS', { mediaId });
+        for (const ua of USER_AGENTS.slice(0, 2)) {
+          if (handle.cancelled) break;
+          const target = await resolveViaDoh(url, ua);
+          if (!target) continue;
+          const headers = { ...buildHeaders(target.url, ua), Host: target.host };
+          const listener = await FileTransfer.addListener('progress', (status) => {
+            if (status.type !== 'download') return;
+            loaded = status.bytes;
+            if (status.lengthComputable && status.contentLength > 0) total = status.contentLength;
+            const percent = total > 0 ? Math.min(100, Math.round((status.bytes / total) * 100)) : 0;
+            onProgress?.({ loaded: status.bytes, total, percent });
+          });
+          try {
+            await FileTransfer.downloadFile({
+              url: target.url,
+              path: targetPath,
+              headers,
+              connectTimeout: 30000,
+              readTimeout: 120000,
+              progress: true,
+              disableRedirects: true,
+            });
+            const size = await statSize(relPath);
+            logger.info('Downloads', 'DoH download returned', { mediaId, size, ua });
+            if (size > 0) {
+              resultPath = relPath;
+              break;
+            }
+            lastError = new Error('Downloaded file is empty — the server may have rejected the request');
+          } catch (error) {
+            lastError = error;
+            logger.warn('Downloads', 'DoH download failed', {
+              ua,
+              error: (error instanceof Error ? error.message : String(error)).slice(0, 200),
+            });
+          } finally {
+            await listener.remove();
           }
         }
       }

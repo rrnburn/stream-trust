@@ -246,6 +246,15 @@ export async function removeSourceLocal(id: string) {
 
 // ── Parsed Media ────────────────────────────────────────────
 
+/** Lower-cased EPG ids of all live channels, used to trim oversized guides. */
+export async function getChannelTvgIds(): Promise<Set<string>> {
+  const d = await initLocalDb();
+  const res = await d.query(
+    "SELECT DISTINCT tvg_id FROM parsed_media WHERE category = 'channel' AND tvg_id IS NOT NULL AND tvg_id != ''",
+  );
+  return new Set((res.values || []).map((r: { tvg_id: string }) => r.tvg_id.trim().toLowerCase()));
+}
+
 export async function getParsedMedia() {
   const d = await initLocalDb();
   const res = await d.query(

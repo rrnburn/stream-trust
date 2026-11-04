@@ -327,9 +327,9 @@ const LocalAppProvider = ({ children }: { children: ReactNode }) => {
       if (res.status >= 400) throw new Error(`HTTP ${res.status}`);
 
       let xml = typeof res.data === 'string' ? res.data : String(res.data ?? '');
-      const maxSize = 40 * 1024 * 1024;
+      const maxSize = 120 * 1024 * 1024;
       if (xml.length > maxSize) {
-        throw new Error('EPG file too large (>40MB). Consider using a smaller EPG source.');
+        throw new Error('EPG file too large (>120MB). Consider using a smaller EPG source.');
       }
       logger.info('EPG', `Downloaded EPG file: ${(xml.length / 1024).toFixed(1)} KB`);
 
@@ -339,8 +339,19 @@ const LocalAppProvider = ({ children }: { children: ReactNode }) => {
       // Use setTimeout to yield to UI thread multiple times during parsing
       await new Promise((resolve) => setTimeout(resolve, 600));
 
-      const programs = parseXmlTvLocal(xml);
-      logger.info('EPG', `Parsed ${programs.length} programs from XML`);
+      // Only keep listings for channels in this playlist — big provider guides
+      // cover thousands of channels and would otherwise flood storage.
+      let allowed: Set<string> | undefined;
+      try {
+        const { getChannelTvgIds } = await import('@/lib/localDb');
+        allowed = await getChannelTvgIds();
+      } catch {
+        allowed = undefined;
+      }
+      let programs = parseXmlTvLocal(xml, allowed);
+      // If ids don't line up with the playlist at all, fall back to everything.
+      if (programs.length === 0 && allowed && allowed.size > 0) programs = parseXmlTvLocal(xml);
+      logger.info('EPG', `Parsed ${programs.length} programs from XML`, { channelFilter: allowed?.size ?? 0 });
 
       // Clear XML from memory immediately after parsing
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

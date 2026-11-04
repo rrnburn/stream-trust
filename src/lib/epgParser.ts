@@ -12,7 +12,8 @@ export interface LocalEpgProgram {
   category: string;
 }
 
-export function parseXmlTvLocal(xml: string): LocalEpgProgram[] {
+export function parseXmlTvLocal(xml: string, allowedChannels?: Set<string>): LocalEpgProgram[] {
+  const filter = allowedChannels && allowedChannels.size > 0 ? allowedChannels : null;
   const programs: LocalEpgProgram[] = [];
   const now = new Date();
   const cutoff = new Date(now.getTime() + 24 * 60 * 60 * 1000);
@@ -29,6 +30,7 @@ export function parseXmlTvLocal(xml: string): LocalEpgProgram[] {
     const channelId = extractAttr(attrs, 'channel');
 
     if (!startStr || !stopStr || !channelId) continue;
+    if (filter && !filter.has(channelId.trim().toLowerCase())) continue;
 
     const startTime = parseXmlTvDate(startStr);
     const endTime = parseXmlTvDate(stopStr);

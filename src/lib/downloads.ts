@@ -97,7 +97,8 @@ const resolveFinalUrl = async (url: string): Promise<string | null> => {
 // adds a long hang followed by a 502. Original URL first — native engines
 // follow redirects themselves and pre-resolved tokens go stale.
 const getCandidateUrls = (url: string, resolved?: string | null): string[] => {
-  const urls = resolved ? [url, resolved] : [url];
+  // Resolved CDN URL first: the front-door panel host is often DNS-blocked on phones.
+  const urls = resolved ? [resolved, url] : [url];
   void appEnv;
   return Array.from(new Set(urls));
 };
@@ -113,9 +114,18 @@ const dohResolve = async (host: string): Promise<string | null> => {
   ];
   for (const ep of endpoints) {
     try {
-      const res = await fetch(ep, { headers: { Accept: 'application/dns-json' } });
-      if (!res.ok) continue;
-      const json = (await res.json()) as { Answer?: { type: number; data: string }[] };
+      const res = await CapacitorHttp.request({
+        method: 'GET',
+        url: ep,
+        headers: { Accept: 'application/dns-json' },
+        responseType: 'json',
+        connectTimeout: 10000,
+        readTimeout: 10000,
+      });
+      if (res.status !== 200) continue;
+      const json = (typeof res.data === 'string' ? JSON.parse(res.data) : res.data) as {
+        Answer?: { type: number; data: string }[];
+      };
       const a = json.Answer?.find((r) => r.type === 1)?.data;
       if (a) return a;
     } catch {
@@ -262,6 +272,7 @@ export async function downloadStream(
       let lastError: unknown;
       const resolved = await resolveFinalUrl(url);
       if (resolved) logger.info('Downloads', 'Resolved redirect', { to: resolved.substring(0, 120) });
+      const resolvedForDoh = resolved;
       const candidates = getCandidateUrls(url, resolved);
       outer: for (const candidateUrl of candidates) {
         for (const ua of USER_AGENTS) {
@@ -304,10 +315,11 @@ export async function downloadStream(
             });
             if (isDnsError(error)) {
               dnsFailed = true;
-              break outer;
+              await progressListener.remove();
+              continue outer; // try the next host instead of giving up
             }
           } finally {
-            await progressListener.remove();
+            await progressListener.remove().catch(() => {});
           }
 
           if (handle.cancelled) break outer;
@@ -346,10 +358,11 @@ export async function downloadStream(
             });
             if (isDnsError(error)) {
               dnsFailed = true;
-              break outer;
+              await fsListener.remove();
+              continue outer;
             }
           } finally {
-            await fsListener.remove();
+            await fsListener.remove().catch(() => {});
           }
         }
       }
@@ -360,7 +373,7 @@ export async function downloadStream(
         logger.info('Downloads', 'DNS blocked on device — retrying via HTTPS DNS', { mediaId });
         for (const ua of USER_AGENTS.slice(0, 2)) {
           if (handle.cancelled) break;
-          const target = await resolveViaDoh(url, ua);
+          const target = (await resolveViaDoh(url, ua)) ?? (resolvedForDoh ? await resolveViaDoh(resolvedForDoh, ua) : null);
           if (!target) continue;
           const headers = { ...buildHeaders(target.url, ua), Host: target.host };
           const listener = await FileTransfer.addListener('progress', (status) => {

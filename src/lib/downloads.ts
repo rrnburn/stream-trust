@@ -103,14 +103,17 @@ const getCandidateUrls = (url: string, resolved?: string | null): string[] => {
   return Array.from(new Set(urls));
 };
 
-const isDnsError = (e: unknown) => /resolve host|no address associated|UnknownHost/i.test(String((e as Error)?.message ?? e));
+const isDnsError = (e: unknown) => /resolve host|no address associated|UnknownHost|OS-PLUG-FLTR-0011|Error during file transfer/i.test(String((e as Error)?.message ?? e));
 
 /** Look up a hostname over HTTPS DNS (Google, then Cloudflare) — bypasses phone/ISP DNS blocks. */
 const dohResolve = async (host: string): Promise<string | null> => {
   if (/^\d+\.\d+\.\d+\.\d+$/.test(host)) return host;
   const endpoints = [
+    // Raw IPs first: phones with blocked DNS can't look up dns.google either.
+    `https://8.8.8.8/resolve?name=${encodeURIComponent(host)}&type=A`,
+    `https://1.1.1.1/dns-query?name=${encodeURIComponent(host)}&type=A`,
+    `https://1.0.0.1/dns-query?name=${encodeURIComponent(host)}&type=A`,
     `https://dns.google/resolve?name=${encodeURIComponent(host)}&type=A`,
-    `https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(host)}&type=A`,
   ];
   for (const ep of endpoints) {
     try {
@@ -373,7 +376,7 @@ export async function downloadStream(
         logger.info('Downloads', 'DNS blocked on device — retrying via HTTPS DNS', { mediaId });
         for (const ua of USER_AGENTS.slice(0, 2)) {
           if (handle.cancelled) break;
-          const target = (await resolveViaDoh(url, ua)) ?? (resolvedForDoh ? await resolveViaDoh(resolvedForDoh, ua) : null);
+          const target = (resolvedForDoh ? await resolveViaDoh(resolvedForDoh, ua) : null) ?? (await resolveViaDoh(url, ua));
           if (!target) continue;
           const headers = { ...buildHeaders(target.url, ua), Host: target.host };
           const listener = await FileTransfer.addListener('progress', (status) => {

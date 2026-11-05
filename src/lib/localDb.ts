@@ -5,6 +5,8 @@
 
 import { CapacitorSQLite, SQLiteConnection, SQLiteDBConnection } from '@capacitor-community/sqlite';
 import { startOfHour } from 'date-fns';
+import { buildMediaSearch, SEARCH_PAGE_SIZE, type SearchCategory } from './mediaSearch';
+import type { MediaRow } from '@/context/AppContext.types';
 
 let sqlite: SQLiteConnection | null = null;
 try {
@@ -261,6 +263,21 @@ export async function getParsedMedia() {
     "SELECT id, title, poster, category, genre, source_id, stream_url, group_name, tvg_id, '' AS description FROM parsed_media ORDER BY title ASC",
   );
   return res.values || [];
+}
+
+/** Query the full on-device catalog, returning only one page and a lookahead row. */
+export async function searchMediaLocal(query: string, category: SearchCategory, offset = 0) {
+  const d = await initLocalDb();
+  const search = buildMediaSearch(query, category, offset);
+  const res = await d.query(search.statement, search.values);
+  const rows = (res.values || []) as MediaRow[];
+  return { rows: rows.slice(0, SEARCH_PAGE_SIZE), hasMore: rows.length > SEARCH_PAGE_SIZE };
+}
+
+export async function getMediaLocal(id: string): Promise<MediaRow | null> {
+  const d = await initLocalDb();
+  const res = await d.query('SELECT * FROM parsed_media WHERE id = ? LIMIT 1', [id]);
+  return (res.values?.[0] as MediaRow | undefined) || null;
 }
 
 export async function insertParsedMedia(

@@ -1,4 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import type { MediaItem } from '@/context/AppContext.types';
+import { isNativePlatform } from '@/lib/platform';
+import { mediaRowToItem } from '@/lib/mediaSearch';
+import { logger } from '@/lib/logger';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Play, Heart, Star, Clock, Calendar, Tv, RotateCcw, CheckCircle2 } from 'lucide-react';
 import { useMedia, useAppContext } from '@/context/AppContext';
@@ -28,7 +32,19 @@ const MediaDetail = () => {
   const navigate = useNavigate();
   const media = useMedia();
   const { toggleFavorite, isFavorite, addToHistory, clearResume, getResume, sources } = useAppContext();
-  const item = media.find((m) => m.id === id);
+  const [localItem, setLocalItem] = useState<MediaItem | null>(null);
+  const [loadingItem, setLoadingItem] = useState(isNativePlatform());
+  const item = media.find((m) => m.id === id) || (localItem?.id === id ? localItem : undefined);
+  useEffect(() => {
+    if (!isNativePlatform() || !id) return;
+    let cancelled = false;
+    setLoadingItem(true);
+    import('@/lib/localDb').then((db) => db.getMediaLocal(id)).then((row) => {
+      if (!cancelled) setLocalItem(row ? mediaRowToItem(row) : null);
+    }).catch((error) => logger.error('MediaDetail', 'Could not load library item', { error: String(error) }))
+      .finally(() => { if (!cancelled) setLoadingItem(false); });
+    return () => { cancelled = true; };
+  }, [id]);
   const [showPlayer, setShowPlayer] = useState(false);
   const [showEpisodeModal, setShowEpisodeModal] = useState(false);
   const [playingUrl, setPlayingUrl] = useState('');
@@ -40,7 +56,7 @@ const MediaDetail = () => {
   if (!item) {
     return (
       <AppLayout>
-        <div className="p-8 text-center text-muted-foreground">Content not found</div>
+        <div className="p-8 text-center text-muted-foreground">{loadingItem ? 'Loading…' : 'Content not found'}</div>
       </AppLayout>
     );
   }

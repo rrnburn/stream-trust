@@ -5,6 +5,7 @@
 import { useSyncExternalStore } from 'react';
 import { toast } from 'sonner';
 import { downloadStream, cancelDownload, type DownloadProgress } from '@/lib/downloads';
+import { osDownload, osCancel, osDownloadAvailable } from '@/lib/osDownload';
 
 export interface ActiveItem {
   mediaId: string;
@@ -56,7 +57,10 @@ export async function startDownload(m: StartMeta): Promise<boolean> {
   emit();
   toast.info(`Downloading "${m.title}"…`);
   try {
-    const result = await downloadStream(m.mediaId, m.title, m.streamUrl, (p) => update(m.mediaId, p));
+    const onP = (p: DownloadProgress) => update(m.mediaId, p);
+    const result = osDownloadAvailable()
+      ? await osDownload(m.mediaId, m.title, m.streamUrl, onP)
+      : await downloadStream(m.mediaId, m.title, m.streamUrl, onP);
     const { saveDownload } = await import('@/lib/localDb');
     await saveDownload({
       media_id: m.mediaId,
@@ -82,7 +86,7 @@ export async function startDownload(m: StartMeta): Promise<boolean> {
 }
 
 export function stopDownload(mediaId: string) {
-  cancelDownload(mediaId);
+  if (!osCancel(mediaId)) cancelDownload(mediaId);
   toast.info('Cancelling download…');
 }
 

@@ -140,6 +140,93 @@ if (fs.existsSync(buildGradlePath)) {
   fs.writeFileSync(buildGradlePath, buildGradle, 'utf8');
 }
 
+// 5. Inject native OS DownloadManager plugin (hands downloads to Android)
+const javaRoot = path.join(ANDROID_DIR, 'app', 'src', 'main', 'java');
+const findMain = (dir) => {
+  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+    const p = path.join(dir, e.name);
+    if (e.isDirectory()) { const r = findMain(p); if (r) return r; }
+    else if (e.name === 'MainActivity.java') return p;
+  }
+  return null;
+};
+const mainPath = fs.existsSync(javaRoot) ? findMain(javaRoot) : null;
+if (mainPath) {
+  const pkg = (fs.readFileSync(mainPath, 'utf8').match(/package\s+([\w.]+);/) || [])[1];
+  const pluginSrc = `package ${pkg};
+
+import android.app.DownloadManager;
+import android.content.Context;
+import android.database.Cursor;
+import android.net.Uri;
+import android.os.Environment;
+import com.getcapacitor.JSObject;
+import com.getcapacitor.Plugin;
+import com.getcapacitor.PluginCall;
+import com.getcapacitor.PluginMethod;
+import com.getcapacitor.annotation.CapacitorPlugin;
+
+@CapacitorPlugin(name = "OsDownload")
+public class OsDownloadPlugin extends Plugin {
+  private DownloadManager dm() { return (DownloadManager) getContext().getSystemService(Context.DOWNLOAD_SERVICE); }
+
+  @PluginMethod
+  public void enqueue(PluginCall call) {
+    try {
+      DownloadManager.Request r = new DownloadManager.Request(Uri.parse(call.getString("url")));
+      r.setTitle(call.getString("title", "Download"));
+      r.addRequestHeader("User-Agent", call.getString("userAgent", "Mozilla/5.0"));
+      r.addRequestHeader("Accept", "*/*");
+      r.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
+      r.setAllowedOverMetered(true);
+      r.setAllowedOverRoaming(true);
+      r.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "StreaminStuff/" + call.getString("fileName", "video.mp4"));
+      long id = dm().enqueue(r);
+      JSObject o = new JSObject(); o.put("id", String.valueOf(id)); call.resolve(o);
+    } catch (Exception e) { call.reject(e.getMessage()); }
+  }
+
+  @PluginMethod
+  public void query(PluginCall call) {
+    long id = Long.parseLong(call.getString("id", "0"));
+    Cursor c = dm().query(new DownloadManager.Query().setFilterById(id));
+    JSObject o = new JSObject();
+    if (c != null && c.moveToFirst()) {
+      int st = c.getInt(c.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS));
+      o.put("status", st == DownloadManager.STATUS_SUCCESSFUL ? "done" : st == DownloadManager.STATUS_FAILED ? "failed" : st == DownloadManager.STATUS_PAUSED ? "paused" : "running");
+      o.put("loaded", c.getLong(c.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR)));
+      o.put("total", c.getLong(c.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES)));
+      o.put("reason", c.getInt(c.getColumnIndexOrThrow(DownloadManager.COLUMN_REASON)));
+      String local = c.getString(c.getColumnIndexOrThrow(DownloadManager.COLUMN_LOCAL_URI));
+      o.put("localUri", local == null ? "" : local);
+      Uri u = dm().getUriForDownloadedFile(id);
+      o.put("uri", u == null ? "" : u.toString());
+      c.close();
+    } else { o.put("status", "missing"); if (c != null) c.close(); }
+    call.resolve(o);
+  }
+
+  @PluginMethod
+  public void remove(PluginCall call) {
+    try { dm().remove(Long.parseLong(call.getString("id", "0"))); } catch (Exception ignored) {}
+    call.resolve();
+  }
+}
+`;
+  fs.writeFileSync(path.join(path.dirname(mainPath), 'OsDownloadPlugin.java'), pluginSrc, 'utf8');
+  let main = fs.readFileSync(mainPath, 'utf8');
+  if (!main.includes('OsDownloadPlugin')) {
+    if (/onCreate\s*\(/.test(main)) {
+      main = main.replace(/(onCreate\s*\([^)]*\)\s*\{)/, '$1\n        registerPlugin(OsDownloadPlugin.class);');
+    } else {
+      main = main.replace(/(class MainActivity extends BridgeActivity\s*\{)/,
+        '$1\n    @Override\n    public void onCreate(android.os.Bundle savedInstanceState) {\n        registerPlugin(OsDownloadPlugin.class);\n        super.onCreate(savedInstanceState);\n    }\n');
+    }
+    fs.writeFileSync(mainPath, main, 'utf8');
+  }
+  console.log('✓ Injected OsDownload (Android DownloadManager) plugin');
+}
+
 console.log('\n✅ Android configuration complete!');
 console.log('\nNext steps:');
 console.log('  1. npx cap sync android');

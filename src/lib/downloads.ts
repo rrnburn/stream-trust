@@ -8,11 +8,8 @@
 
 import { FileTransfer } from '@capacitor/file-transfer';
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
-import { CapacitorHttp } from '@capacitor/core';
 import { isNativePlatform } from '@/lib/platform';
 import { logger } from '@/lib/logger';
-
-const appEnv = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env;
 
 export interface DownloadProgress {
   loaded: number; // bytes downloaded so far
@@ -71,118 +68,14 @@ const inferExtension = (url: string, contentType?: string | null): string => {
   return 'mp4';
 };
 
-/**
- * Follow 302 redirects ourselves (keeping our User-Agent) so the native
- * downloader hits the final storage node directly — Android's downloader
- * drops custom headers on redirect, which makes panels return 0 bytes.
- */
-const resolveFinalUrl = async (url: string): Promise<string | null> => {
-  try {
-    const res = await CapacitorHttp.request({
-      method: 'GET',
-      url,
-      headers: { ...buildHeaders(url, USER_AGENTS[0]), Range: 'bytes=0-0' },
-      responseType: 'text',
-      connectTimeout: 15000,
-      readTimeout: 15000,
-    });
-    if (res.url && res.url !== url && res.status < 400) return res.url;
-  } catch (e) {
-    logger.warn('Downloads', 'Redirect resolve failed', { error: String(e).slice(0, 160) });
-  }
-  return null;
-};
-
-// Native downloads stay direct: providers block cloud IPs, so the proxy only
-// adds a long hang followed by a 502. Original URL first — native engines
-// follow redirects themselves and pre-resolved tokens go stale.
-const getCandidateUrls = (url: string, resolved?: string | null): string[] => {
-  // Resolved CDN URL first: the front-door panel host is often DNS-blocked on phones.
-  const urls = resolved ? [resolved, url] : [url];
-  void appEnv;
-  return Array.from(new Set(urls));
-};
-
-const isDnsError = (e: unknown) => /resolve host|no address associated|UnknownHost|OS-PLUG-FLTR-0011|Error during file transfer/i.test(String((e as Error)?.message ?? e));
-
-/** Look up a hostname over HTTPS DNS (Google, then Cloudflare) — bypasses phone/ISP DNS blocks. */
-const dohResolve = async (host: string): Promise<string | null> => {
-  if (/^\d+\.\d+\.\d+\.\d+$/.test(host)) return host;
-  const endpoints = [
-    // Raw IPs first: phones with blocked DNS can't look up dns.google either.
-    `https://8.8.8.8/resolve?name=${encodeURIComponent(host)}&type=A`,
-    `https://1.1.1.1/dns-query?name=${encodeURIComponent(host)}&type=A`,
-    `https://1.0.0.1/dns-query?name=${encodeURIComponent(host)}&type=A`,
-    `https://dns.google/resolve?name=${encodeURIComponent(host)}&type=A`,
-  ];
-  for (const ep of endpoints) {
-    try {
-      const res = await CapacitorHttp.request({
-        method: 'GET',
-        url: ep,
-        headers: { Accept: 'application/dns-json' },
-        responseType: 'json',
-        connectTimeout: 10000,
-        readTimeout: 10000,
-      });
-      if (res.status !== 200) continue;
-      const json = (typeof res.data === 'string' ? JSON.parse(res.data) : res.data) as {
-        Answer?: { type: number; data: string }[];
-      };
-      const a = json.Answer?.find((r) => r.type === 1)?.data;
-      if (a) return a;
-    } catch {
-      // try next resolver
-    }
-  }
-  return null;
-};
-
-/** Rewrite a URL to hit an IP directly, returning the URL plus the Host header to send. */
-const toIpUrl = async (url: string): Promise<{ url: string; host: string } | null> => {
-  const u = new URL(url);
-  const ip = await dohResolve(u.hostname);
-  if (!ip) return null;
-  const host = u.host;
-  u.hostname = ip;
-  return { url: u.toString(), host };
-};
-
-/**
- * Walk the redirect chain manually via IP + Host header, so DNS-blocked
- * hostnames still work. Returns the final IP URL and its Host header.
- */
-const resolveViaDoh = async (url: string, ua: string): Promise<{ url: string; host: string } | null> => {
-  let current = url;
-  for (let hop = 0; hop < 5; hop++) {
-    const target = await toIpUrl(current);
-    if (!target) return null;
-    try {
-      const res = await CapacitorHttp.request({
-        method: 'GET',
-        url: target.url,
-        headers: { ...buildHeaders(current, ua), Host: target.host, Range: 'bytes=0-0' },
-        responseType: 'text',
-        disableRedirects: true,
-        connectTimeout: 15000,
-        readTimeout: 15000,
-      });
-      const loc = res.headers?.Location || res.headers?.location;
-      if (res.status >= 300 && res.status < 400 && loc) {
-        current = new URL(loc, current).toString();
-        continue;
-      }
-      if (res.status >= 400) {
-        logger.warn('Downloads', 'DoH probe rejected', { status: res.status, hop });
-        return null;
-      }
-      return target;
-    } catch (e) {
-      logger.warn('Downloads', 'DoH probe failed', { hop, error: String(e).slice(0, 160) });
-      return null;
-    }
-  }
-  return null;
+// Only explicit hostname failures count as DNS errors. Generic transfer errors
+// must still reach the second engine, which can handle redirects differently.
+const isDnsError = (error: unknown): boolean => {
+  if (!error || typeof error !== 'object') return /resolve host|no address associated|UnknownHost/i.test(String(error));
+  const details = error as { message?: string; code?: string; data?: { exception?: string } };
+  return /resolve host|no address associated|UnknownHost/i.test(
+    [details.message, details.code, details.data?.exception].join(' '),
+  );
 };
 
 const statSize = async (relPath: string): Promise<number> => {
@@ -273,14 +166,14 @@ export async function downloadStream(
     let dnsFailed = false;
     try {
       let lastError: unknown;
-      const resolved = await resolveFinalUrl(url);
-      if (resolved) logger.info('Downloads', 'Resolved redirect', { to: resolved.substring(0, 120) });
-      const resolvedForDoh = resolved;
-      const candidates = getCandidateUrls(url, resolved);
+      // Request the canonical URL only during the actual transfer. Probing it
+      // beforehand can consume short-lived provider redirect tokens.
+      const candidates = [url];
       outer: for (const candidateUrl of candidates) {
         for (const ua of USER_AGENTS) {
           if (handle.cancelled) break outer;
           loaded = 0;
+          total = 0;
           progressEventsReceived = 0;
           const headers = buildHeaders(candidateUrl, ua);
 
@@ -318,8 +211,6 @@ export async function downloadStream(
             });
             if (isDnsError(error)) {
               dnsFailed = true;
-              await progressListener.remove();
-              continue outer; // try the next host instead of giving up
             }
           } finally {
             await progressListener.remove().catch(() => {});
@@ -327,6 +218,8 @@ export async function downloadStream(
 
           if (handle.cancelled) break outer;
 
+          loaded = 0;
+          total = 0;
           // Engine 2: @capacitor/filesystem legacy downloader (plain HttpURLConnection)
           const fsListener = await Filesystem.addListener('progress', (status) => {
             loaded = status.bytes;
@@ -361,8 +254,7 @@ export async function downloadStream(
             });
             if (isDnsError(error)) {
               dnsFailed = true;
-              await fsListener.remove();
-              continue outer;
+              break outer; // both engines failed; changing User-Agent cannot fix DNS
             }
           } finally {
             await fsListener.remove().catch(() => {});
@@ -370,49 +262,8 @@ export async function downloadStream(
         }
       }
 
-      // Fallback: the phone's DNS can't find the provider's servers (common with
-      // Private DNS / ISP blocks). Look them up over HTTPS DNS and connect by IP.
       if (!resultPath && dnsFailed && !handle.cancelled) {
-        logger.info('Downloads', 'DNS blocked on device — retrying via HTTPS DNS', { mediaId });
-        for (const ua of USER_AGENTS.slice(0, 2)) {
-          if (handle.cancelled) break;
-          const target = (resolvedForDoh ? await resolveViaDoh(resolvedForDoh, ua) : null) ?? (await resolveViaDoh(url, ua));
-          if (!target) continue;
-          const headers = { ...buildHeaders(target.url, ua), Host: target.host };
-          const listener = await FileTransfer.addListener('progress', (status) => {
-            if (status.type !== 'download') return;
-            loaded = status.bytes;
-            if (status.lengthComputable && status.contentLength > 0) total = status.contentLength;
-            const percent = total > 0 ? Math.min(100, Math.round((status.bytes / total) * 100)) : 0;
-            onProgress?.({ loaded: status.bytes, total, percent });
-          });
-          try {
-            await FileTransfer.downloadFile({
-              url: target.url,
-              path: targetPath,
-              headers,
-              connectTimeout: 30000,
-              readTimeout: 120000,
-              progress: true,
-              disableRedirects: true,
-            });
-            const size = await statSize(relPath);
-            logger.info('Downloads', 'DoH download returned', { mediaId, size, ua });
-            if (size > 0) {
-              resultPath = relPath;
-              break;
-            }
-            lastError = new Error('Downloaded file is empty — the server may have rejected the request');
-          } catch (error) {
-            lastError = error;
-            logger.warn('Downloads', 'DoH download failed', {
-              ua,
-              error: (error instanceof Error ? error.message : String(error)).slice(0, 200),
-            });
-          } finally {
-            await listener.remove();
-          }
-        }
+        throw new Error("Your device couldn't find the download server. Try another network or check your DNS settings.");
       }
 
       if (!resultPath) throw lastError instanceof Error ? lastError : new Error('Download failed');

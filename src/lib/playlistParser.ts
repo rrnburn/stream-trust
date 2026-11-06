@@ -257,7 +257,8 @@ export async function getSeriesInfoLocally(
   base = base.replace(/\/get\.php.*$/i, '');
   base = base.replace(/\/$/, '');
 
-  const streamBase = base.replace(/^http:\/\//i, 'https://');
+  // Keep the source's protocol: forcing https breaks the provider's http redirect.
+  const streamBase = /^https:\/\//i.test(sourceUrl) ? base.replace(/^http:\/\//i, 'https://') : base;
   const apiUrl = `${base}/player_api.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}&action=get_series_info&series_id=${seriesId}`;
 
   const res = await fetch(apiUrl, {

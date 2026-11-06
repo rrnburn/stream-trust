@@ -47,7 +47,7 @@ Deno.serve(async (req) => {
     const data = await res.json();
     
     // Build HTTPS stream base for episode URLs
-    const streamBase = base.replace(/^http:\/\//i, 'https://');
+    const streamBase = /^https:\/\//i.test(String(baseUrl)) ? base.replace(/^http:\/\//i, 'https://') : base;
 
     // Structure the response
     const info = data.info || {};

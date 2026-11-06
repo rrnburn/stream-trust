@@ -78,6 +78,27 @@ const isDnsError = (error: unknown): boolean => {
   );
 };
 
+// The phone's Java resolver can fail while the WebView resolver works (the
+// catalog loads fine). Look the host up over DoH via WebView fetch (CORS-enabled)
+// and retry plain-http URLs by IP with a Host header. Only used after a DNS failure.
+const toIpUrl = async (url: string): Promise<{ url: string; host: string } | null> => {
+  try {
+    const u = new URL(url);
+    if (u.protocol !== 'http:' || /^\d+\.\d+\.\d+\.\d+$/.test(u.hostname)) return null;
+    const res = await fetch(`https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(u.hostname)}&type=A`, {
+      headers: { Accept: 'application/dns-json' },
+    });
+    const json = (await res.json()) as { Answer?: { type: number; data: string }[] };
+    const ip = json.Answer?.find((r) => r.type === 1)?.data;
+    if (!ip) return null;
+    const host = u.host;
+    u.hostname = ip;
+    return { url: u.toString(), host };
+  } catch {
+    return null;
+  }
+};
+
 const statSize = async (relPath: string): Promise<number> => {
   try {
     const s = await Filesystem.stat({ path: relPath, directory: Directory.Data });
@@ -168,14 +189,17 @@ export async function downloadStream(
       let lastError: unknown;
       // Request the canonical URL only during the actual transfer. Probing it
       // beforehand can consume short-lived provider redirect tokens.
-      const candidates = [url];
-      outer: for (const candidateUrl of candidates) {
+      const candidates: { url: string; host?: string }[] = [{ url }];
+      outer: for (let ci = 0; ci < candidates.length; ci++) {
+        const { url: candidateUrl, host: hostHeader } = candidates[ci];
+        dnsFailed = false;
         for (const ua of USER_AGENTS) {
           if (handle.cancelled) break outer;
           loaded = 0;
           total = 0;
           progressEventsReceived = 0;
           const headers = buildHeaders(candidateUrl, ua);
+          if (hostHeader) headers.Host = hostHeader;
 
           // Engine 1: @capacitor/file-transfer
           const progressListener = await FileTransfer.addListener('progress', (status) => {
@@ -254,11 +278,16 @@ export async function downloadStream(
             });
             if (isDnsError(error)) {
               dnsFailed = true;
-              break outer; // both engines failed; changing User-Agent cannot fix DNS
+              break; // both engines failed; changing User-Agent cannot fix DNS
             }
           } finally {
             await fsListener.remove().catch(() => {});
           }
+        }
+        if (dnsFailed && ci === 0 && !handle.cancelled) {
+          const ipCandidate = await toIpUrl(candidateUrl);
+          logger.info('Downloads', ipCandidate ? 'Retrying via looked-up address' : 'Address lookup failed', { mediaId });
+          if (ipCandidate) candidates.push(ipCandidate);
         }
       }
 

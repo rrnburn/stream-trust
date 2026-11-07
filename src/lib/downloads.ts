@@ -379,7 +379,9 @@ export function isDownloading(mediaId: string): boolean {
 export async function deleteDownloadedFile(filePath: string): Promise<void> {
   if (!isNativePlatform()) return;
   try {
-    await Filesystem.deleteFile({ path: filePath, directory: Directory.Data });
+    await Filesystem.deleteFile(
+      filePath.startsWith('/') ? { path: `file://${filePath}` } : { path: filePath, directory: Directory.Data },
+    );
   } catch (e) {
     logger.warn('Downloads', `Failed to delete file: ${filePath}`, { error: String(e) });
   }

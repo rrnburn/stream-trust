@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Trash2, Play, Download as DownloadIcon, HardDrive, X } from 'lucide-react';
-import { useActiveDownloads, useCompletedVersion, stopDownload } from '@/lib/downloadStore';
+import { useActiveDownloads, useCompletedVersion, stopDownload, scanExistingDownloads } from '@/lib/downloadStore';
+import { Capacitor } from '@capacitor/core';
 import AppLayout from '@/components/AppLayout';
 import VideoPlayer from '@/components/VideoPlayer';
 import { Button } from '@/components/ui/button';
@@ -21,6 +22,13 @@ const formatBytes = (bytes: number): string => {
   return `${v.toFixed(v < 10 ? 1 : 0)} ${units[i]}`;
 };
 
+// WebView blocks file:// in <video>; route through Capacitor's local file bridge.
+const playableSrc = (row: DownloadRow): string => {
+  const raw = row.file_path.startsWith('/') ? row.file_path : row.file_uri;
+  if (!raw || raw.startsWith('content://')) return row.file_uri;
+  return Capacitor.convertFileSrc(raw.startsWith('/') ? `file://${raw}` : raw);
+};
+
 const Downloads = () => {
   const [items, setItems] = useState<DownloadRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -35,6 +43,7 @@ const Downloads = () => {
     }
     setLoading(true);
     try {
+      await scanExistingDownloads().catch(() => 0);
       const { getDownloads } = await import('@/lib/localDb');
       const rows = await getDownloads();
       setItems(rows);
@@ -90,7 +99,7 @@ const Downloads = () => {
         {native && playing && (
           <div className="mb-8">
             <VideoPlayer
-              src={playing.file_uri}
+              src={playableSrc(playing)}
               title={playing.title}
               poster={playing.poster}
               onClose={() => setPlaying(null)}

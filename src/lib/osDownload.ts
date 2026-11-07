@@ -6,6 +6,17 @@ interface OsDownloadPlugin {
   enqueue(o: { url: string; title: string; fileName: string; userAgent: string }): Promise<{ id: string }>;
   query(o: { id: string }): Promise<{ status: string; loaded: number; total: number; reason: number; localUri: string; uri: string }>;
   remove(o: { id: string }): Promise<void>;
+  scan(): Promise<{ files: { name: string; path: string; size: number }[] }>;
+}
+
+/** Lists video files already on the device (current + older app versions). */
+export async function osScan() {
+  if (!osDownloadAvailable()) return [];
+  try {
+    return (await OsDownload.scan()).files || [];
+  } catch {
+    return [];
+  }
 }
 
 const OsDownload = registerPlugin<OsDownloadPlugin>('OsDownload');
@@ -37,7 +48,7 @@ export async function osDownload(
       if (s.status === 'done') {
         if (!s.loaded && !total) throw new Error('Downloaded file is empty');
         return {
-          filePath: s.localUri.replace(/^file:\/\//, ''),
+          filePath: decodeURIComponent(s.localUri.replace(/^file:\/\//, '')),
           uri: s.localUri || s.uri,
           size: total || s.loaded,
           mime: ext === 'mkv' ? 'video/x-matroska' : 'video/mp4',

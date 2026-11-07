@@ -17,4 +17,11 @@ if (Capacitor.isNativePlatform() && 'serviceWorker' in navigator) {
 
 initStatusBar();
 
+// Pick up videos already saved on the device (including older app versions).
+if (Capacitor.isNativePlatform()) {
+  setTimeout(() => {
+    import('@/lib/downloadStore').then((m) => m.scanExistingDownloads()).catch(() => {});
+  }, 4000);
+}
+
 createRoot(document.getElementById('root')!).render(<App />);

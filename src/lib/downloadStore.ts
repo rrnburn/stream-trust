@@ -85,6 +85,43 @@ export async function startDownload(m: StartMeta): Promise<boolean> {
   }
 }
 
+let scanned = false;
+/** Registers video files already on the device (e.g. from older app versions). */
+export async function scanExistingDownloads(): Promise<number> {
+  if (scanned) return 0;
+  scanned = true;
+  const { osScan } = await import('@/lib/osDownload');
+  const files = await osScan();
+  if (!files.length) return 0;
+  const { getDownloads, saveDownload } = await import('@/lib/localDb');
+  const rows = await getDownloads();
+  const known = new Set(rows.flatMap((r) => [r.file_path, r.file_path.split('/').pop()]));
+  let added = 0;
+  for (const f of files) {
+    if (known.has(f.path) || known.has(f.name)) continue;
+    known.add(f.name);
+    const ext = (f.name.split('.').pop() || 'mp4').toLowerCase();
+    const title = f.name.replace(/\.\w+$/, '').replace(/_[0-9a-f]{6,8}$/i, '').replace(/_+/g, ' ').trim();
+    await saveDownload({
+      media_id: `file:${f.name}`,
+      title: title || f.name,
+      poster: '',
+      category: /S\d+\s?E\d+/i.test(title) ? 'series' : 'movie',
+      file_path: f.path,
+      file_uri: `file://${f.path}`,
+      size: f.size,
+      mime: ext === 'mkv' ? 'video/x-matroska' : `video/${ext}`,
+      source_id: null,
+    });
+    added++;
+  }
+  if (added) {
+    completedVersion++;
+    emit();
+  }
+  return added;
+}
+
 export function stopDownload(mediaId: string) {
   if (!osCancel(mediaId)) cancelDownload(mediaId);
   toast.info('Cancelling download…');

@@ -177,10 +177,14 @@ public class OsDownloadPlugin extends Plugin {
       r.setTitle(call.getString("title", "Download"));
       r.addRequestHeader("User-Agent", call.getString("userAgent", "Mozilla/5.0"));
       r.addRequestHeader("Accept", "*/*");
+      r.addRequestHeader("Accept-Encoding", "identity");
+      r.addRequestHeader("Connection", "keep-alive");
       r.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
+      r.setAllowedNetworkTypes(DownloadManager.Request.NETWORK_WIFI | DownloadManager.Request.NETWORK_MOBILE);
       r.setAllowedOverMetered(true);
       r.setAllowedOverRoaming(true);
-      r.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "StreaminStuff/" + call.getString("fileName", "video.mp4"));
+      // App-specific external dir: playable in-app via the local file bridge (scoped storage safe).
+      r.setDestinationInExternalFilesDir(getContext(), Environment.DIRECTORY_MOVIES, call.getString("fileName", "video.mp4"));
       long id = dm().enqueue(r);
       JSObject o = new JSObject(); o.put("id", String.valueOf(id)); call.resolve(o);
     } catch (Exception e) { call.reject(e.getMessage()); }
@@ -210,6 +214,30 @@ public class OsDownloadPlugin extends Plugin {
   public void remove(PluginCall call) {
     try { dm().remove(Long.parseLong(call.getString("id", "0"))); } catch (Exception ignored) {}
     call.resolve();
+  }
+
+  // Lists video files already on the device from this or older app versions.
+  @PluginMethod
+  public void scan(PluginCall call) {
+    com.getcapacitor.JSArray arr = new com.getcapacitor.JSArray();
+    java.util.List<java.io.File> dirs = new java.util.ArrayList<>();
+    java.io.File mv = getContext().getExternalFilesDir(Environment.DIRECTORY_MOVIES);
+    if (mv != null) dirs.add(mv);
+    dirs.add(new java.io.File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "StreaminStuff"));
+    dirs.add(new java.io.File(getContext().getFilesDir(), "downloads"));
+    for (java.io.File d : dirs) {
+      java.io.File[] fs;
+      try { fs = d.listFiles(); } catch (Exception e) { fs = null; }
+      if (fs == null) continue;
+      for (java.io.File f : fs) {
+        String n = f.getName().toLowerCase();
+        if (!f.isFile() || f.length() == 0 || !n.matches(".*\\\\.(mp4|mkv|avi|mov|ts|m4v|webm)$")) continue;
+        JSObject o = new JSObject();
+        o.put("name", f.getName()); o.put("path", f.getAbsolutePath()); o.put("size", f.length());
+        arr.put(o);
+      }
+    }
+    JSObject r = new JSObject(); r.put("files", arr); call.resolve(r);
   }
 }
 `;

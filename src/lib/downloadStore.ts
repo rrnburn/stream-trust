@@ -85,11 +85,14 @@ export async function startDownload(m: StartMeta): Promise<boolean> {
   }
 }
 
-let scanned = false;
-/** Registers video files already on the device (e.g. from older app versions). */
-export async function scanExistingDownloads(): Promise<number> {
-  if (scanned) return 0;
-  scanned = true;
+let scanning: Promise<number> | null = null;
+/** Registers video files already on the device (e.g. from older app versions). Safe to call repeatedly. */
+export function scanExistingDownloads(): Promise<number> {
+  if (!scanning) scanning = doScan().finally(() => (scanning = null));
+  return scanning;
+}
+
+async function doScan(): Promise<number> {
   const { osScan } = await import('@/lib/osDownload');
   const files = await osScan();
   if (!files.length) return 0;

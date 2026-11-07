@@ -108,7 +108,7 @@ const EpisodeModal = ({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
+      <DialogContent className="w-[calc(100vw-1rem)] max-w-2xl max-h-[85vh] flex flex-col p-4 sm:p-6 overflow-hidden" aria-describedby={undefined}>
         <DialogHeader>
           <DialogTitle className="font-display">{seriesTitle}</DialogTitle>
         </DialogHeader>
@@ -151,7 +151,7 @@ const EpisodeModal = ({
             )}
 
             {/* Episode list */}
-            <ScrollArea className="flex-1 min-h-0">
+            <ScrollArea className="flex-1 min-h-0 [&_[data-radix-scroll-area-viewport]>div]:!block">
               <div className="space-y-1 pr-2">
                 {currentEpisodes.length === 0 && (
                   <p className="text-center py-8 text-muted-foreground">No episodes found for this season.</p>
@@ -169,7 +169,7 @@ const EpisodeModal = ({
                     <div
                       key={ep.id}
                       className={cn(
-                        'w-full flex items-start gap-3 p-3 rounded-lg transition-colors group border',
+                        'w-full min-w-0 flex flex-col gap-2 p-3 rounded-lg transition-colors group border',
                         isLastPlayed
                           ? 'bg-primary/10 border-primary/40 hover:bg-primary/15'
                           : 'border-transparent hover:bg-secondary/80',
@@ -205,7 +205,7 @@ const EpisodeModal = ({
                             <span className="text-xs font-mono text-muted-foreground">E{ep.episodeNum}</span>
                             <span
                               className={cn(
-                                'text-sm font-medium truncate',
+                                'text-sm font-medium break-words line-clamp-2 min-w-0',
                                 isFinished ? 'text-muted-foreground' : 'text-foreground',
                               )}
                             >
@@ -234,7 +234,7 @@ const EpisodeModal = ({
                         </div>
                         {ep.duration && <span className="text-xs text-muted-foreground shrink-0">{ep.duration}</span>}
                       </button>
-                      <div className="shrink-0 flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center justify-end gap-1 pl-11" onClick={(e) => e.stopPropagation()}>
                         <PlayerMenu
                           url={ep.streamUrl}
                           title={epLabel}

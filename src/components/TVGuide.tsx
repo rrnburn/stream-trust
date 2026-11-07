@@ -2,6 +2,8 @@ import { useState, useMemo, useRef, useEffect } from 'react';
 import { format, differenceInMinutes, addHours, startOfHour } from 'date-fns';
 import { Radio, Clock, Loader2 } from 'lucide-react';
 import type { EpgProgram } from '@/context/AppContext.types';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 
 export type { EpgProgram };
 
@@ -30,6 +32,7 @@ const TVGuide = ({ channels, programs, loading, onChannelSelect }: TVGuideProps)
   // Single scroll container — both x and y handled together, no sync needed
   const scrollRef = useRef<HTMLDivElement>(null);
   const [now] = useState(() => new Date());
+  const [selected, setSelected] = useState<{ prog: EpgProgram; ch: Channel } | null>(null);
   const timelineStart = startOfHour(now);
 
   // Build time slots
@@ -52,8 +55,24 @@ const TVGuide = ({ channels, programs, loading, onChannelSelect }: TVGuideProps)
       if (!map[key]) map[key] = [];
       map[key].push(p);
     }
+    // Sort, drop duplicates and clip overlaps so blocks never sit on top of each other.
     for (const key of Object.keys(map)) {
-      map[key].sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
+      const sorted = map[key]
+        .map((p) => ({ p, s: new Date(p.start_time).getTime(), e: new Date(p.end_time).getTime() }))
+        .filter((x) => x.e > x.s)
+        .sort((a, b) => a.s - b.s);
+      const out: EpgProgram[] = [];
+      let lastEnd = -Infinity;
+      for (let i = 0; i < sorted.length; i++) {
+        const { p, s } = sorted[i];
+        let e = sorted[i].e;
+        if (s < lastEnd) continue; // starts inside the previous programme
+        const nextS = sorted[i + 1]?.s;
+        if (nextS !== undefined && nextS > s && nextS < e) e = nextS;
+        out.push(e === sorted[i].e ? p : { ...p, end_time: new Date(e).toISOString() });
+        lastEnd = e;
+      }
+      map[key] = out;
     }
     return map;
   }, [programs]);
@@ -159,16 +178,18 @@ const TVGuide = ({ channels, programs, loading, onChannelSelect }: TVGuideProps)
                     const width = right - left - 2;
                     if (width <= 2) return null;
                     const isNow = now >= pStart && now < pEnd;
-                    const showTitle = width >= 18;
-                    const timeText = width > 100
+                    const showTitle = width >= 36;
+                    const timeText = width >= 130
                       ? `${format(pStart, 'HH:mm')} - ${format(pEnd, 'HH:mm')}`
-                      : width >= 50 ? format(pStart, 'HH:mm') : '';
-                    const pad = width < 30 ? 'px-0.5' : 'px-2';
+                      : width >= 90 ? format(pStart, 'HH:mm') : '';
+                    const pad = width < 36 ? 'px-0' : 'px-2';
 
                     return (
-                      <div
+                      <button
+                        type="button"
+                        onClick={() => setSelected({ prog, ch })}
                         key={prog.id ?? `${ch.id}-${progIdx}`}
-                        className={`absolute top-1 rounded ${pad} py-1 text-xs cursor-default transition-colors box-border flex flex-col justify-center overflow-hidden min-w-0 ${
+                        className={`absolute top-1 rounded ${pad} py-1 text-xs text-left cursor-pointer transition-colors box-border flex flex-col justify-center overflow-hidden min-w-0 ${
                           isNow
                             ? 'bg-primary/20 border border-primary/40 text-primary'
                             : 'bg-secondary/60 border border-border text-foreground hover:bg-secondary'
@@ -182,7 +203,7 @@ const TVGuide = ({ channels, programs, loading, onChannelSelect }: TVGuideProps)
                         {timeText && (
                           <div className="text-[10px] text-muted-foreground truncate min-w-0">{timeText}</div>
                         )}
-                      </div>
+                      </button>
                     );
                   })}
                 </div>
@@ -217,6 +238,34 @@ const TVGuide = ({ channels, programs, loading, onChannelSelect }: TVGuideProps)
         </div>
 
       </div>
+      <Dialog open={!!selected} onOpenChange={(v) => !v && setSelected(null)}>
+        <DialogContent className="w-[calc(100vw-2rem)] max-w-md" aria-describedby={undefined}>
+          {selected && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="font-display text-left pr-6 break-words">{selected.prog.title}</DialogTitle>
+              </DialogHeader>
+              <p className="text-sm text-muted-foreground">
+                {selected.ch.title} · {format(new Date(selected.prog.start_time), 'HH:mm')} –{' '}
+                {format(new Date(selected.prog.end_time), 'HH:mm')}
+              </p>
+              {selected.prog.description && (
+                <p className="text-sm text-foreground/90 max-h-60 overflow-y-auto">{selected.prog.description}</p>
+              )}
+              {onChannelSelect && (
+                <Button
+                  onClick={() => {
+                    onChannelSelect(selected.ch);
+                    setSelected(null);
+                  }}
+                >
+                  Watch channel
+                </Button>
+              )}
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

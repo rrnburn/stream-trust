@@ -237,6 +237,27 @@ public class OsDownloadPlugin extends Plugin {
         arr.put(o);
       }
     }
+    // Also ask Android's download history, which works despite scoped-storage limits.
+    try {
+      Cursor c = dm().query(new DownloadManager.Query().setFilterByStatus(DownloadManager.STATUS_SUCCESSFUL));
+      if (c != null) {
+        while (c.moveToNext()) {
+          String local = c.getString(c.getColumnIndexOrThrow(DownloadManager.COLUMN_LOCAL_URI));
+          long size = c.getLong(c.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES));
+          if (local == null || size <= 0) continue;
+          String path = Uri.parse(local).getPath();
+          if (path == null) continue;
+          String name = path.substring(path.lastIndexOf('/') + 1);
+          String ln = name.toLowerCase();
+          if (!(ln.endsWith(".mp4") || ln.endsWith(".mkv") || ln.endsWith(".avi") || ln.endsWith(".mov") || ln.endsWith(".ts") || ln.endsWith(".m4v") || ln.endsWith(".webm"))) continue;
+          if (!new java.io.File(path).exists()) continue;
+          JSObject o = new JSObject();
+          o.put("name", name); o.put("path", path); o.put("size", size);
+          arr.put(o);
+        }
+        c.close();
+      }
+    } catch (Exception ignored) {}
     JSObject r = new JSObject(); r.put("files", arr); call.resolve(r);
   }
 }

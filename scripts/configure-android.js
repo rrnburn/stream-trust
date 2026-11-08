@@ -8,6 +8,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { configureBuildGradle } from './android-build-config.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -111,7 +112,7 @@ if (fs.existsSync(variablesGradlePath)) {
 const buildGradlePath = path.join(ANDROID_DIR, 'app', 'build.gradle');
 if (fs.existsSync(buildGradlePath)) {
   console.log('✓ Updating app/build.gradle');
-  let buildGradle = fs.readFileSync(buildGradlePath, 'utf8');
+  let buildGradle = configureBuildGradle(fs.readFileSync(buildGradlePath, 'utf8'));
   
   // Add multiDexEnabled
   if (!buildGradle.includes('multiDexEnabled')) {
@@ -169,6 +170,10 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 @CapacitorPlugin(name = "OsDownload")
 public class OsDownloadPlugin extends Plugin {
   private DownloadManager dm() { return (DownloadManager) getContext().getSystemService(Context.DOWNLOAD_SERVICE); }
+  private boolean isVideo(String name) {
+    String n = name.toLowerCase(java.util.Locale.ROOT);
+    return n.endsWith(".mp4") || n.endsWith(".mkv") || n.endsWith(".avi") || n.endsWith(".mov") || n.endsWith(".ts") || n.endsWith(".m4v") || n.endsWith(".webm");
+  }
 
   @PluginMethod
   public void enqueue(PluginCall call) {
@@ -230,8 +235,7 @@ public class OsDownloadPlugin extends Plugin {
       try { fs = d.listFiles(); } catch (Exception e) { fs = null; }
       if (fs == null) continue;
       for (java.io.File f : fs) {
-        String n = f.getName().toLowerCase();
-        if (!f.isFile() || f.length() == 0 || !n.matches(".*\\\\.(mp4|mkv|avi|mov|ts|m4v|webm)$")) continue;
+        if (!f.isFile() || f.length() == 0 || !isVideo(f.getName())) continue;
         JSObject o = new JSObject();
         o.put("name", f.getName()); o.put("path", f.getAbsolutePath()); o.put("size", f.length());
         arr.put(o);
@@ -248,9 +252,13 @@ public class OsDownloadPlugin extends Plugin {
           String path = Uri.parse(local).getPath();
           if (path == null) continue;
           String name = path.substring(path.lastIndexOf('/') + 1);
-          String ln = name.toLowerCase();
-          if (!(ln.endsWith(".mp4") || ln.endsWith(".mkv") || ln.endsWith(".avi") || ln.endsWith(".mov") || ln.endsWith(".ts") || ln.endsWith(".m4v") || ln.endsWith(".webm"))) continue;
-          if (!new java.io.File(path).exists()) continue;
+          if (!isVideo(name)) continue;
+          // Scoped storage may deny File.exists even for our completed downloads.
+          // Verify access through DownloadManager instead of rejecting public paths.
+          long downloadId = c.getLong(c.getColumnIndexOrThrow(DownloadManager.COLUMN_ID));
+          try (android.os.ParcelFileDescriptor fd = dm().openDownloadedFile(downloadId)) {
+            if (fd == null) continue;
+          } catch (Exception inaccessible) { continue; }
           JSObject o = new JSObject();
           o.put("name", name); o.put("path", path); o.put("size", size);
           arr.put(o);

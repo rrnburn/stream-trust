@@ -35,6 +35,9 @@ jobs:
           bun install
           npm install --package-lock-only
 
+      - name: Verify Android configuration safeguards
+        run: bunx vitest run src/test/androidBuild.test.ts src/components/VideoPlayer.test.tsx
+
       - name: Generate build version
         id: version
         run: |
@@ -79,6 +82,8 @@ jobs:
 
       - name: Configure Android memory optimization
         run: node scripts/configure-android.js
+        env:
+          ANDROID_VERSION_CODE_OFFSET: ${{ vars.ANDROID_VERSION_CODE_OFFSET || '100000' }}
 
       - name: Sync Capacitor
         run: npx cap sync android
@@ -106,9 +111,25 @@ jobs:
           key: gradle-${{ hashFiles('android/gradle/wrapper/gradle-wrapper.properties', 'android/**/*.gradle*') }}
           restore-keys: gradle-
 
+      - name: Restore persistent test signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_DEBUG_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::warning::Persistent test signing is not configured. This APK may require reinstalling. Add ANDROID_DEBUG_KEYSTORE_BASE64 to enable in-place updates."
+            exit 0
+          fi
+          umask 077
+          KEYSTORE_PATH="$RUNNER_TEMP/streaminstuff-debug.keystore"
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_PATH"
+          keytool -list -keystore "$KEYSTORE_PATH" -storepass android -alias androiddebugkey > /dev/null
+          echo "ANDROID_DEBUG_KEYSTORE_PATH=$KEYSTORE_PATH" >> "$GITHUB_ENV"
+
       - name: Build debug APK
         working-directory: android
         run: ./gradlew assembleDebug
+        env:
+          ANDROID_DEBUG_KEYSTORE_PATH: ${{ env.ANDROID_DEBUG_KEYSTORE_PATH }}
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4

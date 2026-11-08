@@ -85,6 +85,7 @@ const VideoPlayer = ({ src, title, poster, resumeFrom, onProgress, onClose }: Vi
   const containerRef = useRef<HTMLDivElement>(null);
   const hlsRef = useRef<Hls | null>(null);
   const mpegtsRef = useRef<mpegts.Player | null>(null);
+  const cancelPlaybackRef = useRef<(() => void) | null>(null);
   const controlsTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
   const [playing, setPlaying] = useState(false);
@@ -169,7 +170,17 @@ const VideoPlayer = ({ src, title, poster, resumeFrom, onProgress, onClose }: Vi
     return url.includes('/live/') || getStreamType(url) === 'mpegts';
   }, []);
 
-  const cleanup = useCallback(() => {
+  const cleanup = useCallback((capturedVideo?: HTMLVideoElement) => {
+    cancelPlaybackRef.current?.();
+    cancelPlaybackRef.current = null;
+    if (controlsTimerRef.current) clearTimeout(controlsTimerRef.current);
+    const video = capturedVideo ?? videoRef.current;
+    // Save before load() clears the playhead, preserving existing resume behaviour.
+    if (video && video.currentTime > 1) {
+      const d = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 0;
+      onProgressRef.current?.(d ? video.currentTime / d : 0, video.currentTime, d);
+    }
+    video?.pause();
     if (hlsRef.current) {
       log('DEBUG', 'Destroying HLS instance');
       hlsRef.current.destroy();
@@ -186,6 +197,10 @@ const VideoPlayer = ({ src, title, poster, resumeFrom, onProgress, onClose }: Vi
         log('WARN', 'mpegts cleanup error', e);
       }
       mpegtsRef.current = null;
+    }
+    if (video) {
+      video.removeAttribute('src');
+      video.load();
     }
   }, []);
 
@@ -254,6 +269,23 @@ const VideoPlayer = ({ src, title, poster, resumeFrom, onProgress, onClose }: Vi
     if (!video || !src) return;
 
     cleanup();
+    let disposed = false;
+    const timers = new Set<ReturnType<typeof setTimeout>>();
+    const detach: Array<() => void> = [];
+    const later = (fn: () => void, ms: number) => {
+      const timer = setTimeout(() => { timers.delete(timer); if (!disposed) fn(); }, ms);
+      timers.add(timer);
+      return timer;
+    };
+    const listen = (event: string, listener: () => void) => {
+      video.addEventListener(event, listener, { once: true });
+      detach.push(() => video.removeEventListener(event, listener));
+    };
+    cancelPlaybackRef.current = () => {
+      disposed = true;
+      timers.forEach(clearTimeout);
+      detach.forEach((fn) => fn());
+    };
     setError(null);
     setBuffering(true);
     setPreBuffering(false);
@@ -270,7 +302,7 @@ const VideoPlayer = ({ src, title, poster, resumeFrom, onProgress, onClose }: Vi
     let errorHandled = false;
     const isMovieMp4 = src.includes('/movie/');
     const handleFatalError = (reason: string) => {
-      if (errorHandled) return;
+      if (disposed || errorHandled) return;
       errorHandled = true;
       // On native: if movie .mp4 failed and we haven't tried HLS yet, try .m3u8
       if (isMovieMp4 && !hlsFallback && isNativePlatform()) {
@@ -295,15 +327,18 @@ const VideoPlayer = ({ src, title, poster, resumeFrom, onProgress, onClose }: Vi
 
     // Helper: try to play with sound, fall back to muted if autoplay blocked
     const tryPlay = (video: HTMLVideoElement) => {
+      if (disposed) return;
       video.muted = false;
       video
         .play()
         .then(() => {
+          if (disposed) return;
           log('INFO', 'Playback started with sound');
           setAutoplayMuted(false);
           setMuted(false);
         })
         .catch(() => {
+          if (disposed) return;
           log('WARN', 'Autoplay blocked, retrying muted');
           video.muted = true;
           setMuted(true);
@@ -314,6 +349,7 @@ const VideoPlayer = ({ src, title, poster, resumeFrom, onProgress, onClose }: Vi
 
     // Pre-buffer for live streams
     const startWithPreBuffer = () => {
+      if (disposed) return;
       if (!isLive) {
         log('INFO', 'VOD stream ready, starting playback');
         tryPlay(video);
@@ -322,6 +358,7 @@ const VideoPlayer = ({ src, title, poster, resumeFrom, onProgress, onClose }: Vi
       setPreBuffering(true);
       const MIN_BUFFER = 2;
       const checkBuffer = () => {
+        if (disposed) return;
         if (video.buffered.length > 0) {
           const buffered = video.buffered.end(0) - video.currentTime;
           if (buffered >= MIN_BUFFER) {
@@ -331,7 +368,7 @@ const VideoPlayer = ({ src, title, poster, resumeFrom, onProgress, onClose }: Vi
             return;
           }
         }
-        setTimeout(checkBuffer, 200);
+        later(checkBuffer, 200);
       };
       checkBuffer();
     };
@@ -350,7 +387,7 @@ const VideoPlayer = ({ src, title, poster, resumeFrom, onProgress, onClose }: Vi
         video.src = playbackUrl;
 
         let nativeWorked = false;
-        const nativeTimeout = setTimeout(() => {
+        const nativeTimeout = later(() => {
           if (!nativeWorked) {
             log('WARN', 'Native HLS timed out after 8s, trying hls.js');
             video.removeAttribute('src');
@@ -376,15 +413,9 @@ const VideoPlayer = ({ src, title, poster, resumeFrom, onProgress, onClose }: Vi
           initHlsJs(video, playbackUrl, isLive, startWithPreBuffer, handleFatalError);
         };
 
-        video.addEventListener('canplay', onNativeCanPlay, { once: true });
-        video.addEventListener('error', onNativeError, { once: true });
-        video.addEventListener(
-          'loadedmetadata',
-          () => {
-            log('INFO', 'Native HLS metadata loaded');
-          },
-          { once: true },
-        );
+        listen('canplay', onNativeCanPlay);
+        listen('error', onNativeError);
+        listen('loadedmetadata', () => log('INFO', 'Native HLS metadata loaded'));
       } else {
         // Using proxy URL — go straight to hls.js
         initHlsJs(video, playbackUrl, isLive, startWithPreBuffer, handleFatalError);
@@ -408,7 +439,7 @@ const VideoPlayer = ({ src, title, poster, resumeFrom, onProgress, onClose }: Vi
       player.attachMediaElement(video);
       player.load();
 
-      video.addEventListener('canplay', () => startWithPreBuffer(), { once: true });
+      listen('canplay', startWithPreBuffer);
 
       player.on(mpegts.Events.ERROR, (errorType: string, errorDetail: string) => {
         log('ERROR', `mpegts error: type=${errorType} detail=${errorDetail}`);
@@ -426,7 +457,7 @@ const VideoPlayer = ({ src, title, poster, resumeFrom, onProgress, onClose }: Vi
         video.load();
 
         const onMeta = () => {
-          if (resolved) return;
+          if (disposed || resolved) return;
           resolved = true;
           video.removeEventListener('error', onErr);
           clearTimeout(loadTimeout);
@@ -436,7 +467,7 @@ const VideoPlayer = ({ src, title, poster, resumeFrom, onProgress, onClose }: Vi
         };
 
         const onErr = () => {
-          if (resolved) return;
+          if (disposed || resolved) return;
           video.removeEventListener('loadedmetadata', onMeta);
           clearTimeout(loadTimeout);
           const code = video.error?.code;
@@ -446,7 +477,7 @@ const VideoPlayer = ({ src, title, poster, resumeFrom, onProgress, onClose }: Vi
         };
 
         // Fast timeout - don't make users wait
-        const loadTimeout = setTimeout(() => {
+        const loadTimeout = later(() => {
           if (resolved) return;
           video.removeEventListener('loadedmetadata', onMeta);
           video.removeEventListener('error', onErr);
@@ -454,8 +485,8 @@ const VideoPlayer = ({ src, title, poster, resumeFrom, onProgress, onClose }: Vi
           onFail();
         }, 8000);
 
-        video.addEventListener('loadedmetadata', onMeta, { once: true });
-        video.addEventListener('error', onErr, { once: true });
+        listen('loadedmetadata', onMeta);
+        listen('error', onErr);
         video.src = url;
       };
 
@@ -480,11 +511,11 @@ const VideoPlayer = ({ src, title, poster, resumeFrom, onProgress, onClose }: Vi
 
       return () => {
         resolved = true;
-        cleanup();
+        cleanup(video);
       };
     }
 
-    return cleanup;
+    return () => cleanup(video);
   }, [src, useProxy, hlsFallback, retryCount, getPlaybackUrl, cleanup, isLiveStream, normalizeStreamUrl, title, isNative, nativeActive, initHlsJs]);
 
   // Reset proxy and retry state when src changes

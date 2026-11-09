@@ -1,3 +1,4 @@
+import { parseHistoryId } from '@/lib/historyGrouping';
 import { useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Heart, History, Download, ChevronRight } from 'lucide-react';
@@ -32,9 +33,10 @@ const Favorites = () => {
     const seen = new Set<string>();
     const out: MediaItem[] = [];
     for (const h of watchHistory) {
-      if (seen.has(h.id)) continue;
-      seen.add(h.id);
-      const m = byId.get(h.id);
+      const id = parseHistoryId(h.id)?.parentId ?? h.id;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      const m = byId.get(id);
       if (m) out.push(m);
     }
     return out;

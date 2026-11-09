@@ -1,3 +1,4 @@
+import { parseHistoryId } from '@/lib/historyGrouping';
 import { useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Play, Info, Tv, Plus } from 'lucide-react';
@@ -27,23 +28,27 @@ const Index = () => {
     return { byId, movies, series, channels };
   }, [media]);
 
-  const { continueItems, progress, recentChannels } = useMemo(() => {
+  const { continueItems, progress, badges, recentChannels } = useMemo(() => {
     const seen = new Set<string>();
     const continueItems: MediaItem[] = [];
     const recentChannels: MediaItem[] = [];
     const progress: Record<string, number> = {};
+    const badges: Record<string, string> = {};
     for (const h of watchHistory) {
-      if (seen.has(h.id)) continue;
-      seen.add(h.id);
-      const m = byId.get(h.id);
+      const ep = parseHistoryId(h.id);
+      const id = ep?.parentId ?? h.id;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      const m = byId.get(id);
       if (!m) continue;
       if (m.category === 'channel') recentChannels.push(m);
-      else if (!h.finished) {
+      else if (!h.finished || ep) {
         continueItems.push(m);
-        progress[m.id] = h.progress;
+        if (!h.finished) progress[m.id] = h.progress;
+        if (ep?.label) badges[m.id] = ep.label;
       }
     }
-    return { continueItems: continueItems.slice(0, 20), progress, recentChannels: recentChannels.slice(0, 20) };
+    return { continueItems: continueItems.slice(0, 20), progress, badges, recentChannels: recentChannels.slice(0, 20) };
   }, [watchHistory, byId]);
 
   const hero = useMemo(() => {
@@ -104,7 +109,7 @@ const Index = () => {
       )}
 
       <div className="relative space-y-8 py-6">
-        <MediaRail title="Continue Watching" items={continueItems} progress={progress} />
+        <MediaRail title="Continue Watching" items={continueItems} progress={progress} badges={badges} />
         <MediaRail title="Recent Channels" items={recentChannels} seeAllTo="/live-tv" variant="wide" />
         <MediaRail title="Recently Added Movies" items={pickRecent(movies)} seeAllTo="/movies" />
         <MediaRail title="Recently Added Series" items={pickRecent(series)} seeAllTo="/series" />

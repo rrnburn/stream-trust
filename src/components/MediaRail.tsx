@@ -9,10 +9,11 @@ interface RailProps {
   items: MediaItem[];
   seeAllTo?: string;
   progress?: Record<string, number>;
+  badges?: Record<string, string>;
   variant?: 'poster' | 'wide';
 }
 
-const RailCard = memo(({ item, pct, wide }: { item: MediaItem; pct?: number; wide: boolean }) => {
+const RailCard = memo(({ item, pct, wide, badge }: { item: MediaItem; pct?: number; wide: boolean; badge?: string }) => {
   const navigate = useNavigate();
   return (
     <button
@@ -32,6 +33,9 @@ const RailCard = memo(({ item, pct, wide }: { item: MediaItem; pct?: number; wid
             <Radio className="w-3 h-3" /> LIVE
           </span>
         )}
+        {badge && (
+          <span className="absolute top-2 right-2 text-[10px] font-bold px-1.5 py-0.5 rounded bg-primary text-primary-foreground">{badge}</span>
+        )}
         {pct !== undefined && pct > 0 && (
           <div className="absolute bottom-0 inset-x-0 h-1 bg-background/60">
             <div className="h-full bg-primary" style={{ width: `${Math.min(100, pct * 100)}%` }} />
@@ -44,7 +48,7 @@ const RailCard = memo(({ item, pct, wide }: { item: MediaItem; pct?: number; wid
 });
 RailCard.displayName = 'RailCard';
 
-const MediaRail = ({ title, items, seeAllTo, progress, variant = 'poster' }: RailProps) => {
+const MediaRail = ({ title, items, seeAllTo, progress, badges, variant = 'poster' }: RailProps) => {
   if (items.length === 0) return null;
   return (
     <section>
@@ -58,7 +62,7 @@ const MediaRail = ({ title, items, seeAllTo, progress, variant = 'poster' }: Rai
       </div>
       <div className="flex gap-3 overflow-x-auto snap-x px-4 lg:px-8 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {items.map((it) => (
-          <RailCard key={it.id} item={it} pct={progress?.[it.id]} wide={variant === 'wide'} />
+          <RailCard key={it.id} item={it} pct={progress?.[it.id]} badge={badges?.[it.id]} wide={variant === 'wide'} />
         ))}
       </div>
     </section>

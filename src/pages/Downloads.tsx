@@ -25,7 +25,8 @@ const formatBytes = (bytes: number): string => {
 // WebView blocks file:// in <video>; route through Capacitor's local file bridge.
 const playableSrc = (row: DownloadRow): string => {
   const raw = row.file_path.startsWith('/') ? row.file_path : row.file_uri;
-  if (!raw || raw.startsWith('content://')) return row.file_uri;
+  if (!raw) return row.file_uri;
+  if (raw.startsWith('content://')) return Capacitor.convertFileSrc(raw);
   return Capacitor.convertFileSrc(raw.startsWith('/') ? `file://${raw}` : raw);
 };
 
@@ -63,7 +64,7 @@ const Downloads = () => {
 
   const handleDelete = async (row: DownloadRow) => {
     try {
-      await deleteDownloadedFile(row.file_path);
+      await deleteDownloadedFile(row.file_path).catch(() => {});
       const { removeDownload } = await import('@/lib/localDb');
       await removeDownload(row.media_id);
       setItems((prev) => prev.filter((r) => r.media_id !== row.media_id));
@@ -76,7 +77,7 @@ const Downloads = () => {
 
   return (
     <AppLayout>
-      <div className="p-4 lg:p-8">
+      <div className="p-4 lg:p-8 w-full max-w-full overflow-x-hidden">
         <div className="flex items-center gap-3 mb-6">
           <div className="w-10 h-10 rounded-lg bg-primary/15 flex items-center justify-center">
             <HardDrive className="w-5 h-5 text-primary" />
@@ -159,9 +160,9 @@ const Downloads = () => {
             {items.map((row) => (
               <div
                 key={row.media_id}
-                className="flex items-center gap-4 p-3 rounded-xl border border-border bg-card/40 hover:bg-card/70 transition-colors"
+                className="flex items-center gap-3 p-3 rounded-xl border border-border bg-card/40 hover:bg-card/70 transition-colors min-w-0 max-w-full"
               >
-                <div className="w-16 h-24 rounded-lg overflow-hidden bg-secondary shrink-0 flex items-center justify-center">
+                <div className="w-12 h-[72px] sm:w-16 sm:h-24 rounded-lg overflow-hidden bg-secondary shrink-0 flex items-center justify-center">
                   {row.poster ? (
                     <img src={row.poster} alt={row.title} className="w-full h-full object-cover" />
                   ) : (
@@ -181,16 +182,16 @@ const Downloads = () => {
                   <Button
                     onClick={() => setPlaying(row)}
                     className="bg-primary text-primary-foreground hover:bg-primary/90 gap-1"
-                    size="sm"
+                    size="icon"
+                    aria-label={`Play ${row.title}`}
                   >
                     <Play className="w-4 h-4 fill-current" />
-                    Play
                   </Button>
                   <Button
                     variant="outline"
                     onClick={() => handleDelete(row)}
                     className="border-border text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                    size="sm"
+                    size="icon"
                     aria-label={`Delete ${row.title}`}
                   >
                     <Trash2 className="w-4 h-4" />

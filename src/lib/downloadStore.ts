@@ -73,6 +73,12 @@ export async function startDownload(m: StartMeta): Promise<boolean> {
       mime: result.mime,
       source_id: m.sourceId || null,
     });
+    // Drop any placeholder the startup scan created for this file while it was downloading.
+    const base = (result.filePath || '').split('/').pop();
+    if (base) {
+      const { removeDownload } = await import('@/lib/localDb');
+      await removeDownload(`file:${base}`).catch(() => {});
+    }
     completedVersion++;
     toast.success(`Downloaded "${m.title}"`);
     return true;
@@ -94,14 +100,17 @@ export function scanExistingDownloads(): Promise<number> {
 
 async function doScan(): Promise<number> {
   const { osScan } = await import('@/lib/osDownload');
+  // Files being written by an active download would show up as duplicates.
+  if (items.length) return 0;
   const files = await osScan();
   if (!files.length) return 0;
   const { getDownloads, saveDownload } = await import('@/lib/localDb');
   const rows = await getDownloads();
-  const known = new Set(rows.flatMap((r) => [r.file_path, r.file_path.split('/').pop()]));
+  const known = new Set(rows.flatMap((r) => [r.file_path, r.file_uri, r.file_path.split('/').pop()]));
   let added = 0;
   for (const f of files) {
     if (known.has(f.path) || known.has(f.name)) continue;
+    known.add(f.path);
     known.add(f.name);
     const ext = (f.name.split('.').pop() || 'mp4').toLowerCase();
     const title = f.name.replace(/\.\w+$/, '').replace(/_[0-9a-f]{6,8}$/i, '').replace(/_+/g, ' ').trim();
@@ -111,7 +120,7 @@ async function doScan(): Promise<number> {
       poster: '',
       category: /S\d+\s?E\d+/i.test(title) ? 'series' : 'movie',
       file_path: f.path,
-      file_uri: `file://${f.path}`,
+      file_uri: f.path.startsWith('content://') ? f.path : `file://${f.path}`,
       size: f.size,
       mime: ext === 'mkv' ? 'video/x-matroska' : `video/${ext}`,
       source_id: null,

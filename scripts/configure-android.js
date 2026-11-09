@@ -37,6 +37,11 @@ if (fs.existsSync(manifestPath)) {
     manifest = manifest.replace(/<application([^>]*)>/, '<application$1\n        android:usesCleartextTraffic="true">');
   }
 
+  // Read existing videos (e.g. older downloads) via MediaStore
+  if (!manifest.includes('android.permission.READ_MEDIA_VIDEO')) {
+    manifest = manifest.replace(/<application/, '<uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />\n    <application');
+  }
+
   // TV banner (referenced from /res/drawable/tv_banner.png — copied below)
   if (!manifest.includes('android:banner')) {
     console.log('✓ Adding android:banner for TV launcher');
@@ -261,6 +266,26 @@ public class OsDownloadPlugin extends Plugin {
           } catch (Exception inaccessible) { continue; }
           JSObject o = new JSObject();
           o.put("name", name); o.put("path", path); o.put("size", size);
+          arr.put(o);
+        }
+        c.close();
+      }
+    } catch (Exception ignored) {}
+    // MediaStore: finds videos in public folders (older installs, browser downloads).
+    String perm = android.os.Build.VERSION.SDK_INT >= 33 ? "android.permission.READ_MEDIA_VIDEO" : "android.permission.READ_EXTERNAL_STORAGE";
+    if (androidx.core.content.ContextCompat.checkSelfPermission(getContext(), perm) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+      try { androidx.core.app.ActivityCompat.requestPermissions(getActivity(), new String[]{perm}, 7311); } catch (Exception ignored) {}
+    }
+    try {
+      Uri coll = android.provider.MediaStore.Video.Media.EXTERNAL_CONTENT_URI;
+      String[] proj = { android.provider.MediaStore.Video.Media._ID, android.provider.MediaStore.Video.Media.DISPLAY_NAME, android.provider.MediaStore.Video.Media.SIZE };
+      Cursor c = getContext().getContentResolver().query(coll, proj, null, null, null);
+      if (c != null) {
+        while (c.moveToNext()) {
+          String name = c.getString(1); long size = c.getLong(2);
+          if (name == null || size <= 0 || !isVideo(name)) continue;
+          JSObject o = new JSObject();
+          o.put("name", name); o.put("path", android.content.ContentUris.withAppendedId(coll, c.getLong(0)).toString()); o.put("size", size);
           arr.put(o);
         }
         c.close();

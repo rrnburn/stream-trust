@@ -226,72 +226,27 @@ public class OsDownloadPlugin extends Plugin {
     call.resolve();
   }
 
-  // Lists video files already on the device from this or older app versions.
+  // Lists video files downloaded by this app in its private movies directory.
   @PluginMethod
   public void scan(PluginCall call) {
     com.getcapacitor.JSArray arr = new com.getcapacitor.JSArray();
-    java.util.List<java.io.File> dirs = new java.util.ArrayList<>();
     java.io.File mv = getContext().getExternalFilesDir(Environment.DIRECTORY_MOVIES);
-    if (mv != null) dirs.add(mv);
-    dirs.add(new java.io.File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "StreaminStuff"));
-    dirs.add(new java.io.File(getContext().getFilesDir(), "downloads"));
-    for (java.io.File d : dirs) {
-      java.io.File[] fs;
-      try { fs = d.listFiles(); } catch (Exception e) { fs = null; }
-      if (fs == null) continue;
-      for (java.io.File f : fs) {
-        if (!f.isFile() || f.length() == 0 || !isVideo(f.getName())) continue;
-        JSObject o = new JSObject();
-        o.put("name", f.getName()); o.put("path", f.getAbsolutePath()); o.put("size", f.length());
-        arr.put(o);
-      }
-    }
-    // Also ask Android's download history, which works despite scoped-storage limits.
-    try {
-      Cursor c = dm().query(new DownloadManager.Query().setFilterByStatus(DownloadManager.STATUS_SUCCESSFUL));
-      if (c != null) {
-        while (c.moveToNext()) {
-          String local = c.getString(c.getColumnIndexOrThrow(DownloadManager.COLUMN_LOCAL_URI));
-          long size = c.getLong(c.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES));
-          if (local == null || size <= 0) continue;
-          String path = Uri.parse(local).getPath();
-          if (path == null) continue;
-          String name = path.substring(path.lastIndexOf('/') + 1);
-          if (!isVideo(name)) continue;
-          // Scoped storage may deny File.exists even for our completed downloads.
-          // Verify access through DownloadManager instead of rejecting public paths.
-          long downloadId = c.getLong(c.getColumnIndexOrThrow(DownloadManager.COLUMN_ID));
-          try (android.os.ParcelFileDescriptor fd = dm().openDownloadedFile(downloadId)) {
-            if (fd == null) continue;
-          } catch (Exception inaccessible) { continue; }
+    if (mv != null && mv.exists()) {
+      java.io.File[] fs = mv.listFiles();
+      if (fs != null) {
+        for (java.io.File f : fs) {
+          if (!f.isFile() || f.length() == 0 || !isVideo(f.getName())) continue;
           JSObject o = new JSObject();
-          o.put("name", name); o.put("path", path); o.put("size", size);
+          o.put("name", f.getName());
+          o.put("path", f.getAbsolutePath());
+          o.put("size", f.length());
           arr.put(o);
         }
-        c.close();
       }
-    } catch (Exception ignored) {}
-    // MediaStore: finds videos in public folders (older installs, browser downloads).
-    String perm = android.os.Build.VERSION.SDK_INT >= 33 ? "android.permission.READ_MEDIA_VIDEO" : "android.permission.READ_EXTERNAL_STORAGE";
-    if (androidx.core.content.ContextCompat.checkSelfPermission(getContext(), perm) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
-      try { androidx.core.app.ActivityCompat.requestPermissions(getActivity(), new String[]{perm}, 7311); } catch (Exception ignored) {}
     }
-    try {
-      Uri coll = android.provider.MediaStore.Video.Media.EXTERNAL_CONTENT_URI;
-      String[] proj = { android.provider.MediaStore.Video.Media._ID, android.provider.MediaStore.Video.Media.DISPLAY_NAME, android.provider.MediaStore.Video.Media.SIZE };
-      Cursor c = getContext().getContentResolver().query(coll, proj, null, null, null);
-      if (c != null) {
-        while (c.moveToNext()) {
-          String name = c.getString(1); long size = c.getLong(2);
-          if (name == null || size <= 0 || !isVideo(name)) continue;
-          JSObject o = new JSObject();
-          o.put("name", name); o.put("path", android.content.ContentUris.withAppendedId(coll, c.getLong(0)).toString()); o.put("size", size);
-          arr.put(o);
-        }
-        c.close();
-      }
-    } catch (Exception ignored) {}
-    JSObject r = new JSObject(); r.put("files", arr); call.resolve(r);
+    JSObject r = new JSObject();
+    r.put("files", arr);
+    call.resolve(r);
   }
 }
 `;

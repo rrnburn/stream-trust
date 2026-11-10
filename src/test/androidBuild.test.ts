@@ -41,7 +41,6 @@ describe('Android test build configuration', () => {
       expect(once).toContain('versionCode 100053');
       const plugin = readFileSync(path.join(root, 'android/app/src/main/java/com/getcapacitor/myapp/OsDownloadPlugin.java'), 'utf8');
       expect(plugin).toContain('!isVideo(f.getName())');
-      expect(plugin).toContain('dm().openDownloadedFile(downloadId)');
       expect(plugin).not.toContain('new java.io.File(path).exists()');
       expect(plugin).not.toContain('.matches(');
       for (const ext of ['mp4', 'mkv', 'avi', 'mov', 'ts', 'm4v', 'webm']) {

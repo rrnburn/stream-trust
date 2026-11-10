@@ -182,12 +182,13 @@ export async function parsePlaylistLocally(
     items = await parseXtream(url, username, password);
 
     // Auto-build Xtream EPG URL
+    const originalProtocol = /^https:\/\//i.test(url) ? 'https://' : 'http://';
     let base = url.replace(/\/$/, '');
     base = base.replace(/^https?:\/\//i, '');
     base = base.replace(/\/player_api\.php.*$/i, '');
     base = base.replace(/\/get\.php.*$/i, '');
 
-    epgUrl = `http://${base}/xmltv.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`;
+    epgUrl = `${originalProtocol}${base}/xmltv.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`;
 
     logger.info('PlaylistParser', '📺 Xtream EPG URL generated', { epgUrl });
   } else {

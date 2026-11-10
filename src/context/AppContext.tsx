@@ -316,10 +316,14 @@ const LocalAppProvider = ({ children }: { children: ReactNode }) => {
       const res = await CapacitorHttp.request({
         method: 'GET',
         url,
-        headers: { 'User-Agent': 'okhttp/4.9.2', Accept: '*/*' },
+        headers: {
+          'User-Agent':
+            'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
+          Accept: '*/*',
+        },
         responseType: 'text',
         connectTimeout: 30000,
-        readTimeout: 90000,
+        readTimeout: 180000,
       });
       clearTimeout(timeoutId);
       void controller;

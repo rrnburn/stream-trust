@@ -307,13 +307,14 @@ const LocalAppProvider = ({ children }: { children: ReactNode }) => {
       const { parseXmlTvLocal } = await getEpgParser();
       logger.info('EPG', `📥 Downloading EPG from: ${url}`);
 
-      // Download with timeout and size limit to prevent crashes
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+      // Wrap in a hard JavaScript timeout so it can NEVER hang indefinitely
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('EPG download timed out (file exceeds mobile limit)')), 30000);
+      });
 
       // Native HTTP avoids WebView CORS / cleartext blocks on provider EPG URLs.
       const { CapacitorHttp } = await import('@capacitor/core');
-      const res = await CapacitorHttp.request({
+      const httpPromise = CapacitorHttp.request({
         method: 'GET',
         url,
         headers: {
@@ -322,11 +323,11 @@ const LocalAppProvider = ({ children }: { children: ReactNode }) => {
           Accept: '*/*',
         },
         responseType: 'text',
-        connectTimeout: 30000,
-        readTimeout: 180000,
+        connectTimeout: 20000,
+        readTimeout: 30000,
       });
-      clearTimeout(timeoutId);
-      void controller;
+
+      const res = await Promise.race([httpPromise, timeoutPromise]);
 
       if (res.status >= 400) throw new Error(`HTTP ${res.status}`);
 
